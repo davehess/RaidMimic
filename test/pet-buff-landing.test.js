@@ -51,6 +51,8 @@ const BLOCKS = [
      '  return (Date.now() >= _POP_UNLOCK_MS) ? 65 : 60;\n}'),
   fn('function _durTicksForLevel(formula, capTicks, level) {',
      '  if (cap > 0 && t > cap) t = cap;        // never exceed the spell\'s own cap\n  return t;\n}'),
+  // Our own-cast duration chain (AAs, worn foci) is not under test here: the bare formula, as before 2026-11-15.
+  'function _ownDurTicks(e, lvl) { return _durTicksForLevel(e.dur_formula, e.dur_ticks, lvl); }',
   fn('function _resistLadderEffect(mp, spellName) {',
      '  return inAnyLadder ? { drop } : null;\n}'),
   fn('function _categorizeBuff(name) {',

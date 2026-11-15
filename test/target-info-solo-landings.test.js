@@ -81,6 +81,7 @@ function load() {
     ${grab('_looksLikeTargetName')}
     ${grab('_spellGood')}
     ${grab('_durTicksForLevel')}
+    function _ownDurTicks(e, lvl) { return _durTicksForLevel(e.dur_formula, e.dur_ticks, lvl); }   // the AA / focus chain is not under test here
     let _buffLandingBySuffix = new Map();
     let _debuffLandingBySuffix = new Map();
     const _rebuildMechanicMatchers = () => {};

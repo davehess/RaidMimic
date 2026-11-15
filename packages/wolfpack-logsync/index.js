@@ -696,7 +696,8 @@ function _charmDurationSec(spellName, mapDur, owner) {
   const e = _spellByNameLower.get(key) || _spellByNameLower.get(key.replace(/`/g, "'"));
   if (e && Number(e.dur) > 0) {
     const lvl = (whoData.get(String(owner || '').toLowerCase()) || {}).level || _assumedCasterLevel();
-    const t = _durTicksForLevel(e.durf, e.dur, lvl);
+    // The owner's own focus on the chain (a charm is detrimental: no Reinforcement; only a detrimental-capable item focus, 3843-3846).
+    const t = _durationWithExtensions(e, lvl, { character: owner }).ticks;
     if (t > 0 && t < 72000) return t * 6;
   }
   return mapDur;
@@ -1995,6 +1996,8 @@ function _bumpCharmTick(pet, owner, eventKind, atMs, opts) {
     charm_class:  (opts && opts.charm_class)  || (prev ? prev.charm_class  : null),
     duration_sec: (opts && opts.duration_sec != null) ? opts.duration_sec
                 : (prev ? prev.duration_sec : null),
+    // The staged spell's name, for the party timers (a charm shows as "<caster>'s pet" with the spell beside it).
+    charm_spell:  (opts && opts.charm_spell_name) || (prev ? prev.charm_spell : null),
   });
   // Mirror the charm spell into _buffLandingsByTarget so the Mob Info debuff
   // section shows e.g. "Allure (Sorvane)" with a live countdown — Allure's
@@ -3587,6 +3590,127 @@ function _durTicksForLevel(formula, capTicks, level) {
   return t;
 }
 
+// ── Duration with the caster's own AAs and worn foci (the guild lead, 2026-11-15) ────────────────
+// "we can't give accurate accounting of timers without AAs and item focus effects. those are critical."
+// For a spell WE cast, the server's duration is not the bare formula. Mob::CalcBuffDuration
+// (SecretsOTheP/EQMacEmu c2cd265, zone/spells.cpp:2452-2525):
+//   1. CalcBuffDuration_formula(casterLevel, formula, base)         spells.cpp:2608-2679  = _durTicksForLevel
+//   2. CalcBuffDuration_modification: Quarm's per-spell table       spells.cpp:2527-2606  DB-side, NOT mirrored: the residual
+//   3. Spell Casting Reinforcement AA, a CLIENT caster and IsBeneficialSpell only (spells.cpp:2479-2515): rank 1/2/3 = +5/+15/+30
+//      percent of the ticks, plus 20 more points when Reinforcement Mastery is held AND rank >= 1; res += res * bonus / 100 (int).
+//      A permanent formula (50) skips it (:2477 `formula != DF_Permanent`).
+//   4. Client::ApplyDurationFocus (zone/spell_effects.cpp:4630-4662), AFTER the landing, IsBuffSpell and not a "splurt" formula:
+//      ticks = ticks * (100 + focus) / 100, floored; focus = GetFocusEffect(focusSpellDuration) (:4433-4628) = the best SINGLE worn
+//      item + best buff-spell focus + best AA focus (no AA carries SPA 128), and a bard song gets 0 (:4433).
+//      An item's SPA 128 value passes only while CalcFocusEffect's limits hold (:4080-4408): SE_LimitMaxLevel 134 (the cast spell's
+//      level for the caster's class must not exceed base, else 0 with no base2), SE_LimitSpellType 138 (spell.goodEffect == base),
+//      SE_LimitMinDur 140 (the spell's formula duration at the caster's level >= base).
+// Charm is detrimental, so step 3 never applies to it; step 4 does when a focus passes (the detrimental-only ones: Timeburn /
+// Chronoburn / Eterninostrum / Chrononostrum, spells 3843-3846, type limit 0).
+// AA indexes are the CLIENT's (eqemu_altadv_vars.eqmacid), which is what the Quarmy export carries: 21 Spell Casting Reinforcement,
+// 113 Reinforcement Mastery. NOT skill_id (86 / 266, which a naive join confuses with other AAs).
+const AA_SPELL_CAST_REINFORCEMENT = 21, AA_REINFORCEMENT_MASTERY = 113;
+let _durFociByItem = new Map();   // item id → { pct, max_level, type_limit, min_ticks }
+let _durFociKnown = false;        // false while the bot sends no duration_foci: the gear's foci are then unknown, not absent
+function _setDurationFociCatalog(list) {
+  _durFociKnown = Array.isArray(list);
+  const m = new Map();
+  for (const f of (Array.isArray(list) ? list : [])) {
+    const pct = Number(f && f.pct);
+    if (!(pct > 0) || !(Number(f.id) > 0)) continue;
+    m.set(Number(f.id), { pct, max_level: f.max_level == null ? null : Number(f.max_level),
+      type_limit: f.type_limit == null ? null : Number(f.type_limit), min_ticks: f.min_ticks == null ? null : Number(f.min_ticks) });
+  }
+  _durFociByItem = m;
+}
+// Reinforcement percent for an AA list [{index, rank}], per the switch at spells.cpp:2486-2506 (a rank above 3 adds nothing).
+function _reinforcementPct(aas) {
+  const rank = (i) => { const a = (aas || []).find(x => x && Number(x.index) === i); return a ? Number(a.rank) || 0 : 0; };
+  const r = rank(AA_SPELL_CAST_REINFORCEMENT);
+  if (!(r > 0)) return 0;
+  let b = r === 1 ? 5 : r === 2 ? 15 : r === 3 ? 30 : 0;
+  if (rank(AA_REINFORCEMENT_MASTERY) > 0) b += 20;
+  return b;
+}
+// The best worn duration focus for this spell: { pct, itemId, undecided }. `undecided` = a focus whose cast-level cap cannot be
+// judged because the spell's level for the caster's class is unknown (the mirror carries no class levels for most spells).
+function _bestDurationFocus(wornItemIds, spell, beneficial, formulaTicks, spellLevel, eraCap) {
+  let best = { pct: 0, itemId: 0, undecided: false };
+  for (const id of wornItemIds) {
+    const f = _durFociByItem.get(Number(id));
+    if (!f) continue;
+    if (f.type_limit != null && f.type_limit !== (beneficial ? 1 : 0)) continue;           // SE_LimitSpellType 138
+    if (f.min_ticks != null && formulaTicks < f.min_ticks) continue;                        // SE_LimitMinDur 140
+    if (f.max_level != null) {                                                              // SE_LimitMaxLevel 134
+      if (spellLevel > 0) { if (spellLevel > f.max_level) continue; }
+      else if (f.max_level < eraCap) { if (f.pct > best.pct) best.undecided = true; continue; }
+    }
+    if (f.pct > best.pct) best = { pct: f.pct, itemId: Number(id), undecided: best.undecided };
+  }
+  return best;
+}
+// What a character casts with: its Quarmy AAs, its worn item ids and its class, each null when unread.
+function _castingKit(character) {
+  let aas = null, classId = null;
+  try { const q = _quarmyLocalItems(character); if (q) { aas = q.aas || null; classId = q.classId || null; } } catch { /* unread */ }
+  let items = null;
+  try {
+    const invs = stats.characterInventories || {};
+    const cl = String(character || '').toLowerCase();
+    const key = Object.keys(invs).find(k => k.toLowerCase() === cl);
+    const inv = key ? invs[key] : null;
+    items = inv && Array.isArray(inv.items) ? inv.items : null;
+    const since = inv ? (Date.parse(inv._updatedAt || '') || 0) : 0;
+    const q = _quarmyLocalItems(character);
+    if (q && Array.isArray(q.items) && (!items || q.at > since)) items = q.items;
+  } catch { /* unread */ }
+  const worn = items ? items.filter(it => INVENTORY_WORN_SLOTS.has(String(it.loc || '').replace(/\d+$/, '')) && Number(it.id) > 0).map(it => Number(it.id)) : null;
+  return { aas, worn, classId };
+}
+// The duration of a spell WE cast, in ticks, with the chain above. `spell` is a catalog entry or a name; ctx = { character, level,
+// spellLevel, song, kit }. `kit` overrides the character's own (tests, party). estimated = something the chain needs was unread, so
+// the figure is today's bare formula for that step (Quarm's per-spell table is a residual either way and is not flagged).
+function _durationWithExtensions(spell, casterLevel, ctx) {
+  ctx = ctx || {};
+  const e = (spell && typeof spell === 'object') ? spell
+    : (_spellByNameLower.get(String(spell || '').toLowerCase()) || _spellByNameLower.get(String(spell || '').toLowerCase().replace(/`/g, "'")) || null);
+  if (!e) return { ticks: 0, secs: 0, base_ticks: 0, estimated: true, aa_pct: 0, focus_pct: 0, focus_item: 0 };
+  const eraCap = _assumedCasterLevel();
+  let estimated = !(Number(casterLevel) > 0);
+  const lvl = Number(casterLevel) > 0 ? Number(casterLevel) : eraCap;
+  const base = _durTicksForLevel(e.durf, e.dur, lvl);
+  const out = { ticks: base, base_ticks: base, estimated: false, aa_pct: 0, focus_pct: 0, focus_item: 0 };
+  const f = Number(e.durf) || 0;
+  if (!(base > 0) || f === 50 || f === 51) { out.secs = base * 6; out.estimated = estimated; return out; }   // permanent: neither step touches it
+  const kit = ctx.kit || _castingKit(ctx.character);
+  const beneficial = Number(e.good) === 1;
+  let ticks = base;
+  if (beneficial) {
+    if (kit.aas) { const p = _reinforcementPct(kit.aas); out.aa_pct = p; ticks += Math.trunc(ticks * p / 100); }   // spells.cpp:2510-2512
+    else estimated = true;
+  }
+  if (!ctx.song) {
+    if (kit.worn && _durFociKnown) {
+      const b = _bestDurationFocus(kit.worn, e, beneficial, base, Number(ctx.spellLevel) || 0, eraCap);
+      if (b.pct > 0) { out.focus_pct = b.pct; out.focus_item = b.itemId; ticks = Math.floor(ticks * (100 + b.pct) / 100); }   // spell_effects.cpp:4656
+      if (b.undecided) estimated = true;
+    } else estimated = true;
+  }
+  out.ticks = ticks; out.secs = ticks * 6; out.estimated = estimated;
+  return out;
+}
+// A landing event's duration in ticks: the chain above for a cast WE made (the log owner is the caster, `_selfCast`), the bare
+// formula at `fallbackLevel` for everyone else's (their AAs and gear are not ours to read). A bard's casts are songs (no focus).
+function _ownDurTicks(bcEvt, fallbackLevel) {
+  const bare = () => _durTicksForLevel(bcEvt.dur_formula, bcEvt.dur_ticks, fallbackLevel);
+  const who = bcEvt && bcEvt._selfCast && bcEvt.observer ? String(bcEvt.observer) : null;
+  if (!who) return bare();
+  const kit = _castingKit(who);
+  const lvl = (whoData.get(who.toLowerCase()) || {}).level || fallbackLevel;
+  const r = _durationWithExtensions({ durf: bcEvt.dur_formula, dur: bcEvt.dur_ticks, good: _spellGood(bcEvt.spell_name) }, lvl, { character: who, kit, song: kit.classId === 8 });
+  return r.ticks > 0 ? r.ticks : bare();
+}
+
 // A buff landing we already detected (parseBuffLanding) — if its target is one
 // of our pets, stamp landed_at so the Pet tracker can count it down from the
 // spell's duration. The caster of a buff on YOUR pet is you (the owner), so we
@@ -3625,7 +3749,7 @@ function recordPetBuffLanding(bcEvt) {
   // while Mob Info (which already uses the era-cap fallback in
   // recordTargetBuffLanding) shows it ticking down correctly.
   const ownerLevel = (whoData.get(owner) || {}).level || _assumedCasterLevel();
-  const durTicks   = _durTicksForLevel(bcEvt.dur_formula, bcEvt.dur_ticks, ownerLevel);
+  const durTicks   = _ownDurTicks(bcEvt, ownerLevel);   // our own cast on our pet carries our AAs and worn foci (2026-11-15)
   const newKey     = String(bcEvt.spell_name).toLowerCase();
   // Slot-based overwrite — if the new buff has a known category (haste / hp /
   // runSpeed / etc.) drop any existing entry in the same category, including
@@ -4212,7 +4336,13 @@ function _activeBuffsForDashboard() {
 // "provide an estimate of how long cast buffs will last by character based on
 // AA/Focus effects."
 //
-// ⚠ WE CANNOT COMPUTE THIS FROM THE AA DATA, AND GUESSING IT WOULD BE WORSE
+// ⚠ UPDATE 2026-11-15: the AA arithmetic is no longer a guess. It is read from the server's own code
+// (Mob::CalcBuffDuration, zone/spells.cpp:2479-2515, EQMacEmu c2cd265) and implemented in _durationWithExtensions with the
+// worn item foci; the AA ids are the client indexes 21 / 113 from the Quarmy export, NOT eqemu_aa_effects. This MEASURED
+// factor stays as the cross-check on that arithmetic (and it is what carries Quarm's own per-spell duration table, which the
+// mirror does not hold). The 2026-09-02 text below is the history of why the effects table could not be used.
+//
+// ⚠ WE CANNOT COMPUTE THIS FROM THE AA DATA (eqemu_aa_effects), AND GUESSING IT WOULD BE WORSE
 // THAN NOT SHIPPING IT. Checked against our own mirror on 2026-09-02: in
 // eqemu_aa_effects, Spell Casting Mastery (mana cost) and Spell Casting
 // Reinforcement (buff DURATION) both carry effectid 5, and Natural Durability
@@ -4473,7 +4603,7 @@ function recordTargetBuffLanding(bcEvt) {
   }
   const entry = {
     name: bcEvt.spell_name,
-    dur_ticks: _durTicksForLevel(bcEvt.dur_formula, bcEvt.dur_ticks, lvl),
+    dur_ticks: _ownDurTicks(bcEvt, lvl),   // our own casts carry our AAs and worn foci (2026-11-15)
     landed_at: bcEvt.cast_at ? Date.parse(bcEvt.cast_at) : Date.now(),
     // Which SPAWN this landed on, when the observer could prove it. The map
     // stays keyed by NAME on purpose — an id-keyed map would fragment a mob's
@@ -4783,7 +4913,7 @@ function _synthesizePacifyLanding(spellName, character, atMs) {
   }
   const e = _spellByNameLower.get(key) || null;
   const lvl = (whoData.get(cl) || {}).level || _assumedCasterLevel();
-  const durTicks = e ? _durTicksForLevel(e.durf, e.dur, lvl) : 0;
+  const durTicks = e ? _durationWithExtensions(e, lvl, { character }).ticks : 0;   // our own cast: our AAs and worn foci
   if (!(durTicks > 0)) return;
   const tk = String(target).toLowerCase();
   let mp = _buffLandingsByTarget.get(tk);
@@ -41633,7 +41763,7 @@ function _quarmyLocalItems(character) {
   const c = _quarmyLocal.get(cl);
   if (c && now - c.checkedAt < 30_000) return c.items ? c : null;
   const firstLog = stats.watchedLogs && stats.watchedLogs[0] && stats.watchedLogs[0].logPath;
-  const entry = { checkedAt: now, fp: c ? c.fp : null, at: c ? c.at : 0, items: c ? c.items : null };
+  const entry = { checkedAt: now, fp: c ? c.fp : null, at: c ? c.at : 0, items: c ? c.items : null, aas: c ? c.aas : null, classId: c ? c.classId : null };
   _quarmyLocal.set(cl, entry);
   if (!firstLog) return entry.items ? entry : null;
   try {
@@ -41646,6 +41776,8 @@ function _quarmyLocalItems(character) {
     if (fp !== entry.fp) {
       const q = parseQuarmyExport(fs.readFileSync(full, 'utf8'));
       entry.items = [...q.equipped, ...q.bags].map(i => ({ name: i.item_name, id: i.item_id, count: i.count, loc: i.slot }));
+      entry.aas = q.aas.length ? q.aas : null;   // the duration chain's Reinforcement AAs (an export with no AA section = unread, not rank 0)
+      entry.classId = q.profile ? q.profile.class_id : null;
       entry.fp = fp;
       entry.at = st.mtimeMs;
     }
@@ -47844,10 +47976,11 @@ function _loadItemClickiesFromDisk() {
       if (e && e.name) _itemClickyByNameLower.set(String(e.name).toLowerCase(), e);
     }
     // A file written before `worn_ds` was kept: forget its etag, so the next fetch is a full 200.
-    const etag = (Array.isArray(raw.worn_ds) && 'worn_haste' in raw) ? (raw.etag || null) : null;
+    const etag = (Array.isArray(raw.worn_ds) && 'worn_haste' in raw && 'duration_foci' in raw) ? (raw.etag || null) : null;   // (+ duration_foci, 2026-11-15)
     _itemClickyMeta = { fetchedAt: raw.fetched_at, etag, count: raw.entries.length };
     _setWornDsCatalog(raw.worn_ds);
     _setWornHasteCatalog(raw.worn_haste);
+    _setDurationFociCatalog(raw.duration_foci);
     console.log(`[item-clickies] loaded ${raw.entries.length} clicky items from disk (cached ${raw.fetched_at || '?'})`);
   } catch (err) {
     console.warn('[item-clickies] disk load failed:', err && err.message);
@@ -47894,8 +48027,9 @@ function fetchItemClickies({ botUrl, token }) {
             _itemClickyMeta = { fetchedAt: data.fetched_at, etag: etag || null, count: data.entries.length };
             _setWornDsCatalog(data.worn_ds);
             _setWornHasteCatalog(data.worn_haste);
+            _setDurationFociCatalog(data.duration_foci);
             try {
-              const out = { fetched_at: data.fetched_at, etag: etag || null, entries: data.entries, worn_ds: data.worn_ds || [], worn_haste: data.worn_haste === undefined ? null : data.worn_haste };
+              const out = { fetched_at: data.fetched_at, etag: etag || null, entries: data.entries, worn_ds: data.worn_ds || [], worn_haste: data.worn_haste === undefined ? null : data.worn_haste, duration_foci: data.duration_foci === undefined ? null : data.duration_foci };
               fs.writeFileSync(ITEM_CLICKY_FILE + '.tmp', JSON.stringify(out));
               fs.renameSync(ITEM_CLICKY_FILE + '.tmp', ITEM_CLICKY_FILE);
             } catch (e) { /* disk cache best-effort */ }
@@ -70058,6 +70192,10 @@ const PARTY_RX_IDLE_MS = 15_000;                // the relay sends a view every 
 const PARTY_BACKOFF_MS = [1000, 2000, 5000, 10_000, 20_000, 30_000, 60_000];
 const PARTY_CODE_RX = /^[2-9A-HJKMNP-Z]{6}$/;
 const PARTY_NAME_RX = /^[A-Za-z']{1,24}$/;
+// Shared timers (relay 1.1.0, apps/raidmimic-relay/lib.js): the same kinds, caps and target pattern the relay validates with.
+const PARTY_TIMER_KINDS = ['buff', 'debuff', 'charm'], PARTY_MAX_TIMERS = 100, PARTY_MAX_SPELL = 60;
+const PARTY_TIMER_MAX_MS = { buff: 20 * 60_000, debuff: 20 * 60_000, charm: 3 * 3600_000 };
+const PARTY_TARGET_RX = /^[A-Za-z0-9 '`-]{1,64}$/;
 const PARTY_MAX_ROWS = 80, PARTY_MAX_TEXT = 120, PARTY_MAX_FIRES = 20, PARTY_MAX_NUM = 1e12, PARTY_MAX_FRAME = 32 * 1024;
 // Closing codes after which reconnecting is pointless: the relay said no, and saying it again changes nothing.
 const PARTY_FATAL = {
@@ -70255,12 +70393,28 @@ function partyBuildPub(src, now = Date.now()) {
     if (text && Number.isFinite(at) && at > 0) fires.push({ text, at: Math.round(Math.min(at, now)) });
   }
   if (fires.length) out.fires = fires.slice(-PARTY_MAX_FIRES);
+  // Shared timers (relay 1.1.0, apps/raidmimic-relay/lib.js validatePub): a SNAPSHOT of what this member cast itself. The relay drops a
+  // timer whose caster is not the hello character, so `src.character` (when given) filters here too; an array, even empty, is a
+  // snapshot ([] clears what the relay holds), and a frame with no `timers` key leaves the member's previous set alone.
+  if (src && Array.isArray(src.timers)) {
+    const tm = [];
+    for (const t of src.timers) {
+      const spell = _partyClean(t && t.spell), target = String((t && t.target) || ''), caster = String((t && t.caster) || ''), endsAt = Number(t && t.endsAt);
+      if (!t || !PARTY_TIMER_KINDS.includes(t.kind) || !spell || spell.length > PARTY_MAX_SPELL || !PARTY_TARGET_RX.test(target) || !PARTY_NAME_RX.test(caster)) continue;
+      if (src.character && caster !== src.character) continue;
+      if (!Number.isFinite(endsAt) || endsAt <= now) continue;
+      tm.push({ kind: t.kind, spell, target, caster, endsAt: Math.round(Math.min(endsAt, now + PARTY_TIMER_MAX_MS[t.kind])), may_break: t.may_break === true });
+    }
+    tm.sort((a, b) => a.endsAt - b.endsAt || (a.spell < b.spell ? -1 : 1));
+    out.timers = tm.slice(0, PARTY_MAX_TIMERS);
+  }
   if (Object.keys(out).length === 1) return null;
   // 80 rows of four numbers are about 7 KB, far under the cap; this only guards a pathological name-and-text mix.
   while (JSON.stringify(out).length > PARTY_MAX_FRAME - 512 && out.perPlayer && Object.keys(out.perPlayer).length > 1) {
     const keys = Object.keys(out.perPlayer);
     out.perPlayer = Object.fromEntries(keys.slice(0, Math.ceil(keys.length / 2)).map((k) => [k, out.perPlayer[k]]));
   }
+  while (JSON.stringify(out).length > PARTY_MAX_FRAME - 512 && out.timers && out.timers.length > 1) out.timers = out.timers.slice(0, Math.ceil(out.timers.length / 2));
   return out;
 }
 // Reconnect delay for the nth failed attempt (0-based): 1, 2, 5, 10, 20, 30, 60 s, then 60 s, with up to 20% jitter so a
@@ -70416,7 +70570,7 @@ function createPartyClient(d) {
     view() {
       const v = S.view;
       if (!v) return null;
-      return { players: v.players || [], roster: v.roster || [], fires: v.fires || [], target: v.target || null, casting: v.casting || null, at: S.viewAt };
+      return { players: v.players || [], roster: v.roster || [], fires: v.fires || [], target: v.target || null, casting: v.casting || null, timers: Array.isArray(v.timers) ? v.timers : [], at: S.viewAt };
     },
     tick, destroy() { clearInterval(timer); timer = null; drop(false); S.want = null; },
     _state: S,
@@ -70448,6 +70602,38 @@ function _partyBlocked() {
   if (!shouldUploadForCharacter(c)) return 'hidden';
   return null;
 }
+// The timers THIS character cast and still has running, for the party view (relay 1.1.0). Ends come from the duration chain
+// (_durationWithExtensions: our AAs and worn foci), already in each entry's dur_ticks:
+//   * buffs / debuffs: _buffLandingsByTarget entries we cast (`cast_by`, or `owner` for the synthesized pacify), kind by the spell's
+//     good flag; a permanent spell (formula 50) is left out, it has no end to share.
+//   * charms: the charm tracker's active, non-Dire sessions. The server rolls a break check every tick (EQMacEmu c2cd265
+//     zone/spell_effects.cpp:3054-3095), so a charm only runs to its end if it holds: `may_break` is always true. A Dire Charm (AA)
+//     has no timed end and is not shared.
+let _partyTimersSent = false;
+function _partyOwnTimers(ch, now) {
+  const cl = String(ch || '').toLowerCase(), out = [];
+  if (!cl) return out;
+  for (const [tk, mp] of _buffLandingsByTarget) {
+    for (const b of mp.values()) {
+      if (!b || b.is_charm_spell || !(b.dur_ticks > 0) || !(b.landed_at > 0)) continue;
+      const by = String(b.cast_by || b.owner || '').toLowerCase();
+      if (by !== cl) continue;
+      const e = _spellByNameLower.get(String(b.name || '').toLowerCase());
+      if (e && (Number(e.durf) === 50 || Number(e.durf) === 51)) continue;
+      const endsAt = b.landed_at + b.dur_ticks * 6000;
+      if (endsAt <= now) continue;
+      out.push({ kind: _spellGood(b.name) === 1 ? 'buff' : 'debuff', spell: b.name, target: b.target_name || tk, caster: ch, endsAt, may_break: false });
+    }
+  }
+  for (const c of _charmTickTracker.values()) {
+    if (!c || !c.is_active || c.is_dire_charm || String(c.owner || '').toLowerCase() !== cl) continue;
+    if (!(c.duration_sec > 0) || !(c.started_at > 0)) continue;
+    const endsAt = c.started_at + c.duration_sec * 1000;
+    if (endsAt <= now) continue;
+    out.push({ kind: 'charm', spell: c.charm_spell || 'Charm', target: c.pet, caster: ch, endsAt, may_break: true });
+  }
+  return out;
+}
 // What this agent publishes now. Null = nothing to say (not fighting, not in a raid or group).
 function _partyCollect() {
   const ch = _partyCharacter();
@@ -70464,7 +70650,10 @@ function _partyCollect() {
       src.roster = st.gauges.filter((g) => g && g.text && g.slot >= 11 && g.slot <= 15 && typeof g.hp_pct === 'number').map((g) => ({ name: g.text, hp_pct: g.hp_pct }));
     }
   }
-  if (!src.perPlayer && !(src.roster && src.roster.length)) return null;
+  // Our own timers ride every frame, fight or not: a charm outlives the fight, and a frame that lists none clears the last one.
+  const own = _partyOwnTimers(ch, now);
+  if (own.length || _partyTimersSent) { src.timers = own; src.character = ch; _partyTimersSent = own.length > 0; }
+  if (!src.perPlayer && !(src.roster && src.roster.length)) return src.timers ? src : null;
   src.target = _zealTargetForChar(cl);
   const cast = _lastCastRelay.get(cl);
   if (cast && cast.spell && now - cast.at < ((Number(cast.castSecs) || 3) + 1.5) * 1000) src.casting = cast.target ? `${cast.spell} on ${cast.target}` : cast.spell;
@@ -70523,7 +70712,7 @@ async function _partyRoute(req, res) {
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
   // Raid Mimic party (2026-11-15): see the block above module.exports.
-  MiniWebSocket, createPartyClient, partyBuildPub, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
+  MiniWebSocket, createPartyClient, partyBuildPub, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
   _partyResetForTest: () => { if (_partyClientInst) _partyClientInst.destroy(); _partyClientInst = null; },
   _partySetFileForTest: (f) => { _partyFile = f || PARTY_FILE; },
   _partyCharacterForTest: (c) => { _partyCharacterOverride = c || null; },
@@ -70571,6 +70760,7 @@ module.exports = {
   CHAT_CACHE_FILE, CHAT_CACHE_MAX_AGE_MS, CHAT_CACHE_PER_RING_MAX, CHAT_CACHE_MAX_BYTES, CHAT_CACHE_WRITE_MS,
   _noteBuffDurationsFromState, buffDurationStats, buffDurationTable, _noteBuffDurationSample,
   buffDurationFactorFor,
+  _durationWithExtensions, _reinforcementPct, _setDurationFociCatalog, _castingKit, _ownDurTicks, _statsForTest: () => stats,
   SOURCELESS_SPELLS, BARD_SONGS,
   EncounterBuilder, characterFromFilename, isBackupLogFile, _splitBackupSuffix,
   trackChChainLine, chChainSnapshot, removeChChainSlot,
