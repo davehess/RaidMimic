@@ -104,6 +104,7 @@ writes.
   `handleRequest`) writes `hub_flags` and `hub_characters` (migration `20261102210000_hub_sync.sql`, RLS on, no policies);
   dispatched from `_handleAgentPopFlags` before any Wolf Pack write. `web/lib/mimicLinkHub.ts` lets any raidmimic.com player
   claim a player code. `test/hub-sync.test.js`, `test/mimic-link-hub.test.js`.
+- **What Raid Mimic costs to run, `https://raidmimic.com/costs` (web 2.1.147, `[beta]`).** Public page: what is free, what hosted replays will cost, the monthly bill and a Ko-fi link. Every figure and its source note is in `web/lib/runningCosts.ts` (update it there, then move `measuredAt`); page `web/app/costs/page.tsx`; open path `RAIDMIMIC_COSTS_PATH` in `web/lib/raidmimicHost.ts`; footer link in `web/app/raidmimic/_landing/Parts.tsx`. Authority for the numbers: `docs/COSTS.md`. `test/running-costs.test.js`.
 - **My raids, `https://raidmimic.com/raids` (web 2.1.146, `[beta]`).** A player's own guild list (`hub_player_guilds`, up to 10: a registered
   `hub_guilds` row or a typed name, raid days/start/length/zone, or "use the guild's schedule" from `guild_settings`), the next 14 days of raids
   with a target (the player's own pick in `hub_player_targets`, or one the guild posted in `flag_events`, which wins) and each linked character's

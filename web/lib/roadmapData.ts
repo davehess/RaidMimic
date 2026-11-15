@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'running-costs-2026-11-15',
+    title: 'What Raid Mimic costs to run',
+    version: 'Web 2.1.147',
+    date: '2026-11-15',
+    headline: 'A new page on raidmimic.com shows what Raid Mimic costs each month, what is free, and what we will charge for.',
+    features: [
+      { name: 'What is free and why', blurb: 'Live party merging, your PoP flags, your characters, My raids, recaps and the overlays on your own PC are free.' },
+      { name: 'What we will charge for', blurb: 'Hosted replays, the second-by-second fight record, are the one thing that costs real money to keep for a guild.' },
+      { name: 'The monthly bill', blurb: 'Each service we pay for with its monthly cost, and a plain note where we have not measured yet.' },
+      { name: 'Chip in', blurb: 'A Ko-fi link, with an honest line on what a donation does and does not buy.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'my-raids-2026-11-15',
     title: 'My raids on Raid Mimic',
     version: 'Web 2.1.146',
