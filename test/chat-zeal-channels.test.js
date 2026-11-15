@@ -379,6 +379,8 @@ describe('how much leaves Other: both golden logs, replayed', () => {
       'Lord Nagafen was burned by brambles.',
       'You throw your head back and let loose a piercing blast.',
       'You are snared.',
+      'a greater gnoll pup writhes in the grip of agony.',
+      'Sylvarra feels a healing touch.',
       'Nyxaria begins casting Dire Charm.',
     ].filter(t => !COLOURS.has(t)));
   });
@@ -387,7 +389,7 @@ describe('how much leaves Other: both golden logs, replayed', () => {
     const count = (r, c) => r.all.filter(x => x === c).length;
     expect({ before, withoutZealOther: none.other.length, withZealOther: zeal.other.length,
       withZealWho: count(zeal, 'who'), withZealDeath: count(zeal, 'death'), withZealZeal: count(zeal, 'zeal'), withZealPet: count(zeal, 'pet') })
-      .toEqual({ before: 33, withoutZealOther: 25, withZealOther: 12, withZealWho: 14, withZealDeath: 6, withZealZeal: 5, withZealPet: 1 });
+      .toEqual({ before: 35, withoutZealOther: 27, withZealOther: 14, withZealWho: 14, withZealDeath: 6, withZealZeal: 5, withZealPet: 1 });
   });
 });
 
