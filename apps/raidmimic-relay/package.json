@@ -1,0 +1,17 @@
+{
+  "name": "raidmimic-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Raid Mimic party relay: members of a group or raid share live overlay numbers through one small in-memory WebSocket service",
+  "license": "AGPL-3.0-or-later",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ws": "8.23.0"
+  }
+}

@@ -8188,3 +8188,12 @@ Mithaniel's notes (:37) and the second reading needs zeks **7** (:57), not 6. Th
 - ⏳ Unverified: Fennin's table is "Y, X" in its own comment and the script's spawn call swaps it; the swap is applied as the script does it,
   but only Coirnav's frame was checked against spawn2 (row 365647 sits inside its spots in the same x, y order). Pairing a plain table with
   its type is a reading of the code near each use, so spot-check a new zone against the script.
+### 🧾 2026-11-15 — Raid Mimic party relay: built, not deployed (relay 1.0.0, first draft, not yet routed)
+- `apps/raidmimic-relay/`: a small Node 22 WebSocket service (one dependency, `ws`) that lets a group or raid share live overlay
+  numbers. Own Railway project, in-memory only, no service-role key. Design, protocol, tiers and costs: `DESIGN-raidmimic-relay.md`.
+- Migration `20261115150000_raidmimic_relay.sql` (file only, NOT applied): `hub_player_entitlements`, `relay_resolve_session`,
+  `relay_start_trial`. Run against a scratch Postgres with stub tables (all token shapes, tiers, trial once, anon grants); not yet
+  run against production.
+- Test: `test/raidmimic-relay.test.js` (53 tests incl. a real-socket end to end). `test.yml` now runs `npm ci --prefix apps/raidmimic-relay`.
+- Not done: the Mimic client (overlay + the Settings card to create/join a party), the Railway project, applying the migration,
+  the `beta`-branch copy of `test.yml` (the workflow must exist on the branch it runs on).

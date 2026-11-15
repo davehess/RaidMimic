@@ -143,6 +143,11 @@ different failure for a raid night) and current egress against the 250 GB. The
 Management API exposes neither. Do not quote an egress figure until someone does.
 
 ## 3. Decisions already made that the wizard must carry
+- **2026-11-15 — the live party view runs on its own small service, in memory only** (`DESIGN-raidmimic-relay.md`): a Node
+  WebSocket relay on its own Railway project (not the bot's), holding the Supabase ANON key only and asking two `SECURITY DEFINER`
+  RPCs who a session token belongs to. It stores nothing, so a self-hosted guild runs it for the price of one small container;
+  the free/trial/pro caps are OUR plan rules (`hub_player_entitlements`, 14-day trial) and a wizard must ask which tier rule the
+  guild wants. Migration `20261115150000_raidmimic_relay.sql` is a setup step for any database that serves the relay.
 - **2026-11-13 — the bot's raid schedule comes from the guild's settings row** (DECISIONS §575): the raid window, night
   keys and attendance tick slots read `guild_settings`; with no row the bot uses its built-in times, which are OURS
   (Sun/Wed/Thu 20:30-23:30 Eastern, 6 AM night cutoff). So a wizard must write the row before the first raid night, or a

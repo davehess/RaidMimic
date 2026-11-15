@@ -3361,6 +3361,13 @@ Records only opted-in members (`/bristlebane optin|optout|forget|status`) as `<n
 `/data/consent.json`. Ogg conversion is still a README TODO. Tests: `test/bristlebane.test.js`,
 `test/raid-live.test.js`.
 
+### Raid Mimic party relay — live party view (relay 1.0.0, not deployed)
+`apps/raidmimic-relay/` (`index.js` = sockets, `lib.js` = validation, tier rule, per-player MAX merge, `Party`, session cache).
+WebSocket `/v1/party`; the first message carries a Mimic session token, resolved through the anon-key RPC
+`relay_resolve_session` (migration `20261115150000_raidmimic_relay.sql`; the relay never holds the service-role key). Parties live
+in memory only. Free: 6 members, roster/HP + trigger fires; trial/pro: 72 members, every stream, 10-minute history. Design:
+`docs/DESIGN-raidmimic-relay.md`. Test: `test/raidmimic-relay.test.js`. No Mimic client yet.
+
 ### Raid-night appearance (bot 3.1.208, §166)
 `utils/raidAppearance.js` `noteMinute()` is called by `raidTrack._writeMinute` after a minute row lands:
 `snapshotNight()` on a night's first minute, each raider's first minute and hourly → `raid_night_appearance`
