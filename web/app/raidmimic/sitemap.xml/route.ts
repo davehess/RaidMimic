@@ -3,7 +3,7 @@
 // hosts is a page.
 import { RAIDMIMIC_ORIGIN } from '../../../lib/raidmimicHost';
 
-const PAGES = ['/', '/setup', '/register', '/privacy', '/terms', '/refunds'];
+const PAGES = ['/', '/setup', '/register', '/privacy', '/security', '/terms', '/refunds'];
 
 export function GET() {
   const urls = PAGES.map(p => `  <url><loc>${RAIDMIMIC_ORIGIN}${p}</loc></url>`).join('\n');
