@@ -24,7 +24,7 @@ import HomeDashboard from './_landing/HomeDashboard';
 import { loadHomeGuilds } from '@/lib/hubGuildsLoad';
 import { profileOf } from '@/lib/hubRegistry';
 import type { Metadata } from 'next';
-import { isRaidmimicHost, raidmimicSeo, RAIDMIMIC_SETUP_PATH } from '@/lib/raidmimicHost';
+import { isRaidmimicHost, raidmimicSeo, RAIDMIMIC_CHARACTERS_PATH, RAIDMIMIC_SETUP_PATH } from '@/lib/raidmimicHost';
 import { EQMIMIC_FEEDBACK_PATH, EQMIMIC_ORIGIN, interestUrl } from '@/lib/raidmimicLanding';
 import { DOWNLOAD_URL } from '@/lib/raidmimicPlayer';
 import { CtaBand, Footer, type Ctx } from './_landing/Parts';
@@ -80,6 +80,16 @@ export default async function RaidmimicPage() {
             2026-11-02: "top bar on the raidmimic.com site doesn't lock"). The stage keeps its own header. */}
         {!signedIn && onHost && <HostBar />}
         <FeatureBlocks />
+        {!signedIn && (
+          <section aria-label="Track your PoP flags" className="mt-6 rounded-md border border-gold/70 bg-panel p-5 sm:p-6">
+            <h2 className="text-xl text-text">Track your PoP flags</h2>
+            <p className="mt-2 max-w-[62ch] text-sm leading-6 text-text">
+              Sign in with Discord, then paste your #popflags lines or drop the PoPFlags file Zeal saves when you camp. You see which
+              Planes of Power zones you can enter and what each character needs next. No guild needed, and only you can see it.
+            </p>
+            <p className="mt-4"><a href={RAIDMIMIC_CHARACTERS_PATH} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-bg px-4 text-sm text-gold hover:no-underline">Track your PoP flags</a></p>
+          </section>
+        )}
         <RaidManagement />
         <Pricing setup={ctx.setup} onHost={onHost} />
         <div className="mt-12"><CtaBand ctx={ctx} /></div>

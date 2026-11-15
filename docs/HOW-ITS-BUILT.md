@@ -104,6 +104,16 @@ writes.
   `handleRequest`) writes `hub_flags` and `hub_characters` (migration `20261102210000_hub_sync.sql`, RLS on, no policies);
   dispatched from `_handleAgentPopFlags` before any Wolf Pack write. `web/lib/mimicLinkHub.ts` lets any raidmimic.com player
   claim a player code. `test/hub-sync.test.js`, `test/mimic-link-hub.test.js`.
+- **My characters, `https://raidmimic.com/characters` (web 2.1.144 on `main`, `[beta]`; DECISIONS §545).** Three ways in, one path:
+  drop Zeal's `<Name>-PoPFlags.txt` files (`UploadForm.tsx` → `importCharacters`), or paste the `#popflags` lines, a file's text
+  or the Seer's words with a name (`PasteForm.tsx` → `importPaste`; `pasteToFile` in `web/lib/hubImport.ts`: 64 KB / 800 line caps
+  and the NUL check BEFORE parsing, header name must match the field, only catalog keys stored, unrecognised lines only counted).
+  Both go through `importExports` (50-character and 50-file caps, `hubClaim.ts`, dedupe; `normalizeText` first: curly quotes, NBSP, dashes, zero-width) and the two-layer limiter: in-memory 10 per 10 min, then
+  `hub_import_attempts` (20 an hour per player, `web/lib/hubImportLimit.ts`, fails OPEN; migration `20261115120000`, pruned at 1 day
+  by the bot's midnight chain). Each card shows Needs next, a "Can enter" zone list (`zoneEntry` in `hubCharactersView.ts`, from
+  `zoneAccess` / `missingFor` over `heldClosure`), the flags it has, and "Remove this character" (`removeCharacter`). Above the cards, the demo's `GateTable` draws the flag matrix from the
+  player's real flags (`matrixRows`: most flags first, ties by name; `?gate=` picks the gate). The signed-out
+  landing carries a "Track your PoP flags" button. `test/hub-characters-import.test.js`, `test/hub-characters-paste.test.js`.
 - **Flag events board, `/pop/flag-events` (web 2.1.99 on `main`, `[beta]`, 2026-11-02; DECISIONS §522 pick A).** Officers post
   a target (catalog `web/lib/flagTargets.ts`, 12 targets, each a set of gate pieces from `popGatePieces.ts`; the demo shares it)
   and an Eastern date/time, an optional note and an optional Raid-Helper event (`actions.ts`: session + `isOfficer` re-checked,

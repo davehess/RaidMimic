@@ -227,6 +227,10 @@ export default function RaidmimicPrivacyPage() {
             guild&apos;s raid records stay with the guild, unlinked from your Discord account.
           </li>
           <li>
+            <B>PoP flags you load on My characters</B> (by file or by paste) are stored against your sign-in and shown only to you.
+            Remove one character from its card on that page, or delete everything from Your data above.
+          </li>
+          <li>
             <B>Anything else</B> (see what we hold, fix it, remove it, ask a question):{' '}
             <a href={CONTACT_HREF} className={LEGAL_LINK}>{CONTACT_EMAIL}</a>. Wherever you live, ask; we will answer.
           </li>

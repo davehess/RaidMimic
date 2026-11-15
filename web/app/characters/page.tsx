@@ -18,18 +18,32 @@ import NewPageTag from '@/components/NewPageTag';
 import SignInButton from '@/components/SignInButton';
 import HostFrame from '@/components/RaidmimicFrame';
 import UploadForm from './UploadForm';
+import PasteForm from './PasteForm';
+import GateTable from '@/app/pop/guide/GateTable';
+import { GATES } from '@/lib/popGatePieces';
+import { gateKeyOr } from '@/lib/popGateStatus';
+import { matrixRows } from '@/lib/hubCharactersView';
+import RemoveButton from './RemoveButton';
 
-export const metadata: Metadata = {
-  title: '[beta] My characters',
-  description: 'Load your characters on Raid Mimic from the PoPFlags file Zeal saves when you camp, and see each one’s Planes of Power flag progress and what it needs next.',
-  robots: { index: false, follow: false },
-};
+const GATE_CHOICES = GATES.map(g => ({ key: g.key, name: g.name, short: g.short }));
+const TITLE = '[beta] My characters';
+const DESCRIPTION = 'Load your characters on Raid Mimic from the PoPFlags file Zeal saves when you camp, and see each one’s Planes of Power flag progress and what it needs next.';
+
+// On a raidmimic host the tab says Raid Mimic, not the root layout's WolfPack.quest suffix.
+export function generateMetadata(): Metadata {
+  const onHost = isRaidmimicHost(headers().get('host'));
+  return {
+    title: onHost ? { absolute: `${TITLE} · Raid Mimic` } : TITLE,
+    description: DESCRIPTION,
+    robots: { index: false, follow: false },
+  };
+}
 
 export const dynamic = 'force-dynamic';
 
 const CARD = 'rounded-lg border border-border bg-panel p-4';
 
-export default async function CharactersPage() {
+export default async function CharactersPage({ searchParams }: { searchParams?: { gate?: string } }) {
   const onHost = isRaidmimicHost(headers().get('host'));
   const { data: { user } } = await supabaseServer().auth.getUser();
   const discordId = discordIdOf(user);
@@ -49,6 +63,7 @@ export default async function CharactersPage() {
   }
 
   const mine = await loadMine(discordId);
+  const gateKey = gateKeyOr(searchParams?.gate);
   return (
     <HostFrame onHost={onHost}>
       <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
@@ -60,7 +75,19 @@ export default async function CharactersPage() {
           <UploadForm max={MAX_CHARACTERS_PER_PLAYER} held={mine.length} />
         </section>
 
-        <section aria-label="Your characters" className="mt-6 space-y-3">
+        <section aria-label="Paste flags" className="mt-4">
+          <PasteForm />
+        </section>
+
+        {mine.length > 0 && (
+          <section aria-label="Flag matrix" className="mt-6">
+            <GateTable gates={GATE_CHOICES} selected={gateKey} rows={matrixRows(mine, gateKey)}
+              hrefFor={k => `/characters?gate=${k}`} singleHref="#your-characters" />
+            <p className="mt-1 text-xs text-dim">Most flags first. Each card below says what that character needs next.</p>
+          </section>
+        )}
+
+        <section id="your-characters" aria-label="Your characters" className="mt-6 space-y-3">
           {mine.length === 0 && <p className="text-sm text-dim">No characters loaded yet. Choose your PoPFlags files above.</p>}
           {mine.map(c => (
             <article key={c.name} className={CARD}>
@@ -95,6 +122,18 @@ export default async function CharactersPage() {
                 <p className="mt-3 text-sm text-dim">{c.flagCount === 0 ? 'No flags read from this export yet.' : 'Nothing left on the lines we track.'}</p>
               )}
 
+              <details className="mt-3" open>
+                <summary className="cursor-pointer text-sm text-blue">Can enter ({c.zones.filter(z => z.open).length} of {c.zones.length} zones)</summary>
+                <ul className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                  {c.zones.map(z => (
+                    <li key={z.key}>
+                      <b className="font-medium text-text">{z.name}</b>{' '}
+                      {z.open ? <span className="text-green">yes</span> : <span className="text-dim">missing {z.missing.join(', ')}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+
               {c.groups.length > 0 && (
                 <details className="mt-3">
                   <summary className="cursor-pointer text-sm text-blue">Flags it has</summary>
@@ -108,6 +147,7 @@ export default async function CharactersPage() {
                   </dl>
                 </details>
               )}
+              <RemoveButton name={c.name} />
             </article>
           ))}
         </section>

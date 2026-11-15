@@ -3615,6 +3615,18 @@ function scheduleMidnightSummary(readyClient) {
         console.warn('[midnight] hub_invite_attempts retention skipped:', err?.message);
       }
 
+      // Import log (hub_import_attempts, the "My characters" hourly cap): only the last hour is ever read.
+      try {
+        const supabase = require('./utils/supabase');
+        if (supabase.isEnabled()) {
+          const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          await supabase.del('hub_import_attempts', `at=lt.${encodeURIComponent(cutoff)}`);
+          console.log('[midnight] swept hub_import_attempts older than 1 day');
+        }
+      } catch (err) {
+        console.warn('[midnight] hub_import_attempts retention skipped:', err?.message);
+      }
+
       // ── Retention sweep: raid history (utils/raidHistory.js) ──────────────
       // The six saved streams (mob sightings, mob HP, casts, zone changes, pet owners, trigger fires) keep 60 days in
       // Supabase (the guild lead, 2026-10-29); the Tower archive keeps them longer. Each table's time column leads its

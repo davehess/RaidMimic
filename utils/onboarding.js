@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.0.85': [
+    'Behind the scenes: the nightly cleanup also clears Raid Mimic\'s hourly import log.',
+  ],
   '4.0.84': [
     'Behind the scenes: a monk\'s weave count for each fight is kept, for the new Combat page (needs the newest Mimic beta).',
   ],

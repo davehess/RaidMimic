@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'track-pop-flags-2026-11-15',
+    title: 'Track your PoP flags on Raid Mimic',
+    version: 'Web 2.1.144',
+    date: '2026-11-15',
+    headline: 'Anyone can track their Planes of Power flags on raidmimic.com by pasting the lines or dropping the file.',
+    features: [
+      { name: 'Paste your flags', blurb: 'Paste what #popflags printed, or what the Seer told you, with the character name. No file needed.' },
+      { name: 'All your alts at a glance', blurb: 'Up to 50 characters in one table, the ones with the most flags first, with what each is still missing.' },
+      { name: 'Where can I go?', blurb: 'Each character shows every Planes of Power zone it can enter, and which flag is missing for the rest.' },
+      { name: 'Remove a character', blurb: 'Take a character and its saved flags off the page whenever you like.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'character-combat-2026-11-14',
     title: 'Combat page for your characters',
     version: 'Web 2.1.143 · Bot 4.0.83',
