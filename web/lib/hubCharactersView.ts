@@ -6,7 +6,8 @@ import { nextCard, nextSteps, type NextCard } from './popNextSteps';
 import { stepLabel, stepZone } from './popFlagsPaste';
 import { POP_FLAGS, POP_ZONES, POP_ZONE_BY_KEY, missingFor, zoneAccess } from './popFlags';
 import { DEFAULT_GATE, gateReport } from './popGateStatus';
-import type { GateTableRow } from '@/app/pop/guide/GateTable';
+import type { GateTableRow, OverallRow } from '@/app/pop/guide/GateTable';
+import { GATES } from './popGatePieces';
 import { heldClosure } from './popRecital';
 
 export type CharacterView = {
@@ -34,6 +35,24 @@ export function matrixRows(views: CharacterView[], gateKey: string): GateTableRo
       const r = gateReport(zone, { flags: v.keys, fullRead: true });
       return { name: v.name, cls: null, isMain: true, pieces: r.pieces, verdict: r.verdict };
     });
+}
+
+/** The Overall view: each character across every gate (pieces done of total), most flags first, ties by name. */
+export function overallRows(views: CharacterView[]): OverallRow[] {
+  return [...views]
+    .sort((a, b) => b.flagCount - a.flagCount || a.name.localeCompare(b.name))
+    .map(v => ({
+      name: v.name, flagCount: v.flagCount,
+      gates: GATES.map(z => {
+        const r = gateReport(z, { flags: v.keys, fullRead: true });
+        return { key: z.key, short: z.short, done: r.pieces.filter(p => p.state === 'done').length, total: r.pieces.length };
+      }),
+    }));
+}
+
+/** True when the page should open on Overall: no ?gate=, ?gate=overall, or anything that is not a gate. */
+export function wantsOverall(raw: unknown): boolean {
+  return !(typeof raw === 'string' && GATES.some(g => g.key === raw));
 }
 
 /** The entry check per zone, on the flags the character has plus what each one implies (the same closure the Seer paste uses). */
