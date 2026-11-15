@@ -8,10 +8,12 @@
 // with the anon key who a Mimic session token belongs to (supabase/migrations/20261115150000_raidmimic_relay.sql).
 //
 // Protocol (WebSocket, /v1/party, JSON text frames):
-//   client → hello {token, party? | create:true, character, agent_version}     first message, within 10 s
-//   server → welcome {party, tier, member}   or   error {code}  then close
-//   client → pub {perPlayer?, target?, casting?, roster?, fires?, timers?}      latest wins, about every 2 s
-//   server → view {...}                                                        every 2 s, same view to every member
+//   client → hello {token, party? | create:true | auto:true, character, agent_version}   first message, within 10 s
+//   server → welcome {party, tier, member}   or   error {code}  then close   (auto: party null, auto true)
+//   client → pub {perPlayer?, target?, casting?, roster?, members?, fires?, timers?}   latest wins, about every 2 s
+//   server → view {...}                                                        every 2 s; a code party's members share one view,
+//                                                                              an auto member's view is its own (mutual set)
+// Every hello is checked: the token's account must own `character` (rpc.owns), else error not_your_character.
 //   client → history {}      server → history {frames}                         paid parties only
 //   client → bye {}                                                            leave now
 //
@@ -33,6 +35,7 @@ function log(ev, fields = {}) { process.stdout.write(JSON.stringify({ t: new Dat
 // `rpc` is { resolve(token), startTrial(token) } (lib.cachedResolver in production, a stub in the tests).
 function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxClients = lib.MAX_CLIENTS, viewEveryMs = VIEW_EVERY_MS, quiet = false } = {}) {
   const parties = new Map();                 // code → Party
+  const autos = new lib.AutoIndex();         // auto mode: every auto member, by character (no party)
   const clients = new Set();
   const limiter = new lib.FailLimiter();
   const say = quiet ? () => {} : log;
@@ -50,6 +53,7 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
 
   function leave(ws) {
     clients.delete(ws);
+    if (ws.auto) { autos.remove(ws.auto); ws.auto = null; say('leave', { auto: true, members: autos.size }); return; }
     const p = ws.party;
     if (!p) return;
     ws.party = null;
@@ -65,6 +69,39 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
     try { identity = await rpc.resolve(hello.token); } catch { return fail(ws, 'unavailable', 1013); }
     if (!identity) { limiter.fail(ip, now()); say('hello_rejected', { why: 'unknown_session' }); return fail(ws, 'unknown_session', 4401); }
     if (ws.readyState !== 1) return;
+
+    // Ownership: the session's account must hold this character, or anyone could claim a group member's name (auto mode
+    // trusts the names the game reports; this is the other half). FAIL CLOSED for auto mode: when the lookup itself
+    // errors (network, Supabase down) an auto hello is refused ('unavailable', the client retries), because letting it
+    // through would let a spoofed name in exactly when we cannot check. FAIL OPEN for a code party: the code is the
+    // opt-in and the party worked before this check existed, so an outage must not take parties down; logged.
+    // A guest link has no account to own anything, so a guest in a code party is not checked (auto mode asks the RPC,
+    // which answers for the session's own discord id and refuses a guest without one).
+    if (hello.auto || identity.scope !== 'guest') {
+      let owned;
+      try { owned = await rpc.owns(hello.token, hello.character); }
+      catch {
+        if (hello.auto) return fail(ws, 'unavailable', 1013);
+        say('owns_unavailable', { mode: 'code', open: true });
+        owned = true;
+      }
+      if (!owned) { limiter.fail(ip, now()); say('hello_rejected', { why: 'not_your_character', auto: hello.auto }); return fail(ws, 'not_your_character', 4403); }
+      if (ws.readyState !== 1) return;
+    }
+
+    // Auto mode: no party. One entry per character; a second connection of the same character replaces the first.
+    if (hello.auto) {
+      const t = now();
+      const member = lib.memberFrom(identity, hello.token, hello.character, t);
+      const existing = autos.get(member.character);
+      if (existing) { send(existing.ws, { type: 'error', code: 'replaced' }); existing.ws.close(4000, 'replaced'); leave(existing.ws); }
+      ws.auto = autos.add({ ...member, ws });
+      ws.helloed = true;
+      clearTimeout(ws.helloTimer);
+      send(ws, { type: 'welcome', auto: true, party: null, tier: lib.memberTier(member, t), member: member.character });
+      say('join', { auto: true, members: autos.size, agent: hello.agentVersion });
+      return;
+    }
 
     // Creating a party starts the creator's one 14-day trial when they have never had one (idempotent in the RPC).
     if (hello.create && identity.tier === 'free' && !identity.trial_ends_at && identity.player_id) {
@@ -107,9 +144,10 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
     if (!msg) return;                                           // a bad frame is dropped, not echoed, not fatal
     const t = now();
     if (msg.type === 'pub') {
-      const v = lib.validatePub(msg, t, ws.party.members.get(ws.memberKey)?.character);
-      if (v.ok) ws.party.ingest(ws.memberKey, v.pub, t);
+      const v = lib.validatePub(msg, t, ws.auto ? ws.auto.character : ws.party.members.get(ws.memberKey)?.character);
+      if (v.ok) { if (ws.auto) autos.ingest(ws.auto, v.pub, t); else ws.party.ingest(ws.memberKey, v.pub, t); }
     } else if (msg.type === 'history') {
+      if (ws.auto) return send(ws, { type: 'error', code: 'no_history' });   // history belongs to code parties
       if (ws.party.tier(t) === 'free') return send(ws, { type: 'error', code: 'tier' });
       send(ws, { type: 'history', party: ws.party.code, frames: ws.party.history });
     } else if (msg.type === 'bye') {
@@ -141,6 +179,8 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
       const body = JSON.stringify(p.view(t));
       for (const m of p.members.values()) if (m.ws.readyState === 1) m.ws.send(body);
     }
+    // Auto members: a view per member (each one's mutual set differs), computed from the one index.
+    for (const e of autos.byName.values()) if (e.ws.readyState === 1) e.ws.send(JSON.stringify(autos.view(e, t)));
   }
 
   function heartbeat(clientSet = clients) {
@@ -157,7 +197,7 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
     return !o || allowedOrigins.includes(o);                    // Mimic is not a browser and sends no Origin
   };
 
-  function health() { return { ok: true, version: VERSION, parties: parties.size, clients: clients.size }; }
+  function health() { return { ok: true, version: VERSION, parties: parties.size, clients: clients.size, auto: autos.size }; }
 
   const server = http.createServer((req, res) => {
     if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
@@ -192,7 +232,7 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
     await new Promise((r) => server.close(() => r()));
   }
 
-  return { server, start, stop, tick, heartbeat, health, parties, clients };
+  return { server, start, stop, tick, heartbeat, health, parties, autos, clients };
 }
 
 async function main() {
