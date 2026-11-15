@@ -29,7 +29,7 @@ export default function DemoRaidPage() {
 
   return (
     <DemoShell active="raid" title={`Tonight: ${TONIGHT.title}`}
-      lead={`${ev.day} ${ev.time}, posted by ${ev.by}. Everyone who signed, against the flags the pull needs. Fix the red ones first.`}>
+      lead={`${ev.day} ${ev.time}, posted by ${ev.by}.`}>
       <div className="flex flex-col gap-4">
         <div className="grid gap-2 sm:grid-cols-3">
           <div className={PANEL}><p className="m-0 text-2xl text-green">{ready}</p><p className="m-0 text-xs text-dim">of {rows.length} ready to pull</p></div>
@@ -51,8 +51,7 @@ export default function DemoRaidPage() {
             }))}
           />
           <p className="text-[11px] text-dim">
-            ✅ done · ❌ missing (they have had a full read) · ❓ not recorded. Flags a raid leader recorded for someone else count
-            as done; the owner confirms them later.
+            ✅ done · ❌ missing · ❓ not recorded. Reported flags count as done.
           </p>
         </section>
       </div>
