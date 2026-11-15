@@ -67,9 +67,12 @@ export const RAIDMIMIC_HUBS_PATH = '/api/hubs';
 // "My characters" (2026-11-09, DECISIONS §545): where a player loads their characters from Zeal's PoPFlags file.
 export const RAIDMIMIC_CHARACTERS_PATH = '/characters';
 
+// "My raids" (2026-11-15): the player's own upcoming raids, calendar and guild days.
+export const RAIDMIMIC_RAIDS_PATH = '/raids';
+
 export function isRaidmimicOpenPath(pathname: string): boolean {
   return pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/') || pathname === RAIDMIMIC_HUBS_PATH
-    || pathname === RAIDMIMIC_CHARACTERS_PATH
+    || pathname === RAIDMIMIC_CHARACTERS_PATH || pathname === RAIDMIMIC_RAIDS_PATH
     || pathname === RAIDMIMIC_GUILDS_PATH || pathname.startsWith(`${RAIDMIMIC_GUILDS_PATH}/`);
 }
 

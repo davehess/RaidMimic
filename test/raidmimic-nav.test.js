@@ -14,7 +14,7 @@ const code = (rel) => stripJs(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
 
 // Every path that exists on a raidmimic host (web/lib/raidmimicHost.ts): the open paths, the rewritten pages and the demo.
 const EXISTING = ['/', '/characters', '/guilds', '/guilds/new', '/setup', '/register', '/privacy', '/terms', '/refunds',
-  '/demo', '/demo/flags', '/demo/capture', '/demo/events', '/demo/events/needs', '/demo/raid'];
+  '/demo', '/demo/flags', '/demo/capture', '/demo/events', '/demo/events/needs', '/demo/raid', '/raids'];
 const allHrefs = RAIDMIMIC_SECTIONS.flatMap(s => [s.href, ...s.pages.map(p => p.href)]);
 
 describe('the raidmimic.com nav data', () => {

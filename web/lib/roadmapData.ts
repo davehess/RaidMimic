@@ -37,6 +37,34 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'my-raids-2026-11-15',
+    title: 'My raids on Raid Mimic',
+    version: 'Web 2.1.146',
+    date: '2026-11-15',
+    headline: 'A new My raids page on raidmimic.com: your next raids, what to kill, and which of your characters is ready.',
+    features: [
+      { name: 'Upcoming raids', blurb: 'The next two weeks of raids for every guild you raid with, each with a target you can pick, and for every character whether they are ready, still need something, or are not sure.' },
+      { name: 'Calendar', blurb: 'The same raids as a month calendar, with the target in each day.' },
+      { name: 'Your own raid days', blurb: 'Add each guild you raid with, pick its days, start time and time zone, or follow the schedule the guild already set.' },
+      { name: 'Characters by guild', blurb: 'Choose which guild each of your characters raids with from a drop-down.' },
+    ],
+    fixes: [],
+  },
+  {
+    key: 'track-pop-flags-2026-11-15',
+    title: 'Track your PoP flags on Raid Mimic',
+    version: 'Web 2.1.144',
+    date: '2026-11-15',
+    headline: 'Anyone can track their Planes of Power flags on raidmimic.com by pasting the lines or dropping the file.',
+    features: [
+      { name: 'Paste your flags', blurb: 'Paste what #popflags printed, or what the Seer told you, with the character name. No file needed.' },
+      { name: 'All your alts at a glance', blurb: 'Up to 50 characters in one table, the ones with the most flags first, with what each is still missing.' },
+      { name: 'Where can I go?', blurb: 'Each character shows every Planes of Power zone it can enter, and which flag is missing for the rest.' },
+      { name: 'Remove a character', blurb: 'Take a character and its saved flags off the page whenever you like.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'character-combat-2026-11-14',
     title: 'Combat page for your characters',
     version: 'Web 2.1.143 · Bot 4.0.83',

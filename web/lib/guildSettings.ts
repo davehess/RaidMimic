@@ -278,7 +278,8 @@ function windowOn(sc: Sched, y: number, m: number, d: number): RaidWindow | null
 }
 
 // Raid windows from the local day before `now` through `ahead` days after it, earliest first. [] for a bad zone.
-function windowsAround(sc: Sched, now: number, ahead: number): RaidWindow[] {
+// Exported for web/lib/myRaids.ts (a player's own upcoming raids), which must not copy the zone and DST arithmetic.
+export function windowsAround(sc: Sched, now: number, ahead: number): RaidWindow[] {
   if (!validTimeZone(sc.tz) || !Number.isFinite(now)) return [];
   const p = parts(now, sc.tz);
   const out: RaidWindow[] = [];

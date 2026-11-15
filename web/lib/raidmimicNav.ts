@@ -21,7 +21,9 @@ export const RAIDMIMIC_SECTIONS: readonly RaidmimicSection[] = [
     { label: 'For guild leaders', href: '/register' },
     { label: 'Set up', href: '/setup' },
   ] },
-  { key: 'raids', label: 'Raids', href: '/demo/raid', prefixes: ['/demo/raid', '/demo/events', '/demo'], pages: [
+  // My raids leads the section (the guild lead, 2026-11-15: "the pages should be user focused").
+  { key: 'raids', label: 'Raids', href: '/raids', prefixes: ['/raids', '/demo/raid', '/demo/events', '/demo'], pages: [
+    { label: 'My raids', href: '/raids' },
     { label: 'Tonight’s raid, demo', href: '/demo/raid' },
     { label: 'Events', href: '/demo/events' },
     { label: 'Needs board', href: '/demo/events/needs' },

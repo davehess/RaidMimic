@@ -95,7 +95,7 @@ function fakeStore({ held = [], owners = {}, holders = {} } = {}) {
   return { s, deps };
 }
 const up = (name, text) => ({ name: `${name}-PoPFlags.txt`, text, size: text.length });
-const names = (n) => Array.from({ length: n }, (_, i) => 'Zarrin' + String.fromCharCode(97 + i));   // letters only
+const names = (n) => Array.from({ length: n }, (_, i) => 'Zarrin' + String.fromCharCode(97 + Math.floor(i / 26)) + String.fromCharCode(97 + (i % 26)));   // letters only
 
 describe('importing', () => {
   it('saves a character and its flags, steps plus what they imply, stamped with the file time', async () => {
@@ -112,18 +112,20 @@ describe('importing', () => {
     expect(s.flags.map(f => f.flag_key)).toEqual(rows.map(f => f.flag_key));
   });
 
-  it('the cap is one exported constant, 8', () => { expect(MAX_CHARACTERS_PER_PLAYER).toBe(8); });
+  it('the cap is one exported constant, 50', () => { expect(MAX_CHARACTERS_PER_PLAYER).toBe(50); });
 
   it('refuses characters past the cap with a clear message, and keeps the first ones', async () => {
-    const { s, deps } = fakeStore();
-    const files = names(MAX_CHARACTERS_PER_PLAYER + 2).map(n => up(n, fileText(n)));
-    const r = await importExports(files, deps);
-    const saved = r.characters.filter(c => c.status === 'saved');
+    // the per-upload file cap is also 50, so the two extras come in a second upload against the 50 now held
+    const all = names(MAX_CHARACTERS_PER_PLAYER + 2);
+    const first = fakeStore();
+    const r1 = await importExports(all.slice(0, MAX_CHARACTERS_PER_PLAYER).map(n => up(n, fileText(n))), first.deps);
+    expect(r1.characters.filter(c => c.status === 'saved')).toHaveLength(MAX_CHARACTERS_PER_PLAYER);
+    const { s, deps } = fakeStore({ held: all.slice(0, MAX_CHARACTERS_PER_PLAYER).map(n => n.toLowerCase()) });
+    const r = await importExports(all.slice(MAX_CHARACTERS_PER_PLAYER).map(n => up(n, fileText(n))), deps);
     const refused = r.characters.filter(c => c.status === 'refused');
-    expect(saved).toHaveLength(MAX_CHARACTERS_PER_PLAYER);
     expect(refused).toHaveLength(2);
-    expect(refused[0].reason).toMatch(/already have 8 characters/);
-    expect(s.chars).toHaveLength(MAX_CHARACTERS_PER_PLAYER);
+    expect(refused[0].reason).toMatch(/already have 50 characters/);
+    expect(s.chars).toHaveLength(0);
   });
 
   it('counts the characters a player already holds; a held name can be re-uploaded at the cap', async () => {

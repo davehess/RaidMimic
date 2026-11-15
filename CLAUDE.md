@@ -727,6 +727,22 @@ MCP call stalls at its approval step (it did four times on 2026-10-19 with
 nothing reaching the database), the guild lead pastes the file into the
 Supabase SQL Editor instead.
 
+**RULE — warn before any approval prompt, and push a notification (the guild lead, 2026-11-15):** *"if you have a prompt
+for supabase you have to tell me up front and send a push notification. I can do the notification I just need a heads
+up. I'm often working on other things."* An `apply_migration` (or any tool call that waits on the guild lead's approval)
+is preceded, in the same turn, by (1) a chat line saying what is about to ask and what it changes, and (2) a
+`PushNotification` ("Supabase approval coming in 1 min: <migration>"). Then make the call.
+⚠ **What was learned the same day:**
+- `PushNotification` answering "Mobile push requested" means requested, NOT delivered: none reached the guild lead's
+  phone. Never tell them a notification was sent; say it was requested.
+- The box that timed out (four times) was NOT the connector permission: "Apply migration" is set to Always. It is the
+  Supabase server's own confirmation for statements it judges destructive, and it never appeared on mobile or here.
+  Statements that create, alter, comment, grant or revoke went through with no box; the one that hung redefined a
+  function full of `DELETE`s (member_self_delete).
+- So: split a migration so the non-destructive part goes through `apply_migration` alone, and hand anything with
+  `DELETE` / `DROP` / `TRUNCATE` to the guild lead as a SQL Editor paste (a link to the committed file, named up front),
+  unless they are known to be at the desktop app.
+
 ### When git state looks wrong
 This environment's local clone can come up with stale refs (it has happened —
 "my commits vanished"). Before concluding work was lost or force-pushing

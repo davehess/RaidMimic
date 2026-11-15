@@ -12,25 +12,45 @@
 // Rows are the steps plus what each implies (STAGE_IMPLIES), exactly as the Wolf Pack paste save and hubSync write them.
 
 import { parsePopFlags } from './popFlagsPaste';
-import { STAGE_IMPLIES } from './popRecital';
+import { STAGE_IMPLIES, parseRecital } from './popRecital';
 import { decideClaim, type Holder } from './hubClaim';
 
-/** Characters one player may hold by default. One constant: the request was "up to 8 by default, a setting". */
-export const MAX_CHARACTERS_PER_PLAYER = 8;
+/** Characters one player may hold by default. One constant (8 until 2026-11-15, when a player with many alts hit it). */
+export const MAX_CHARACTERS_PER_PLAYER = 50;
 export const MAX_FILE_BYTES = 128 * 1024;    // the agent's POPFLAGS_FILE_MAX_BYTES (Zeal keeps at most 400 lines)
-export const MAX_FILES_PER_UPLOAD = 16;
+export const MAX_FILES_PER_UPLOAD = 50;
 /** Letters only, 3-24: the agent's NAME_RX / hubSync NAME_RX and hub_characters' own length check. */
 export const NAME_RX = /^[A-Za-z]{3,24}$/;
 export const SOURCE = 'popflags_file';
 const FUTURE_SLACK_MS = 24 * 3600_000;
 const FILE_TS_RX = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$/;
 
-export type ParsedExport = { character: string; atMs: number; lines: string[] };
+/** `stages` is only set by a pasted Seer recital: catalog stage keys it proved, stored like the #popflags steps. */
+/** Text as the catalog lines write it, whatever app it passed through (Discord, a browser, Word): curly quotes → ' and `,
+ *  en/em dashes → -, NBSP and the other Unicode spaces → a space, NFKC, zero-width and control characters (but tab and
+ *  newline) gone, runs of spaces one space, each line trimmed. The mappings run BEFORE NFKC, which would turn ´ into a
+ *  space and a combining mark. */
+export function normalizeText(s: string): string {
+  return String(s ?? '')
+    .replace(/[‘’ʼ′＇]/g, "'")
+    .replace(/[´ˋ‵｀]/g, '`')
+    .replace(/[‐-―−]/g, '-')
+    .replace(/[   -   　]/g, ' ')
+    .normalize('NFKC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[​-‍⁠﻿]/g, '')
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+    .replace(/ {2,}/g, ' ')
+    .replace(/^ +| +$/gm, '')
+    .trim();
+}
+
+export type ParsedExport = { character: string; atMs: number; lines: string[]; stages?: string[] };
 
 /** The text of one export, or null when it is not one (no header, no `---`, a name or Timestamp that does not read).
  *  The Timestamp is read as UTC: the server cannot know the player's zone, and it only orders re-uploads. */
 export function parseExportFile(text: string): ParsedExport | null {
-  const rows = String(text || '').split(/\r?\n/);
+  const rows = normalizeText(String(text || '')).split('\n');
   let character: string | null = null;
   let atMs: number | null = null;
   let i = 0;
@@ -67,16 +87,54 @@ export function flagRowsFromExport(p: ParsedExport, nowMs: number): { rows: Flag
     seen.add(flag_key);
     rows.push({ character: p.character, name_lc: p.character.toLowerCase(), flag_key, stage, source: SOURCE, earned_at: earnedAt });
   };
-  for (const s of parsed.flags) {
+  for (const s of [...parsed.flags, ...(p.stages ?? [])]) {
     push(s, s);
     for (const k of STAGE_IMPLIES[s] ?? []) push(k, s);
   }
-  return { rows, recognised: parsed.used.length };
+  return { rows, recognised: parsed.used.length + (p.stages?.length ?? 0) };
+}
+
+// ── A paste instead of a file ────────────────────────────────────────────────
+
+export const MAX_PASTE_BYTES = 64 * 1024;
+export const MAX_PASTE_LINES = 800;
+
+export type PasteResult =
+  | { ok: true; file: UploadFile; unrecognised: number }
+  | { ok: false; error: string };
+
+/** A pasted block → the same upload an exported file makes. Either the Zeal file (header and all) or bare lines: the
+ *  server's `#popflags` reply, or what the Seer said. The size and line caps are checked BEFORE anything is parsed.
+ *  Only the catalog keys the parsers know ever reach a row; `unrecognised` is a COUNT of the other lines, never their text. */
+export function pasteToFile(nameField: string, paste: string, nowMs: number): PasteResult {
+  const name = normalizeText(nameField);
+  const raw = String(paste ?? '');
+  if (new TextEncoder().encode(raw).length > MAX_PASTE_BYTES) return { ok: false, error: 'That is too much text. Paste only the flag lines (up to 64 KB).' };
+  if (raw.split('\n').length > MAX_PASTE_LINES) return { ok: false, error: `That is too many lines. Paste only the flag lines (up to ${MAX_PASTE_LINES}).` };
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(raw)) return { ok: false, error: 'That does not look like text from EverQuest.' };
+  const text = normalizeText(raw);
+  if (!text) return { ok: false, error: 'Paste the lines first.' };
+
+  let parsed: ParsedExport | null;
+  if (/^Character\t/.test(text)) {
+    parsed = parseExportFile(text);
+    if (!parsed) return { ok: false, error: 'That starts like a PoPFlags file but does not read as one (it needs the Character and Timestamp lines, then ---).' };
+    if (name && name.toLowerCase() !== parsed.character.toLowerCase()) return { ok: false, error: 'The name in the file is not the name you typed. Fix the name box or leave it empty.' };
+    if (parsed.atMs > nowMs + FUTURE_SLACK_MS) return { ok: false, error: 'Its Timestamp is in the future.' };
+  } else {
+    if (!NAME_RX.test(name)) return { ok: false, error: 'Type the character name (letters only, 3 to 24).' };
+    const lines = text.split('\n').filter(l => l.trim());
+    parsed = { character: name, atMs: nowMs, lines, stages: parseRecital(text).stages };
+  }
+  const { rows, recognised } = flagRowsFromExport(parsed, nowMs);
+  if (rows.length === 0 || recognised === 0) return { ok: false, error: 'No flag lines found in that. Paste what #popflags printed, or what the Seer told you.' };
+  return { ok: true, file: { name: 'paste', text: '', size: text.length, parsed }, unrecognised: Math.max(0, parsed.lines.length - recognised) };
 }
 
 // ── The import ───────────────────────────────────────────────────────────────
 
-export type UploadFile = { name: string; text: string; size: number };
+/** `parsed` is set by a paste, which has already been read (and size-checked); `text` is then unused. */
+export type UploadFile = { name: string; text: string; size: number; parsed?: ParsedExport };
 export type CharOutcome = { character: string; status: 'saved' | 'contested' | 'refused'; flags: number; reason?: string };
 export type FileProblem = { file: string; message: string };
 export type ImportResult = { ok: true; characters: CharOutcome[]; problems: FileProblem[] } | { ok: false; error: string };
@@ -111,7 +169,7 @@ export async function importExports(files: UploadFile[], deps: ImportDeps): Prom
   for (const f of files) {
     const label = f.name.slice(0, 80);
     if (f.size > MAX_FILE_BYTES) { problems.push({ file: label, message: 'Larger than 128 KB, so it is not a PoPFlags export.' }); continue; }
-    const parsed = parseExportFile(f.text);
+    const parsed = f.parsed ?? parseExportFile(f.text);
     if (!parsed) { problems.push({ file: label, message: 'Not a PoPFlags export (it needs the Character and Timestamp lines, then ---).' }); continue; }
     if (parsed.atMs > nowMs + FUTURE_SLACK_MS) { problems.push({ file: label, message: 'Its Timestamp is in the future.' }); continue; }
     const { rows, recognised } = flagRowsFromExport(parsed, nowMs);

@@ -18,7 +18,7 @@
 
 import { POP_FLAGS, POP_ZONE_BY_KEY, type PopNode } from './popFlags';
 import { STAGE_IMPLIES } from './popRecital';
-import { STEP_IMPLIES } from './popSteps';
+import { STEP_IMPLIES, POP_STEPS, type PopStep } from './popSteps';
 import { GATES, gatePieces, piecesForBlocker, piecesOfFlag, type GatePiece, type PieceKind } from './popGatePieces';
 
 export type PieceState = 'done' | 'pending' | 'missing' | 'unknown';
@@ -36,7 +36,34 @@ export type PieceStatus = {
   verified: boolean;
   note: string | null;
   group?: { key: string; needs: string } | null;
+  /** For a piece that is not done: the steps of its chain up to the proving step, in order, each marked done or not
+   *  (from POP_STEPS). Shown when a ✕ is tapped (the guild lead, 2026-11-15: "clicking into one of the X's should
+   *  show those specific steps"). */
+  steps?: { label: string; where: string | null; note: string | null; done: boolean }[];
 };
+
+// The chain of steps that ends at a proof key, in catalog order. A key no zone chain names gives nothing.
+function chainTo(key: string): PopStep[] {
+  for (const chain of Object.values(POP_STEPS)) {
+    const i = chain.findIndex(s => s.key === key);
+    if (i >= 0) return chain.slice(0, i + 1);
+  }
+  return [];
+}
+
+function stepsFor(p: GatePiece, held: ReadonlySet<string>): NonNullable<PieceStatus['steps']> {
+  const keys = p.all ? p.proof : p.proof.slice(0, 1);
+  const seen = new Set<string>();
+  const out: NonNullable<PieceStatus['steps']> = [];
+  for (const k of keys) {
+    for (const s of chainTo(k)) {
+      if (seen.has(s.key)) continue;
+      seen.add(s.key);
+      out.push({ label: s.label, where: s.where ?? null, note: s.note ?? null, done: held.has(s.key) });
+    }
+  }
+  return out;
+}
 
 export type Verdict = {
   /** done: nothing left. handins: only the Seer / NPC hand-ins are left. blocked: a kill or task is still owed.
@@ -120,14 +147,15 @@ export function pieceStatus(p: GatePiece, held: ReadonlySet<string>, fullRead: b
   const base = { key: p.key, label: p.label, kind: p.kind, needs: p.needs, to: p.to ?? null, verified: p.verified, note: p.note ?? null, group: p.group ?? null };
   const have = p.proof.filter(k => held.has(k)).length;
   if (p.all ? have === p.proof.length : have > 0) return { ...base, state: 'done', detail: null, killOnly: false };
+  const owed = { steps: stepsFor(p, held) };
   if (p.pending && held.has(p.pending)) {
-    return { ...base, state: 'pending', detail: 'Kill credited. The Seer is holding it: ask her to unlock memories', killOnly: false };
+    return { ...base, ...owed, state: 'pending', detail: 'Kill credited. The Seer is holding it: ask her to unlock memories', killOnly: false };
   }
   if ((p.kills ?? []).some(k => held.has(k))) {
-    return { ...base, state: 'unknown', detail: 'The kill is on record; the hail after it is not', killOnly: true };
+    return { ...base, ...owed, state: 'unknown', detail: 'The kill is on record; the hail after it is not', killOnly: true };
   }
   const part = p.all && have > 0 ? `${have} of ${p.proof.length}` : null;
-  return { ...base, state: fullRead ? 'missing' : 'unknown', detail: part, killOnly: false };
+  return { ...base, ...owed, state: fullRead ? 'missing' : 'unknown', detail: part, killOnly: false };
 }
 
 // ── The verdict ──────────────────────────────────────────────────────────────
