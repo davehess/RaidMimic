@@ -35,7 +35,9 @@ const PARTY_GRACE_MS = 15 * 60 * 1000;      // a party dies this long after its 
 const SAMPLE_TTL_MS = 30 * 1000;            // a member's frame stops counting toward the merge after this
 const STALE_MS = 10 * 1000;                 // the view is flagged stale when the freshest sample is older than this
 const HISTORY_STEP_MS = 10 * 1000;
-const HISTORY_SPAN_MS = 10 * 60 * 1000;
+// 20 minutes (the guild lead, 2026-11-15: "10 minutes is too short for charmers … 20 minutes is enough time for most
+// stuff to wear off").
+const HISTORY_SPAN_MS = 20 * 60 * 1000;
 const FIRES_IN_VIEW = 20;
 const FIRES_KEPT = 60;
 const MIN_PUB_GAP_MS = 500;                 // a client publishes about every 2 s; faster than this is dropped
