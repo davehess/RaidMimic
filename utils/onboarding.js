@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.1': [
+    'Mob Info (newest Mimic beta): the target\'s aggro and assist radius, with your distance to it and the area rampage reach, red when you are inside it.',
+  ],
   '4.1.0': [
     'Raid Mimic opens to every player: track your PoP flags and raids on raidmimic.com, and share live overlay numbers and timers with your group or raid through the new party service. Nothing changes for Wolf Pack raid nights.',
   ],
