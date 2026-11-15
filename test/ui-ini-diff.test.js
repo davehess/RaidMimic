@@ -209,7 +209,7 @@ describe('wiring: every Mimic write over a character\'s files keeps the previous
     expect(preload).toContain("ipcRenderer.invoke('ui-studio-versions'");
     expect(preload).toContain("ipcRenderer.invoke('ui-studio-diff'");
     const v = sliceBlock(main, "ipcMain.handle('ui-studio-diff'", '\n});\n');
-    expect(v).toMatch(/iniDiff\.diffBundles\(prev, _readUiBundle\(d, c\)/);
+    expect(v).toMatch(/iniDiff\.diffBundles\(_comparableFiles\(prev\), _comparableFiles\(_readUiBundle\(d, c\)\)/);
     expect(v).toMatch(/localVersions\.readMeta\(/);
     expect(v).toMatch(/isLocalId\(id\)/);
     expect(code).toContain('window.mimic.uiStudioDiff(STATE.character, STATE.eqDir, id)');

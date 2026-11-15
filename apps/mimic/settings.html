@@ -871,6 +871,7 @@
             (c.has_eqclient ? ' · eqclient.ini' : '') + ' · <code>' + c.eqDir.replace(/</g,'&lt;') + '</code></span></div>' +
           '<div style="display:flex;gap:6px">' +
             '<button type="button" class="ui-capture" data-idx="' + i + '" style="margin:0;background:var(--wp-accent);padding:5px 10px;font-size:11px">📦 Back up</button>' +
+            '<button type="button" class="ui-local-backup" data-idx="' + i + '" title="Keep a copy of this character\u2019s UI files and your overlay layout on this PC. No account, nothing is sent." style="margin:0;background:var(--wp-panel);border:1px solid var(--wp-border);padding:5px 10px;font-size:11px;color:var(--wp-text)">💾 Back up on this PC</button>' +
             '<button type="button" class="ui-snapshots" data-idx="' + i + '" style="margin:0;background:#21262d;border:1px solid #2a3140;padding:5px 10px;font-size:11px;color:var(--wp-text)">🔄 Backups</button>' +
           '</div>' +
         '</div>' +
@@ -930,6 +931,22 @@
         }
       });
     });
+    list.querySelectorAll('.ui-local-backup').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const idx = parseInt(e.currentTarget.dataset.idx, 10);
+        const c = chars[idx];
+        const msg = list.querySelector('[data-msg="' + idx + '"]');
+        btn.disabled = true;
+        try {
+          const r = await window.mimic.uiLocalBackupNow({ character: c.character, eqDir: c.eqDir });
+          msg.style.color = r && r.ok ? 'var(--wp-green)' : '#f87171';
+          msg.textContent = r && r.ok
+            ? (r.created ? '✓ Kept a copy on this PC (' + r.file_count + ' files, newest 10 kept). Restore it under 🔄 Backups.' : '✓ Nothing changed since your last copy on this PC.')
+            : '✕ ' + (r && r.error ? r.error : 'could not back up');
+        } catch (err) { msg.style.color = '#f87171'; msg.textContent = '✕ ' + (err && err.message ? err.message : String(err)); }
+        finally { _uiRowMsg[c.character] = { text: msg.textContent, color: msg.style.color }; btn.disabled = false; }
+      });
+    });
     list.querySelectorAll('.ui-snapshots').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const idx  = parseInt(e.target.dataset.idx, 10);
@@ -941,9 +958,9 @@
           // Versions this PC kept itself (localVersions.js), newest first: restorable offline, same compare-first path.
           let lv = [];
           try { lv = (await window.mimic.uiLocalVersions(c.character)) || []; } catch { lv = []; }
-          if (!r || !r.ok) {
+          if ((!r || !r.ok) && lv.length === 0) {
             slot.innerHTML = '<div style="color:#f87171;font-size:11px;margin-top:6px">✕ ' + (r && r.error ? r.error : 'failed to list backups') + '</div>';
-          } else if ((!r.snapshots || r.snapshots.length === 0) && lv.length === 0) {
+          } else if ((!r || !r.ok || !r.snapshots || r.snapshots.length === 0) && lv.length === 0) {
             slot.innerHTML = '<div style="color:#6b7280;font-size:11px;font-style:italic;margin-top:6px">No backups yet. Click 📦 Back up first.</div>';
           } else {
             slot.innerHTML = '<table style="width:100%;margin-top:8px;font-size:11px;border-collapse:collapse">' +
@@ -955,7 +972,7 @@
                   '<td style="padding:3px 4px;text-align:right"><button type="button" class="ui-restore" data-id="' + v.id + '" data-charidx="' + idx + '" data-machine="" style="margin:0;padding:3px 9px;font-size:10px;background:var(--wp-green)">↩ Restore</button></td></tr>' +
                 '<tr data-restore-for="' + v.id + '" style="display:none"><td colspan="5" style="padding:4px 0 8px"></td></tr>'
               ).join('') +
-              (r.snapshots || []).map(s =>
+              ((r && r.snapshots) || []).map(s =>
                 '<tr style="border-top:1px solid #2a3140">' +
                   '<td style="padding:3px 4px;color:var(--wp-text)">' + new Date(s.created_at).toLocaleString() + '</td>' +
                   // A named layout's backup carries "Layout: <name>" in its label (UI Studio); show the name.
