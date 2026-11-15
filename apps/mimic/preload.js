@@ -1556,6 +1556,9 @@ contextBridge.exposeInMainWorld('mimic', {
   uiPackInstall:     (id)        => ipcRenderer.invoke('ui-pack-install', id),
   uiPackPrepare:     (id)        => ipcRenderer.invoke('ui-pack-prepare', id),
   uiPackSetOptions:  (id, ids)   => ipcRenderer.invoke('ui-pack-set-options', id, ids),
+  // Item-icon sheets the active custom UI is missing (uiDragItems.js): check is read-only, fix keeps a dated copy first.
+  uiIconSheetsCheck: ()          => ipcRenderer.invoke('ui-icon-sheets-check'),
+  uiIconSheetsFix:   ()          => ipcRenderer.invoke('ui-icon-sheets-fix'),
 
   // Overlay lock state — main pushes this to overlay renderers so they can
   // show/hide their drag handle.

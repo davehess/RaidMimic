@@ -225,6 +225,7 @@
   <div id="uiPacksList" style="margin-top:10px">
     <div class="hint">Loading UI packs…</div>
   </div>
+  <div id="uiIconSheets" style="margin-top:10px"></div>
 
   <h2>Overlay sets <span style="background:#2d1b4e;color:#d2a8ff;border:1px solid #6e40c9;border-radius:3px;font-size:9px;padding:1px 5px;margin-left:6px;vertical-align:middle;letter-spacing:1px">ALPHA</span></h2>
   <div class="sub">Save how your overlays are laid out — which are on, where each one sits, how see-through, and the Canvas panels — then switch layouts in one step. Sets are kept on this computer.</div>
@@ -1138,6 +1139,7 @@
     }
     _renderZealStatus();
     _renderUiPacks();
+    _renderUiIconSheets();
     _initVoice(c.voice);
     const tm = c.tellsMode || 'off';
     document.querySelectorAll('input[name=tells]').forEach(r => { r.checked = (r.value === tm); });
@@ -1758,6 +1760,33 @@
     return out.join(', ');
   }
   function _uiLabel(c){ return c.variant ? c.option + ' · ' + c.variant : c.option; }
+  // Item-icon sheets the active custom UI lacks (uiDragItems.js; a member, 2026-11-15: some items showed as a pearl
+  // necklace). Shows nothing unless sheets are missing; Fix keeps a dated copy of EQUI_Animations.xml first.
+  async function _renderUiIconSheets(){
+    var host = document.getElementById('uiIconSheets');
+    if (!host || !window.mimic || !window.mimic.uiIconSheetsCheck) return;
+    var r;
+    try { r = await window.mimic.uiIconSheetsCheck(); } catch (e) { return; }
+    if (!r || !r.ok || (r.status !== 'missing' && r.status !== 'malformed')) { host.innerHTML = ''; return; }
+    var n = (r.missing || []).length;
+    host.innerHTML = '<div style="padding:10px 12px;background:var(--wp-panel);border:1px solid var(--wp-gold);border-radius:6px">' +
+      (r.status === 'missing'
+        ? '<div style="font-size:12px;color:var(--wp-text)">Your custom UI is missing ' + n + ' item-icon sheet' + (n === 1 ? '' : 's') + ', so some items show as the wrong icon (often a pearl necklace).</div>' +
+          '<div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<button type="button" id="uiIconFix" style="background:var(--wp-accent);color:var(--wp-text);border:0;border-radius:5px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:12px">Fix</button>' +
+          '<span id="uiIconMsg" style="font-size:11px;color:var(--wp-dim)"></span></div>'
+        : '<div style="font-size:12px;color:var(--wp-text)">' + _esc(r.message) + '</div>') +
+      '</div>';
+    var b = document.getElementById('uiIconFix'), m = document.getElementById('uiIconMsg');
+    if (!b) return;
+    b.addEventListener('click', async function(){
+      b.disabled = true; m.style.color = 'var(--wp-dim)'; m.textContent = 'Fixing…';
+      var f;
+      try { f = await window.mimic.uiIconSheetsFix(); } catch (e) { f = { ok: false, error: String(e && e.message || e) }; }
+      if (f && f.ok) { m.style.color = 'var(--wp-green)'; m.textContent = '✓ ' + f.message + (f.backup ? ' Your old file is kept as ' + f.backup + '.' : '') + ' Type /loadskin in-game, or relog.'; }
+      else { m.style.color = 'var(--wp-red)'; m.textContent = '✕ ' + ((f && (f.error || f.message)) || 'could not fix it'); b.disabled = false; }
+    });
+  }
   var _uiPackPrepTried = {};   // one defaults fetch per pack per Settings open
   async function _renderUiPacks(){
     var host = document.getElementById('uiPacksList');

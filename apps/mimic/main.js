@@ -16538,6 +16538,49 @@ ipcMain.handle('ui-pack-set-options', async (_e, id, ids) => {
     return { ok: false, error: e && e.message ? e.message : String(e) };
   }
 });
+// Item-icon sheets in the active custom UI's EQUI_Animations.xml (uiDragItems.js; a member, 2026-11-15: items on a newer
+// DragItem sheet drew as a pearl necklace). The custom UI is the one eqclient.ini UISkin= names (_activeUiSkin); the
+// default skin, or a custom UI with no EQUI_Animations.xml of its own, has nothing to fix. Files are read and written as
+// latin1 so every byte outside the inserted blocks survives untouched.
+const uiDragItems = require('./uiDragItems');
+function _uiIconSheetsRead(eqDir) {
+  const skin = _activeUiSkin(eqDir);
+  if (skin.toLowerCase() === 'default') return { skin, status: 'nothing', message: 'You are on the default UI, which has every item-icon sheet.' };
+  const find = (dir) => {
+    try { const n = fs.readdirSync(dir).find(f => f.toLowerCase() === 'equi_animations.xml'); return n ? path.join(dir, n) : null; } catch { return null; }
+  };
+  const customPath = find(path.join(eqDir, 'uifiles', skin));
+  if (!customPath) return { skin, status: 'nothing', message: 'This custom UI has no EQUI_Animations.xml of its own, so it uses the default one.' };
+  const defPath = find(path.join(eqDir, 'uifiles', 'default'));
+  if (!defPath) return { skin, status: 'malformed', message: 'The default UI’s EQUI_Animations.xml was not found, so Mimic cannot tell what is missing.' };
+  return { skin, customPath, defPath, customXml: fs.readFileSync(customPath, 'latin1'), defXml: fs.readFileSync(defPath, 'latin1') };
+}
+ipcMain.handle('ui-icon-sheets-check', () => {
+  try {
+    const eqDir = _zealEqDir();
+    if (!eqDir) return { ok: true, status: 'nothing', missing: [], message: 'Set your EverQuest folder first.' };
+    const r = _uiIconSheetsRead(eqDir);
+    const c = r.customXml ? uiDragItems.check(r.customXml, r.defXml) : r;
+    return { ok: true, skin: r.skin, status: c.status, missing: (c.missing || []).map(m => m.n), message: c.message };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+});
+ipcMain.handle('ui-icon-sheets-fix', () => {
+  try {
+    const eqDir = _zealEqDir();
+    if (!eqDir) return { ok: false, error: 'Set your EverQuest folder first.' };
+    const r = _uiIconSheetsRead(eqDir);
+    if (!r.customXml) return { ok: false, error: r.message };
+    const f = uiDragItems.fix(r.customXml, r.defXml);
+    if (!f.changed) return { ok: f.status === 'ok', status: f.status, message: f.message };
+    // backupAndWriteBinary keeps a dated copy (EQUI_Animations.xml.sheetsbak-<time>) before it writes.
+    const backup = require('./ghDownload').backupAndWriteBinary(r.customPath, Buffer.from(f.text, 'latin1'), 'sheets');
+    appendAgentLog(`[ui-sheets] ${r.skin}: ${f.message} backup=${backup ? path.basename(backup) : 'none'}\n`);
+    return { ok: true, status: 'fixed', message: f.message, backup: backup ? path.basename(backup) : null };
+  } catch (e) {
+    appendAgentLog(`[ui-sheets] fix failed: ${e && e.message}\n`);
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+});
 // Mimic Discord login (device-code flow).
 ipcMain.handle('mimic-link-start',   async () => await startMimicLink());
 ipcMain.handle('mimic-link-cancel',  () => { cancelMimicLink(); return true; });
