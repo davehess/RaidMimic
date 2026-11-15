@@ -85,6 +85,7 @@ const STATIC_META: Record<string, PageMeta> = {
   '/raidmimic/demo/raid': { title: '[beta] Demo guild · Tonight’s raid', description: 'A demo raid night: who signed and which flags each raider still needs before the pull, so the leader can fix it first. Invented guild.' },
   // The pre-launch legal pages (2026-11-01). Their words live in lib/legal.ts so the tab and the card cannot disagree.
   '/raidmimic/privacy': { ...LEGAL_META.privacy },
+  '/raidmimic/security': { ...LEGAL_META.security },
   '/raidmimic/terms':   { ...LEGAL_META.terms },
   '/raidmimic/refunds': { ...LEGAL_META.refunds },
   '/terms':        { ...LEGAL_META.terms },

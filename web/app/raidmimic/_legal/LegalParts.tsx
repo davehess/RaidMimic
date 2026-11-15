@@ -39,8 +39,8 @@ export function Rows({ rows }: { rows: { head: ReactNode; body: ReactNode }[] })
 
 export const LEGAL_LINK = 'text-blue underline';
 
-export function LegalShell({ onHost, title, lead, showVersion = false, children }: {
-  onHost: boolean; title: string; lead: string; showVersion?: boolean; children: ReactNode;
+export function LegalShell({ onHost, title, lead, showVersion = false, updated = LEGAL_UPDATED, children }: {
+  onHost: boolean; title: string; lead: string; showVersion?: boolean; updated?: string; children: ReactNode;
 }) {
   const p = legalPaths(onHost);
   return (
@@ -51,7 +51,7 @@ export function LegalShell({ onHost, title, lead, showVersion = false, children 
         <h1 className="mt-1 text-3xl leading-tight text-white">{title}</h1>
         <p className="mt-3 max-w-[62ch] text-base leading-7 text-white">{lead}</p>
         <p className="mt-2 text-xs text-dim">
-          Last updated {LEGAL_UPDATED}{showVersion ? ` · version ${TERMS_VERSION}` : ''}
+          Last updated {updated}{showVersion ? ` · version ${TERMS_VERSION}` : ''}
         </p>
       </header>
       {children}
