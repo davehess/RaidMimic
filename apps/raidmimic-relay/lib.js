@@ -21,6 +21,14 @@ const MAX_FIRES_PER_FRAME = 20;
 const MAX_TEXT = 120;
 const MAX_NUMBER = 1e12;
 
+// Shared timers (relay 1.1.0). A frame carries the timers its sender cast itself: a snapshot of what is active.
+const TIMER_KINDS = ['buff', 'debuff', 'charm'];
+const MAX_TIMERS_PER_FRAME = 100;
+const MAX_TIMERS_IN_VIEW = 200;
+const MAX_SPELL = 60;
+const TIMER_MAX_MS = { buff: 20 * 60 * 1000, debuff: 20 * 60 * 1000, charm: 3 * 60 * 60 * 1000 };   // charms run to their own end (Tunare's Request: 3 h)
+const TARGET_RE = /^[A-Za-z0-9 '`-]{1,64}$/;                       // a mob name, so digits and spaces are allowed
+
 // Live merging is free for everyone and funded by donations (the guild lead, 2026-11-15, DECISIONS §588: "same day
 // overlay data merging is done on the new bot, donation based up front. the hosted replays are the main point to
 // charge for"). So a free party gets every stream and the full size. Set LIVE_MERGE_FREE to false to bring back the
@@ -66,7 +74,10 @@ const isPlainObject = (o) => o !== null && typeof o === 'object' && !Array.isArr
 const validName = (n) => typeof n === 'string' && NAME_RE.test(n);
 const validNumber = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_NUMBER;
 const validTime = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1e14;   // epoch ms is ~1.8e12, over MAX_NUMBER
+const validTarget = (t) => typeof t === 'string' && TARGET_RE.test(t);
 const validText =(t) => typeof t === 'string' && t.length >= 1 && t.length <= MAX_TEXT && !/[\u0000-\u001f\u007f]/.test(t);
+
+const timerKey = (t) => `${t.kind}|${t.spell}|${t.target}|${t.caster}`;
 
 // Raw socket data → a parsed object, or null (too big, not JSON, not an object). Never throws, never echoes input.
 function parseFrame(raw) {
@@ -94,9 +105,10 @@ function validateHello(o) {
 
 // A `pub` frame. Strict: ANY violation drops the whole frame ({ok:false, reason}); the reason is a fixed word, never
 // the offending input. The result is a fresh object built field by field, so nothing a client sent rides along.
-function validatePub(o, now = Date.now()) {
+// `character` is the publishing member's own character (from the hello): the only caster a timer may name.
+function validatePub(o, now = Date.now(), character = null) {
   if (!isPlainObject(o) || o.type !== 'pub') return { ok: false, reason: 'shape' };
-  const out = { perPlayer: new Map(), target: null, casting: null, roster: null, fires: [] };
+  const out = { perPlayer: new Map(), target: null, casting: null, roster: null, fires: [], timers: null };
 
   if (o.perPlayer != null) {
     if (!isPlainObject(o.perPlayer)) return { ok: false, reason: 'perPlayer' };
@@ -134,6 +146,22 @@ function validatePub(o, now = Date.now()) {
       // An agent's clock may be off; a fire is never older than the history window or from the future.
       out.fires.push({ text: f.text, at: Math.min(now, Math.max(now - HISTORY_SPAN_MS, Math.round(f.at))) });
     }
+  }
+  // Timers are the one stream that drops PER ITEM, not per frame: a snapshot of up to 100 timers is worth keeping when one
+  // entry is malformed (or an observed timer of someone else, which is not accepted), and a bad timer must not blank the
+  // frame's numbers. `timers` absent → out.timers stays null (keep the member's previous set); present, even [] → a snapshot.
+  if (o.timers != null) {
+    if (!Array.isArray(o.timers)) return { ok: false, reason: 'timers' };
+    const seen = new Map();
+    for (const t of o.timers.slice(0, MAX_TIMERS_PER_FRAME)) {
+      if (!isPlainObject(t) || !TIMER_KINDS.includes(t.kind)) continue;
+      if (typeof t.spell !== 'string' || t.spell.length > MAX_SPELL || !validText(t.spell)) continue;
+      if (!validTarget(t.target) || !validName(t.caster) || t.caster !== character) continue;
+      if (!validTime(t.endsAt) || t.endsAt <= now) continue;
+      const endsAt = Math.round(Math.min(t.endsAt, now + TIMER_MAX_MS[t.kind]));
+      seen.set(timerKey(t), { kind: t.kind, spell: t.spell, target: t.target, caster: t.caster, endsAt, may_break: t.may_break === true });
+    }
+    out.timers = [...seen.values()];
   }
   return { ok: true, pub: out };
 }
@@ -173,6 +201,7 @@ class Party {
     this.fires = [];              // newest last, deduped, capped
     this.history = [];            // [{ t, players }] at most HISTORY_SPAN_MS / HISTORY_STEP_MS entries
     this.lastHistoryAt = 0;
+    this.timers = new Map();      // timerKey → { kind, spell, target, caster, endsAt, may_break, at }; outlives its caster until endsAt
   }
 
   tier(now) { return partyTier([...this.members.values()].map((m) => memberTier(m, now))); }
@@ -198,6 +227,13 @@ class Party {
     const full = !limited(this.tier(now));
     m.pub = full ? pub : { perPlayer: new Map(), target: null, casting: null, roster: pub.roster, fires: pub.fires };
     m.pubAt = now;
+    if (pub.timers) {
+      // The frame is a snapshot of the caster's active timers: whatever it no longer lists is gone.
+      const keys = new Set();
+      for (const t of pub.timers) { const k = timerKey(t); keys.add(k); this.timers.set(k, { ...t, at: now }); }
+      for (const k of m.timerKeys || []) if (!keys.has(k)) this.timers.delete(k);
+      m.timerKeys = keys;
+    }
     for (const f of pub.fires) {
       if (!this.fires.some((g) => g.at === f.at && g.text === f.text)) this.fires.push(f);
     }
@@ -243,6 +279,13 @@ class Party {
     };
   }
 
+  // Live timers, soonest first. Pruning happens here so a view never carries a finished timer.
+  liveTimers(now) {
+    for (const [k, t] of this.timers) if (t.endsAt <= now) this.timers.delete(k);
+    return [...this.timers.values()].sort((a, b) => a.endsAt - b.endsAt || (a.spell < b.spell ? -1 : 1))
+      .slice(0, MAX_TIMERS_IN_VIEW).map((t) => ({ kind: t.kind, spell: t.spell, target: t.target, caster: t.caster, endsAt: t.endsAt, may_break: t.may_break }));
+  }
+
   // The same view goes to every member of the party, so the caller stringifies it once.
   view(now) {
     const tier = this.tier(now);
@@ -257,6 +300,7 @@ class Party {
       roster: m.roster,
       fires: this.fires.slice(-FIRES_IN_VIEW),
       ...(limited(tier) ? {} : { target: m.target, casting: m.casting }),
+      timers: this.liveTimers(now),                  // every tier, free included (DECISIONS §588)
       stale: m.stale,
     };
   }
@@ -363,7 +407,7 @@ function memberFrom(identity, token, character, now) {
 
 module.exports = {
   CODE_ALPHABET, CODE_RE, TOKEN_RE, NAME_RE,
-  MAX_FRAME_BYTES, MAX_ROWS, MAX_TEXT, FREE_MEMBER_CAP, PAID_MEMBER_CAP, MAX_CLIENTS,
+  MAX_FRAME_BYTES, MAX_ROWS, MAX_TEXT, MAX_TIMERS_PER_FRAME, MAX_TIMERS_IN_VIEW, TIMER_MAX_MS, FREE_MEMBER_CAP, PAID_MEMBER_CAP, MAX_CLIENTS,
   PARTY_GRACE_MS, SAMPLE_TTL_MS, STALE_MS, HISTORY_STEP_MS, HISTORY_SPAN_MS, MIN_PUB_GAP_MS,
   RESOLVE_HIT_MS, RESOLVE_MISS_MS, FAILED_HELLOS_PER_MIN,
   makeCode, normalizeCode, parseFrame, validateHello, validatePub,
