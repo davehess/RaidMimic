@@ -32,7 +32,7 @@ const NAV: { id: DemoPage; label: string; path: string; tag?: string }[] = [
   { id: 'capture', label: 'Record for others', path: '/capture' },
   { id: 'events', label: 'Events', path: '/events', tag: 'A' },
   { id: 'needs', label: 'Needs board', path: '/events/needs', tag: 'B' },
-  { id: 'raid', label: 'Tonight', path: '/raid' },
+  { id: 'raid', label: 'Next raid', path: '/raid' },
 ];
 
 export const PANEL = 'bg-panel border border-border rounded-lg p-3 min-w-0';

@@ -82,7 +82,7 @@ const STATIC_META: Record<string, PageMeta> = {
   '/raidmimic/demo/capture': { title: '[beta] Demo guild · Record flags for someone else', description: 'How a raid leader records flags for a character that is not theirs, and how the owner signs in to confirm or correct them. Invented guild.' },
   '/raidmimic/demo/events': { title: '[beta] Demo guild · Flag events', description: 'Option A for coordinating flag events: a leader posts an event and sees which raiders still need it and who signed. Invented guild.' },
   '/raidmimic/demo/events/needs': { title: '[beta] Demo guild · Flag needs board', description: 'Option B for coordinating flag events: every flag target ranked by how many raiders still need it, with a schedule button. Invented guild.' },
-  '/raidmimic/demo/raid': { title: '[beta] Demo guild · Tonight’s raid', description: 'A demo raid night: who signed and which flags each raider still needs before the pull, so the leader can fix it first. Invented guild.' },
+  '/raidmimic/demo/raid': { title: '[beta] Demo guild · Next raid', description: 'A demo raid: who signed and which flags each raider still needs before the pull, so the leader can fix it first. Invented guild.' },
   // The pre-launch legal pages (2026-11-01). Their words live in lib/legal.ts so the tab and the card cannot disagree.
   '/raidmimic/privacy': { ...LEGAL_META.privacy },
   '/raidmimic/security': { ...LEGAL_META.security },

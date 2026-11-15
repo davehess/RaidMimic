@@ -317,7 +317,7 @@ describe('the wiring', () => {
       const nav = stripJs(src('web/lib/raidmimicNav.ts'));
       const raids = nav.slice(nav.indexOf("key: 'raids'"));
       expect(raids.indexOf("href: '/raids'")).toBeGreaterThan(0);
-      expect(raids.indexOf("label: 'My raids'")).toBeLessThan(raids.indexOf("label: 'Tonight"));
+      expect(raids.indexOf("label: 'My raids'")).toBeLessThan(raids.indexOf("label: 'Next raid"));
     }
   });
   it('the signed-in home leads with an Upcoming raids card linking to /raids', () => {
