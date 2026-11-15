@@ -63,7 +63,7 @@ describe('the Target Info overlay', () => {
   it('both chip rows sort before they draw', () => {
     const s = stripJs(html);
     expect(s).toMatch(/specSort\(mob\.specials\)[\s\S]{0,200}specChips \+= specChip\(slab\)/);
-    expect(s).toMatch(/specSort\(mob\.specials\)[\s\S]{0,200}chips \+= specChip\(lab\)/);
+    expect(s).toMatch(/specSort\(mob\.specials\)[\s\S]{0,200}chips \+= (lab === 'Area Rampage' \? aeChip\(mob\) : )?specChip\(lab\)/);
   });
 });
 

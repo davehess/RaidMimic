@@ -239,6 +239,11 @@
   .spec .chip.warn{background:#3d1d1d;color:#ffb3b3;border-color:#5a2a2a}
   /* Summon: the one solid-red chip (FB-104). Dark text on the platform red keeps it readable at a glance. */
   .spec .chip.warn.summon{background:var(--wp-red);color:var(--wp-bg);border-color:var(--wp-red);font-weight:700;text-shadow:none}
+  /* Area Rampage while the target is inside its reach (paintRange adds .hot): the same solid red as Summon */
+  .spec .chip.warn.hot{background:var(--wp-red);color:var(--wp-bg);border-color:var(--wp-red);font-weight:700;text-shadow:none}
+  /* distance + aggro + assist radii row on the Stats tab */
+  .rng{display:flex;flex-wrap:wrap;gap:2px 10px;font-variant-numeric:tabular-nums}
+  .rng b{color:var(--wp-text);font-weight:600}
   .spec .chip.imm{background:#1d2a3d;color:#9ecbff;border-color:#2a3d57}
   /* sight chips — "invis will not hide you". Amber rather than the red warn
      tone: it defeats a PLAN (a pull, a corpse run), it is not something the mob
@@ -657,6 +662,62 @@
     return '<span class="chip warn" title="Pull this and others can come to its aid: '+esc(names.join(', '))+(more > 0 ? ' and '+more+' more' : '')
       +'. Any of these kinds in this zone may join if they are close enough. Full list: F/Q/V, Faction.">Social \u00d7'+n+'</span>';
   }
+  // ── Range block (the guild lead, 2026-11-15: "add target distance and aggro and social radius to target info, and area
+  // ramp distance next to the area ramp bullet. make area ramp red highlighted when in area ramp range").
+  // Server facts (SecretsOTheP/EQMacEmu @ c2cd2651):
+  //   distance  zone/aggro.cpp:453 CheckWillAggro uses DistanceSquared(vec4→vec3) = plain 3D; the same file's
+  //             :431-438 first rejects any axis (x, y or z alone) past the aggro range. AE rampage measures
+  //             Distance() in 3D too (zone/hate_list.cpp:1851).
+  //   aggro     zone/zonedb.cpp:2025-2029: aggroradius <= 0 becomes 70.
+  //   assist    zone/zonedb.cpp:2031-2034: assistradius <= 0 becomes the aggro radius (zone/aggro.cpp:867 reads it).
+  // The AE reach is the bot's ae_rampage.radius_still (utils/aeRampage.js, the Map's red ring): the tank stands.
+  // Unknown anything (older bot, no Zeal position, no z) draws nothing extra and never highlights.
+  var AGGRO_DEFAULT = 70;
+  function rangeDist(pos){
+    var a = pos && pos.self, b = pos && pos.target;
+    if (!a || !b) return null;
+    var ax = a.x, ay = a.y, az = a.z, bx = b.x, by = b.y, bz = b.z;
+    if (ax == null || ay == null || az == null || bx == null || by == null || bz == null) return null;
+    var dx = Number(ax) - Number(bx), dy = Number(ay) - Number(by), dz = Number(az) - Number(bz);
+    var d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    return isFinite(d) ? d : null;
+  }
+  // { aggro, assist } the way the server loads the NPC, or null when the bot sent neither key (an older bot).
+  function mobRadii(mob){
+    if (!mob || mob.aggroradius == null) return null;
+    var a = Number(mob.aggroradius);
+    if (!isFinite(a)) return null;
+    var aggro = a > 0 ? a : AGGRO_DEFAULT, as = null;
+    if (mob.assistradius != null && isFinite(Number(mob.assistradius))) as = Number(mob.assistradius) > 0 ? Number(mob.assistradius) : aggro;
+    return { aggro: aggro, assist: as };
+  }
+  function aeRange(mob){
+    var r = mob && mob.ae_rampage ? Number(mob.ae_rampage.radius_still) : 0;
+    return r > 0 ? Math.round(r * 10) / 10 : null;
+  }
+  // Red only when BOTH are known and the target is inside the reach.
+  function aeHot(dist, range){
+    return dist != null && range != null && isFinite(dist) && isFinite(range) && range > 0 && dist <= range;
+  }
+  function fmtR(n){ return String(Math.round(n * 10) / 10); }
+  // The Area Rampage chip: the reach in its text, and the number the painter compares the live distance with.
+  function aeChip(mob){
+    var r = aeRange(mob);
+    if (r == null) return specChip('Area Rampage');
+    return '<span class="'+specClass('Area Rampage')+'" data-wp-ae="'+r+'" title="Area Rampage hits everyone on its hate list inside '+fmtR(r)
+      +' of the mob except the tank. The chip turns red while your target is inside that reach.">Area Rampage · '+fmtR(r)+'</span>';
+  }
+  // The row under the resists: a placeholder for the live distance (painted by paintRange, never part of the
+  // string compared between polls) and the two radii, which only change when the target does.
+  function rangeRow(mob){
+    var rad = mobRadii(mob), parts = '<span id="wpDistWrap" hidden>Distance <b id="wpDist"></b></span>';
+    if (rad) {
+      parts += ' <span title="How close you can stand before it aggros: the catalog radius, or 70 when the catalog has none (the server\'s own default).">Aggro <b>'+fmtR(rad.aggro)+'</b></span>';
+      if (rad.assist != null) parts += ' <span title="Social radius: another mob in a fight calls this one, and it comes when it stands within this distance of the caller (the aggro radius when the catalog has none).">Assist <b>'+fmtR(rad.assist)+'</b></span>';
+    }
+    return '<div class="sub rng" data-wp-sect="range">'+parts+'</div>';
+  }
+  // ── end range block
   // The order the chips are drawn in (FB-104: Summon sat last because the catalog lists codes numerically and a
   // same-name sibling row's extras are appended after the primary's). What the mob DOES to you first, then what
   // it is immune to (damage, then control), then the notes. A label not listed keeps its place after all of these.
@@ -1867,7 +1928,7 @@
       var chips = sightChips(mob, mi.target_invis) + lullChip(mi.target_lull);   // before the specials: asked before the pull
       if (mob && Array.isArray(mob.specials) && mob.specials.length){
         var orderedSpecs = specSort(mob.specials);
-        for (var j=0;j<orderedSpecs.length;j++){ var lab=orderedSpecs[j]; chips += specChip(lab); }
+        for (var j=0;j<orderedSpecs.length;j++){ var lab=orderedSpecs[j]; chips += lab === 'Area Rampage' ? aeChip(mob) : specChip(lab); }
       }
       chips += slowMitChip(mob);
       chips += socialChip(mob);
@@ -1884,7 +1945,7 @@
       // PvP what your drains took from them. Replaces "no catalog stats".
       var pl = mi.target_player;
       if (pl) loadingNote = playerCard(pl);
-      tabBody = res + spec + loadingNote;
+      tabBody = res + (mob || pl ? rangeRow(mob) : '') + spec + loadingNote;
     }
     // Corpse of the mob the fight was against → splice in that just-finished fight's top-damage
     // scoreboard from /api/state.stats.currentEncounterThreat.perPlayer.
@@ -1961,11 +2022,31 @@
     // Unchanged HTML is not set again: every rewrite drops the hover under the cursor and a
     // copy chip's ✓. While a chip shows ✓ the repaint waits (the click cleared __wpHtml, so
     // the next paint after the hold goes through).
-    if (Date.now() < _copyHoldUntil || html === bodyEl.__wpHtml) return;
+    if (Date.now() < _copyHoldUntil || html === bodyEl.__wpHtml) { paintRange(mi); return; }
     _itemTipHide();   // the button it hung off is gone (FB-73)
     bodyEl.innerHTML = html;
     bodyEl.__wpHtml = html;
+    paintRange(mi);
     _fitHeight();
+  }
+  // The live half of the range block: the distance number and the Area Rampage chip's red. Both are filled
+  // into placeholders the html string already holds, every poll, so a changing distance never rewrites the body.
+  // A paint that throws must never stop the render that called it (the refit after it still has to run).
+  function paintRange(mi){
+    try {
+      var d = rangeDist(mi && mi.target_pos);
+      var wrap = document.getElementById('wpDistWrap'), num = document.getElementById('wpDist');
+      if (wrap && num) {
+        var t = d == null ? '' : String(Math.round(d));
+        if (num.textContent !== t) num.textContent = t;
+        wrap.hidden = d == null;
+      }
+      var ae = bodyEl.querySelector('[data-wp-ae]');
+      if (ae) {
+        var hot = aeHot(d, Number(ae.getAttribute('data-wp-ae')));
+        if (ae.classList.contains('hot') !== hot) ae.classList.toggle('hot', hot);
+      }
+    } catch (e) {}
   }
   // Grow the host window to fit the rendered content so the Loot tab can
   // show every row without a scrollbar. Skipped when the IPC isn't wired
