@@ -26,7 +26,7 @@ HTTP `GET /health` → `{ok, version, parties, clients}` (no secrets). WebSocket
 | ← server | `welcome {party, tier, member}` or `error {code}` then close | codes: `bad_hello` `bad_token` `bad_character` `bad_party` `unknown_session` `no_party` `party_full` `slow_down` `busy` `unavailable` `hello_timeout` `replaced` |
 | client → | `pub {perPlayer?, target?, casting?, roster?, fires?}` | latest wins, no queue. `perPlayer: {Name: {dmg, heal, took, threat}}` |
 | ← server | `view {party, tier, trial_ends_at, members, players, roster, fires, target?, casting?, stale}` | every 2 s, the same view to every member; `players[i].age_ms` carries each stat's age |
-| client → | `history {}` | ← `history {party, frames}`: the last 10 minutes of merged frames, one per 10 s. Paid parties only |
+| client → | `history {}` | ← `history {party, frames}`: the last 20 minutes of merged frames, one per 10 s (20 since 2026-11-15: "10 minutes is too short for charmers") |
 | client → | `bye {}` | leave now |
 
 Validation is strict and silent: a name is letters and apostrophes, at most 24; at most 80 rows; numbers finite and non-negative;
@@ -54,7 +54,7 @@ A **party** is as good as its best member: one Pro member lifts everyone.
 
 **Live merging is free for everyone (the guild lead, 2026-11-15, DECISIONS §588)**: *"same day overlay data merging is done on
 the new bot, donation based up front. the hosted replays are the main point to charge for."* Every party gets 72 members, every
-stream and the 10-minute history, whatever its tier. The tier is still resolved and sent in each view (it will matter for hosted
+stream and the 20-minute history, whatever its tier. The tier is still resolved and sent in each view (it will matter for hosted
 replays and a supporter tag); `LIVE_MERGE_FREE` in `lib.js` brings back the first draft's limits (free: 6 members, roster/HP
 and trigger fires only) if that call is ever reversed. A party still starts its creator's one 14-day trial; that trial now
 belongs to the hosted-replay plan, not to the relay.
