@@ -37,6 +37,19 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'character-combat-2026-11-14',
+    title: 'Combat page for your characters',
+    version: 'Web 2.1.143 · Bot 4.0.83',
+    date: '2026-11-14',
+    headline: 'A new Combat page for each of your characters: how much you avoid, how your damage moves, raid night by raid night.',
+    features: [
+      { name: 'Swings avoided', blurb: 'The share of swings at you that missed, were dodged, parried, riposted or blocked, and the damage you took, per fight and per raid night. Kept for good from now on.' },
+      { name: 'Damage over time', blurb: 'Your DPS night by night, your best and typical fights, and how your damage splits across your abilities.' },
+      { name: 'Coming with Mimic 3.1', blurb: 'Your highest, typical and lowest hit for every ability, Harm Touch totals, and for monks how often you weave.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'mimic-3-1-0-beta-2026-11-14',
     title: 'Mimic 3.1.0 beta',
     version: 'Mimic 3.1.0 beta',

@@ -230,23 +230,25 @@ export function characterName(raw: string | null | undefined): string | null {
   if (!/^[A-Za-z]{2,24}$/.test(clean)) return null;
   return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
 }
-const CHARACTER_SECTIONS: Record<string, { label: string; blurb: string }> = {
+const CHARACTER_SECTIONS: Record<string, { label: string; blurb: string; beta?: boolean }> = {
   gear:      { label: 'Gear',       blurb: 'what they wear and their raid-kit readiness' },
   inventory: { label: 'Inventory',  blurb: 'what they carry and bank' },
   spells:    { label: 'Spells',     blurb: 'the spells they have and the ones still missing' },
   factions:  { label: 'Factions',   blurb: 'where their faction standing sits' },
   quests:    { label: 'Quests',     blurb: 'how far along their quests are' },
+  combat:    { label: 'Combat',     blurb: 'swings avoided, damage trends and hit sizes', beta: true },
 };
 export function characterMeta(rawName: string, section?: string | null): PageMeta {
   const name = characterName(rawName);
   const sec = section ? CHARACTER_SECTIONS[section] : undefined;
+  const beta = sec?.beta ? '[beta] ' : '';
   if (!name) {
     return sec
-      ? { title: `Character ${sec.label.toLowerCase()}`, description: `A character’s ${sec.label.toLowerCase()} page on WolfPack.quest.` }
+      ? { title: `${beta}Character ${sec.label.toLowerCase()}`, description: `A character’s ${sec.label.toLowerCase()} page on WolfPack.quest.` }
       : { title: 'Character', description: 'A character page on WolfPack.quest: parses, loot, attendance and raid history.' };
   }
   return sec
-    ? { title: `${name} · ${sec.label}`, description: `${name}’s ${sec.label.toLowerCase()} on WolfPack.quest: ${sec.blurb}.` }
+    ? { title: `${beta}${name} · ${sec.label}`, description: `${name}’s ${sec.label.toLowerCase()} on WolfPack.quest: ${sec.blurb}.` }
     : { title: `${name} · Character`, description: `${name} on WolfPack.quest: parses, loot, attendance and raid history.` };
 }
 
