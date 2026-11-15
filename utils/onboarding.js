@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.0.83': [
+    'Behind the scenes: each character\'s own incoming-fight numbers (hits taken, dodges, parries and so on) are now kept per fight instead of for a week, so the character page can chart them over time.',
+  ],
   '4.0.82': [
     'Behind the scenes: a UI backup is now accepted only under a plain character name. Nothing changes for normal backups.',
   ],
