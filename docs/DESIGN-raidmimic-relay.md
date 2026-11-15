@@ -22,9 +22,9 @@ HTTP `GET /health` → `{ok, version, parties, clients}` (no secrets). WebSocket
 
 | Direction | Message | Notes |
 |---|---|---|
-| client → | `hello {token, party?, create?, character, agent_version}` | first message, within 10 s. Exactly one of `party` (a 6-letter code) or `create:true`. `token` is the Mimic session token `wpms_` + 64 hex |
-| ← server | `welcome {party, tier, member}` or `error {code}` then close | codes: `bad_hello` `bad_token` `bad_character` `bad_party` `unknown_session` `no_party` `party_full` `slow_down` `busy` `unavailable` `hello_timeout` `replaced` |
-| client → | `pub {perPlayer?, target?, casting?, roster?, fires?, timers?}` | latest wins, no queue. `perPlayer: {Name: {dmg, heal, took, threat}}`; `timers` see Timers below |
+| client → | `hello {token, party?, create?, auto?, character, agent_version}` | first message, within 10 s. Exactly one of `party` (a 6-letter code), `create:true` or `auto:true` (see Auto mode). `token` is the Mimic session token `wpms_` + 64 hex |
+| ← server | `welcome {party, tier, member}` or `error {code}` then close | codes: `bad_hello` `bad_token` `bad_character` `bad_party` `unknown_session` `not_your_character` `no_party` `party_full` `slow_down` `busy` `unavailable` `hello_timeout` `replaced` |
+| client → | `pub {perPlayer?, target?, casting?, roster?, members?, fires?, timers?}` | latest wins, no queue. `perPlayer: {Name: {dmg, heal, took, threat}}`; `timers` see Timers below |
 | ← server | `view {party, tier, trial_ends_at, members, players, roster, fires, target?, casting?, timers, stale}` | every 2 s, the same view to every member; `players[i].age_ms` carries each stat's age |
 | client → | `history {}` | ← `history {party, frames}`: the last 20 minutes of merged frames, one per 10 s (20 since 2026-11-15: "10 minutes is too short for charmers") |
 | client → | `bye {}` | leave now |
@@ -47,6 +47,39 @@ A shared stream of the buff, debuff and charm timers members cast, so the party 
   A frame with no `timers` field changes nothing.
 - **Party map** keyed `kind|spell|target|caster`; expired entries are pruned on every view. A member leaving keeps its timers until `endsAt`.
 - **View:** `timers: [{kind, spell, target, caster, endsAt, may_break}]` sorted by `endsAt`, at most 200. History does not carry timers.
+
+## Auto mode and ownership (relay 1.2.0, 2026-11-15)
+
+The guild lead's call: *sharing must be decided by the game, not by a code* ("where we check session against zeal pipes party
+members"). Each Mimic's Zeal pipe already knows its real group (type 6) and raid (type 5) members, so a member can connect with
+**no party code at all** and be shared with exactly the people the game says are with them. Code parties stay as they were
+(explicit opt-in) and are unchanged.
+
+- **Hello:** `hello {token, character, auto: true, agent_version}`. `auto` cannot be combined with `create` or `party` (`bad_party`).
+  Welcome is `{type:'welcome', auto:true, party:null, tier, member}`.
+- **Pub:** the usual frame plus an optional `members: [names]`, the full group + raid name list from the pipe (at most 72,
+  letters/apostrophes like any name, de-duplicated; one bad name drops the frame). When a frame has no `members`, the names of its
+  `roster` are used; a frame with neither keeps the member's last known list.
+- **The mutual rule.** The relay keeps every auto member in one index by character (lowercase). A member M's view merges frames
+  only from `S(M) = {M} ∪ {N in auto mode : N.character ∈ M.names AND M.character ∈ N.names}`. Both pipes must list each other:
+  A listing B is not enough, B's own game has to list A. So writing someone's name into your own list gets you nothing, and a
+  third player (C) in B's list who lists B but not A is in B's view and not A's. Views are per member (one JSON per member per 2 s
+  tick; S(M) is one map lookup per name in M's list, at most 72). Matching is case-insensitive; M is always in its own set.
+- **Same set for everything:** players (MAX merge), roster, target/casting, fires (de-duplicated, last 20) and timers. A member's
+  timers and fires live on its own entry and go when it disconnects (a code party keeps timers until `endsAt`; auto does not).
+- **View:** the party view with `auto: true`, `party: null`, `members` = the size of S(M) (at most 72), `tier` = the best tier in S(M).
+  No `history` (`error {code:'no_history'}`: history belongs to code parties).
+- **Ownership.** Every hello is checked with `relay_owns_character(token, character)`
+  (`20261115190000_relay_character_owner.sql`, anon-executable, returns a boolean only): the token's discord id must hold the
+  character in `hub_characters` (not contested) or in the Wolf Pack `characters` table (its own row, or an alt of a main that id
+  holds). Not owned → `error {code:'not_your_character'}`, close 4403, and it counts against the IP's failed-hello limit.
+  Cached like the resolver (a yes 5 min, a no 60 s, never an error). **When the lookup itself fails:** auto mode fails CLOSED
+  (`unavailable`, client retries, because a spoofed name must not get in exactly when we cannot check); a code party fails OPEN
+  with a log line (the code is the opt-in and parties must survive a Supabase blip). A guest link has no account, so a guest in a
+  code party is not checked; a guest in auto mode is sent to the RPC, which refuses it unless the session has a discord id.
+- **Apply the migration BEFORE deploying 1.2.0:** without the function every hello's lookup errors (auto refused, code parties
+  open but logging).
+- `/health` gains `auto` (the number of auto members).
 
 ## The merge
 
