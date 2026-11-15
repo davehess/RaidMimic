@@ -5108,10 +5108,29 @@ function wpPtTag(p) {
   }
   return '';
 }
+// The automatic way in: follows the real in-game group or raid (the Zeal pipe). Off by default; it prints nothing that ticks.
+function wpPtAutoHtml(s, p) {
+  var on = !!(s && s.partyShare && s.partyShare.on);
+  var auto = p && p.mode === 'auto';
+  var h = '<div id="wpPtAuto" style="margin:8px 0"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">'
+    + '<input type="checkbox" id="wpPtShare"' + (on ? ' checked' : '') + ' onchange="wpPtShare(this.checked)" style="margin-top:3px">'
+    + '<span><b>Share with my in-game group and raid</b><br><span class="dim" style="font-size:12px">'
+    + 'Shares only with people in your group or raid who also use Mimic. It follows your group by itself: it connects when you group up and leaves after two minutes on your own. Off by default.</span></span></label>';
+  if (on) {
+    var line;
+    if (p && p.auto_stopped && p.error && p.error.message) line = '<span style="color:var(--orange)">' + esc(p.error.message) + '</span>';
+    else if (auto && p.status === 'joined') line = '<b>' + (p.members || 1) + '</b> sharing from your group or raid' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live') + '. Open the DPS HUD and switch it to <b>Party</b>.';
+    else if (auto && p.status === 'paused') line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' It reconnects by itself.';
+    else if (auto) line = 'Connecting to the party relay…' + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    else line = '<span class="dim">Waiting until you are in a group or raid.' + (p && p.status === 'paused' && p.paused_text ? ' ' + esc(p.paused_text) : '') + '</span>';
+    h += '<div style="font-size:12px;margin:4px 0 0 24px">' + line + '</div>';
+  }
+  return h + '</div>';
+}
 function wpPtHtml(s) {
   var p = s && s.partyView;
-  var h = '';
-  var inParty = p && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
+  var h = wpPtAutoHtml(s, p) + '<div class="dim" style="font-size:12px;margin-top:10px">Or share by code</div>';
+  var inParty = p && p.mode !== 'auto' && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
   if (inParty) {
     h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">';
     if (p.code) {
@@ -5137,7 +5156,7 @@ function wpPtHtml(s) {
        + '<button type="button" class="wp-btn pri" onclick="wpPtJoin()">🐺 Join</button>'
        + '<span class="dim">or</span>'
        + '<button type="button" class="wp-btn" onclick="wpPtCreate()" title="Makes a new party and shows its code, to give to your group or raid">＋ Create a party</button></div>';
-    if (p && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
+    if (p && !p.auto_stopped && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
   }
   if (_wpPt.note) h += '<div id="wpPtNote" style="color:' + (_wpPt.tone === 'ok' ? 'var(--green)' : 'var(--orange)') + ';font-size:12px;margin-bottom:6px">' + esc(_wpPt.note) + '</div>';
   return h;
@@ -5147,7 +5166,7 @@ function wpPtRepaint(s) {
   if (!el) return;
   if (!document.getElementById('wpPtBody')) {
     el.innerHTML = '<h2>🐺 Raid Mimic party</h2>'
-      + '<div class="subtle">Share your numbers live with the people you play with. One of you creates a party and gives out the code; everyone else joins with it. '
+      + '<div class="subtle">Share your numbers live with the people you play with: automatically with your in-game group and raid, or by a party code that one of you creates and the rest join. '
       + 'Each Mimic sends its own damage, healing, damage taken, threat, target and group health, and gets back one merged list, the highest value anyone saw for each player, never added together. '
       + 'It sends only during a fight or while you are in a group or raid, and nothing else leaves your PC. Needs Mimic signed in with Discord.</div>'
       + '<div id="wpPtBody"></div>';
@@ -5169,6 +5188,7 @@ function wpPtAct(body, okNote) {
     wpPtRefresh();
   }, function () { _wpPt.note = 'The agent did not answer.'; _wpPt.tone = ''; wpPtRefresh(); });
 }
+function wpPtShare(on) { wpPtAct({ action: 'share', on: !!on }, on ? 'Sharing with your group and raid is on.' : 'Sharing with your group and raid is off.'); }
 function wpPtCreate() { wpPtAct({ action: 'create' }, ''); }
 function wpPtJoin() { var inp = document.getElementById('wpPtCode'); wpPtAct({ action: 'join', code: inp ? inp.value : '' }, ''); }
 function wpPtLeave() { wpPtAct({ action: 'leave' }, 'Left the party.'); }

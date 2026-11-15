@@ -1434,6 +1434,9 @@ contextBridge.exposeInMainWorld('mimic', {
   openResources:       ()         => ipcRenderer.invoke('open-resources'),
   // 🐺 Raid Mimic party: Settings' way in to the dashboard's party card (the tray's "Raid Mimic party…" does the same).
   openPartyCard:       ()         => ipcRenderer.invoke('open-party-card'),
+  // "Share with my in-game group and raid": the setting (default off) lives in the agent; Settings, the tray and the card all drive it.
+  getPartyShare:       ()         => ipcRenderer.invoke('party-share-get'),
+  setPartyShare:       (on)       => ipcRenderer.invoke('party-share-set', !!on),
   // Feedback in its own window — the dashboard's 💬 Feedback button and the tray item.
   // Resolves false when the agent has no port yet (the page then opens its in-page card).
   openFeedback:        ()         => ipcRenderer.invoke('open-feedback'),
