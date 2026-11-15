@@ -406,6 +406,10 @@ boundaries, `#if 0` C++ — the index above stays the map of intent. The
   roster sync overwrote anything stored. The spells page then had no class and no spell list.
 - **Where (bot):** `mergeKnownClassRace` / `isUnknownClassRace` in `utils/openDkpSync.js`, applied in `syncCharacters` after the
   duplicate-name collapse and before the upsert (one paged read of the guild's name/class/race; fail-open).
+- **Character combat page** (web 2.1.143, bot 4.0.83, 2026-11-14, DECISIONS §585): `web/app/character/[name]/combat/page.tsx`,
+  owner-only (`COMBAT_VISIBILITY` in `web/lib/characterCombat.ts`), reads `character_combat_trends(name, days)` as the signed-in
+  member. Incoming swings per fight: `encounter_combat_rollup.taken`, written by `upsertCombatTaken` (utils/supabase.js) from the
+  uploader's own defender row. Per-ability highs / lows (`max`/`min`/`h` in `by_skill`), Harm Touch and `weave` come from the agent.
 - **Where (web):** `web/app/character/[name]/spells/ClassSetter.tsx` (officers only), `setCharacterClass` in the same folder's
   `actions.ts`, lists and validation in `web/lib/characterClass.ts`. Visible at `https://wolfpack.quest/character/<name>/spells`.
 - **Not done:** OpenDKP is not edited; its "edit character" request has not been captured. Test: `test/character-class-set.test.js`.
