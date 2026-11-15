@@ -458,6 +458,11 @@ const KEEP_PATTERNS = [
   // so the EncounterBuilder can attribute the next "was hit by non-melee" to
   // the bard's specific dirge (damage lands 3-6s later on the server tick).
   /\byou\s+throw\s+your\s+head\s+back\s+and/i,
+  // Harm Touch / Lay on Hands landing lines — spell text from eqemu_spells (ids 88, 2821 / 87), verified.
+  // Numberless, so the damage patterns above never kept them; parseEvent turns them into `ability_land`,
+  // which pairs the uploader's own HT with the damage line that follows (EncounterBuilder._noteAbilityLand).
+  /\bwrithes? in the grip of agony\./i,
+  /\bfeels? a healing touch\./i,
   // Avoidance / miss lines — "X tries to <verb> Y, but misses!" / "but Y dodges!" etc.
   // Needed for tanking stats (avoidance %, hits-taken, accuracy). The parseEvent
   // handler classifies each into miss/dodge/parry/riposte/block/invulnerable.
@@ -978,7 +983,12 @@ function parseEvent(line, ts) {
   if (m) {
     if (parseInt(m[2], 10) > MELEE_HIT_MAX) { _finishingBlowsDropped++; return null; }   // finishing blow — not real melee
     const verb = m[0].match(new RegExp(`\\bYou\\s+(${ATTACK_VERBS_RX})\\b`, 'i'))?.[1] || 'hit';
-    return { ts: tsIso, type: 'damage', attacker: null /* self */, defender: m[1], ability: verb.toLowerCase().replace(/(?:sh|ch|ss|x)es$/, m => m.slice(0, -2)).replace(/s$/, ''), amount: parseInt(m[2], 10) };
+    const selfEv = { ts: tsIso, type: 'damage', attacker: null /* self */, defender: m[1], ability: verb.toLowerCase().replace(/(?:sh|ch|ss|x)es$/, m => m.slice(0, -2)).replace(/s$/, ''), amount: parseInt(m[2], 10) };
+    // "You hit X for N points of non-melee damage." is the CASTER's view of a direct-damage spell (a
+    // bystander sees "X was hit by non-melee"). Flag it like the third-person branch below does, so the
+    // builder can tell the uploader's own spell hit from a weapon hit (Harm Touch pairing).
+    if (/points?\s+of\s+non-melee\s+damage/i.test(line)) selfEv.nonMelee = true;
+    return selfEv;
   }
 
   // "<Name> <verb> X for N points of damage." (third-person; everyone else)
@@ -1335,6 +1345,17 @@ function parseEvent(line, ts) {
       return { ts: tsIso, type: 'dirge_cast', attacker: null, ability: spell.name, tickMs: spell.tickMs };
     }
   }
+
+  // ── Harm Touch / Lay on Hands landing (spell text from eqemu_spells, verified) ─
+  //   Harm Touch (spells 88, 2821): cast_on_other "<target> writhes in the grip of agony.",
+  //                                 cast_on_you   "You writhe in the grip of agony."
+  //   Lay on Hands (spell 87):      cast_on_other "<target> feels a healing touch."
+  // The line never says who cast it; EncounterBuilder._noteAbilityLand decides that from the uploader's
+  // own class and the damage line that follows. `target` is null when the landing is on the uploader.
+  m = line.match(/\]\s+(?:(You) writhe|([^'"\[\]]+?) writhes) in the grip of agony\.\s*$/);
+  if (m) return { ts: tsIso, type: 'ability_land', kind: 'harm_touch', target: m[1] ? null : m[2].trim() };
+  m = line.match(/\]\s+(?:(You) feel|([^'"\[\]]+?) feels) a healing touch\.\s*$/);
+  if (m) return { ts: tsIso, type: 'ability_land', kind: 'lay_on_hands', target: m[1] ? null : m[2].trim() };
 
   // ── Pet leader declaration ────────────────────────────────────────────────
   // Covers both forms that EQ produces:
@@ -10324,6 +10345,109 @@ const PVP_ASSIST_WINDOW_MS = 240_000;
 const WIPE_SPLIT_IDLE_MS  = 5 * 60_000;
 const WIPE_SPLIT_CHECK_MS = 10_000;
 
+// ── Per-ability hit-size histogram (rollup.by_char[name].by_skill[ability].h) ─────────────
+// 16 log2 buckets of hit size. Bucket i holds hits in [2^i, 2^(i+1)); bucket 0 also holds a hit of 1,
+// and bucket 15 is open-ended (>= 32768). Edges: 1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768.
+// Only hits > 0 are counted. The web reads a median / p25 / p75 with histQuantile (mirror it there): it
+// walks the buckets to the one holding the rank and interpolates geometrically inside it, clamped to the
+// ability's exact `min` / `max` (sent beside `h`), so a tight spread (a monk's kick) reads close to true
+// and a wide one is good to about a factor of two.
+const HIST_BUCKETS = 16;
+function _histBucket(amt) {
+  return Math.min(HIST_BUCKETS - 1, 31 - Math.clz32(Math.max(1, amt | 0)));
+}
+// Value at quantile q (0..1) of a histogram `h`; `min` / `max` (optional) clamp the interpolation.
+function histQuantile(h, q, min, max) {
+  if (!Array.isArray(h)) return null;
+  let n = 0;
+  for (const c of h) n += Number(c) || 0;
+  if (!(n > 0)) return null;
+  const rank = Math.min(1, Math.max(0, Number(q) || 0)) * n;
+  let acc = 0;
+  for (let i = 0; i < h.length; i++) {
+    const c = Number(h[i]) || 0;
+    if (!c) continue;
+    if (acc + c >= rank) {
+      let lo = 2 ** i, hi = i === HIST_BUCKETS - 1 ? Infinity : 2 ** (i + 1);
+      if (min > lo) lo = min;
+      if (max < hi) hi = max;
+      if (!(hi > lo)) return Math.round(lo);
+      return Math.round(lo * Math.pow(hi / lo, (rank - acc) / c));
+    }
+    acc += c;
+  }
+  return null;
+}
+
+// ── Monk weave per fight (rollup.by_char[uploader].weave) ─────────────────────────────────
+// Weaving = landing a special (kick, tiger claw, ...) between auto-attack rounds without delaying the
+// next round. Built from the uploader's OWN logged events, in log order: auto-attack lines (and swings
+// that missed) in the same log second are one round (primary + off hand); a special is credited to the
+// round before it. Shape: { rounds, roundsWithSpecial, specials, avgRoundGapMs, lateRounds }.
+//  · avgRoundGapMs — mean gap between consecutive rounds, gaps over 10 s ignored (a pause, not a delay).
+//  · lateRounds    — rounds that followed a special and came later than the fight's median gap by more
+//                    than 25%: a clip. ⚠ The log is stamped to the SECOND, so a gap is only good to
+//                    about ±1 s; a round must also be over a full second later than the median to count,
+//                    which under-reports small clips rather than inventing them. Needs 3+ gaps.
+// Omitted when the uploader landed no special or had fewer than two rounds.
+const _WEAVE_AUTO = new Set(['hit', 'slash', 'crush', 'pierce', 'punch']);
+const _WEAVE_SPECIAL = new Set(['kick', 'flying kick', 'round kick', 'tiger claw', 'eagle strike', 'strike', 'dragon punch', 'tail rake']);
+const _WEAVE_MAX_GAP_MS = 10_000;
+function _weaveOf(events) {
+  const rounds = [];     // { sec, t, special }
+  let specials = 0;
+  for (const ev of events) {
+    if (!ev || ev.attacker != null) continue;
+    if (ev.type !== 'damage' && ev.type !== 'avoid') continue;
+    if (ev.ds || ev.nonMelee || ev.spellName) continue;
+    const verb = String(ev.type === 'damage' ? ev.ability : ev.verb || '').toLowerCase();
+    const t = Date.parse(ev.ts);
+    if (!t) continue;
+    const sec = Math.floor(t / 1000);
+    if (_WEAVE_AUTO.has(verb)) {
+      const last = rounds[rounds.length - 1];
+      if (!last || last.sec !== sec) rounds.push({ sec, t, special: false });
+    } else if (_WEAVE_SPECIAL.has(verb)) {
+      specials++;
+      if (rounds.length) rounds[rounds.length - 1].special = true;
+    }
+  }
+  if (!specials || rounds.length < 2) return undefined;
+  const gaps = [];
+  for (let i = 1; i < rounds.length; i++) {
+    const g = rounds[i].t - rounds[i - 1].t;
+    gaps.push(g <= _WEAVE_MAX_GAP_MS ? g : null);
+  }
+  const good = gaps.filter(g => g != null);
+  let late = 0;
+  if (good.length >= 3) {
+    const sorted = [...good].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    const limit = Math.max(med * 1.25, med + 1000);
+    for (let i = 0; i < gaps.length; i++) if (rounds[i].special && gaps[i] != null && gaps[i] > limit) late++;
+  }
+  return {
+    rounds: rounds.length,
+    roundsWithSpecial: rounds.filter(r => r.special).length,
+    specials,
+    avgRoundGapMs: good.length ? Math.round(good.reduce((a, b) => a + b, 0) / good.length) : 0,
+    lateRounds: late,
+  };
+}
+
+// The uploader's class: Zeal's char info, then /who, then the raid roster. null when none knows.
+function _ownClassOf(character) {
+  const cl = String(character || '').toLowerCase();
+  if (!cl) return null;
+  const zst = _meZealFor(cl);
+  const who = whoData.get(cl);
+  return normalizeClass((zst && _meLabel(zst, 3)) || (who && who.class) || _raidClassByName.get(cl) || '') || null;
+}
+
+// Harm Touch pairing window: the landing line and the damage line print in the same server tick, and
+// the log stamps whole seconds, so allow a second either side of the line (see _noteAbilityLand).
+const HT_PAIR_MS = 1500;
+
 class EncounterBuilder {
   constructor({ character, onFlush, silent = false }) {
     this.character  = character;
@@ -10347,6 +10471,10 @@ class EncounterBuilder {
     // lastDirgeCast persists across encounters too — a bard might fire a dirge
     // right before an encounter starts and the damage tick lands inside it.
     this.lastDirgeCast  = null;       // { ts: ms, name: string } | null
+    // Harm Touch pairing (see _noteAbilityLand). Persist across fights like lastDirgeCast: HT is
+    // often the opener, before the fight is open.
+    this._htPending        = null;    // { tgt: lowercase name, tsMs } — a landing line waiting for its damage
+    this._lastSelfNonMelee = null;    // { ev, tsMs } — the uploader's last own spell hit, for damage-before-landing order
     this.reset();
   }
   reset() {
@@ -10480,6 +10608,7 @@ class EncounterBuilder {
     // per-target debounce for mob self-heal ticks (Zeal-gauge sourced).
     this._slowsOnTarget    = new Map();
     this._mobHealDebounce  = new Map();
+    this._lohUses          = 0;   // the uploader's own Lay on Hands landings this fight (count only)
     // petLeaders and lastDirgeCast intentionally NOT reset — persists for the agent's runtime
   }
   // ── Callout-replay timeline (#98) ──────────────────────────────────────────
@@ -10973,6 +11102,53 @@ class EncounterBuilder {
     ba.total += amount;
   }
 
+  // ── Harm Touch / Lay on Hands (uploader's own) ─────────────────────────────
+  // VERIFIED (eqemu_spells): the landing text. Harm Touch (88, 2821) prints "<target> writhes in the grip
+  // of agony." on others; Lay on Hands (87) prints "<target> feels a healing touch.".
+  // INFERRED (not seen in a live log): that the Harm Touch damage prints as the caster's own "You hit X for
+  // N points of non-melee damage." within a second of the landing line, in either order. Nothing in the log
+  // says WHO cast a landing, so it is only credited to the uploader when (a) the uploader is a Shadow Knight
+  // (Zeal / /who class) and (b) the uploader's own spell-hit line on that same target pairs with it. A
+  // bystander's Harm Touch has no "You hit" line of ours, so it pairs with nothing. Class unknown (backfill
+  // with no /who) -> no pairing, the hit stays in 'hit'.
+  // Lay on Hands: no heal line is proven, so it is a COUNT only (by_skill['lay on hands'].hits), credited
+  // when the uploader is a Paladin and the landing is on their Zeal target (or on them, with no target).
+  _noteAbilityLand(event) {
+    const tsMs = Date.parse(event.ts) || Date.now();
+    const cls = _ownClassOf(this.character);
+    if (event.kind === 'harm_touch') {
+      if (cls !== 'Shadow Knight' || !event.target) return;
+      const tgt = String(event.target).toLowerCase();
+      const p = this._lastSelfNonMelee;
+      if (p && p.ev.ability === 'hit' && String(p.ev.defender || '').toLowerCase() === tgt && Math.abs(tsMs - p.tsMs) <= HT_PAIR_MS) {
+        this._lastSelfNonMelee = null;
+        this._creditHarmTouch(p.ev);       // the damage line came first; it is already in this.events
+        return;
+      }
+      this._htPending = { tgt, tsMs };
+      return;
+    }
+    if (event.kind === 'lay_on_hands') {
+      if (cls !== 'Paladin') return;
+      const cl = String(this.character || '').toLowerCase();
+      const who = event.target ? String(event.target).toLowerCase() : cl;
+      const zt = _zealTargetForChar(cl);
+      if (!((zt ? zt.toLowerCase() : null) === who || (!zt && who === cl))) return;
+      if (this.startedAt) this._lohUses++;
+      this._pushClassFun('lay_on_hands', 0, event.ts, 'Lay on Hands' + (event.target ? ' on ' + event.target : ''));
+    }
+  }
+  _creditHarmTouch(ev) {
+    ev.ability = 'harm touch';
+    this._pushClassFun('harm_touch', Number(ev.amount) || 0, ev.ts, 'Harm Touch on ' + (ev.defender || '?') + ' for ' + (Number(ev.amount) || 0));
+  }
+  // The existing harm_touch / lay_on_hands fun-events (reagent_qty = damage, or 0 for a count). Live only —
+  // a silent (backfill) builder must not re-announce old fights.
+  _pushClassFun(type, qty, ts, text) {
+    if (this.silent) return;
+    funEventBuffer.push({ type, caster: this.character || null, reagent_qty: qty, ts, raw_text: String(text).slice(0, 200) });
+  }
+
   // Decide the held anonymous non-melee hit and re-add it. `flavor` is the
   // shield named by "<mob> was <verb> by <spell>." when that line landed for
   // the same mob within the pair window, else null. Called from the flavor
@@ -11435,6 +11611,12 @@ class EncounterBuilder {
       return;
     }
 
+    // Harm Touch / Lay on Hands landing line — see _noteAbilityLand.
+    if (event.type === 'ability_land') {
+      this._noteAbilityLand(event);
+      return;
+    }
+
     // /melody markers — stamp the character's bardMelody state so the overlay
     // shows "playing melody…" + the start timestamp even before Zeal label 134
     // delivers the first per-song transition. Zeal label 134 does the heavy
@@ -11515,6 +11697,21 @@ class EncounterBuilder {
       } else if (evTs - this.lastDirgeCast.ts > window + 5000) {
         // stale — drop it so future hits aren't wrongly credited
         this.lastDirgeCast = null;
+      }
+    }
+
+    // Harm Touch damage: the uploader's own direct-damage spell hit ("You hit X for N points of
+    // non-melee damage.") right after a Harm Touch landing on X is the HT itself, so it is credited to
+    // `harm touch` instead of the generic 'hit' bucket. Pending landing -> damage here; damage ->
+    // landing is paired in _noteAbilityLand (the log order is not proven, so both are handled).
+    if (event.type === 'damage' && event.attacker === null && event.nonMelee && event.amount > 0) {
+      const evTs = Date.parse(event.ts) || Date.now();
+      const p = this._htPending;
+      if (p && String(event.defender || '').toLowerCase() === p.tgt && Math.abs(evTs - p.tsMs) <= HT_PAIR_MS) {
+        this._htPending = null;
+        this._creditHarmTouch(event);
+      } else {
+        this._lastSelfNonMelee = { ev: event, tsMs: evTs };
       }
     }
 
@@ -12904,6 +13101,13 @@ class EncounterBuilder {
       if (!s) s = bucket.by_skill[skillKey] = { hits: 0, dmg: 0 };
       s.hits += 1;
       s.dmg  += amt;
+      // Highs / mids / lows (agent 4.0.86+): exact max + smallest non-zero hit, and the log2 histogram
+      // `h` (see HIST_BUCKETS). Older agents send just { hits, dmg }; the bot stores by_skill as-is.
+      if (amt > 0) {
+        if (s.max === undefined || amt > s.max) s.max = amt;
+        if (s.min === undefined || amt < s.min) s.min = amt;
+        (s.h || (s.h = new Array(HIST_BUCKETS).fill(0)))[_histBucket(amt)] += 1;
+      }
       bucket.total_hits   += 1;
       bucket.total_damage += amt;
 
@@ -12911,6 +13115,24 @@ class EncounterBuilder {
         bucket.self_attack_count += 1;
       }
     }
+    // The histogram only earns its bytes with 2+ hits (one hit is just `max`). by_skill is stored as jsonb
+    // per fight per character, so this keeps the common one-hit ability at { hits, dmg, max, min }.
+    for (const b of Object.values(_rollupByChar)) {
+      for (const s of Object.values(b.by_skill)) {
+        if (s.h && s.h.reduce((a, c) => a + c, 0) < 2) delete s.h;
+      }
+    }
+    // The uploader's own Lay on Hands landings: a count (heal size is not in the log). Rides in by_skill
+    // as { hits: n, dmg: 0 } so the bot stores it untouched; it is NOT added to total_hits / total_damage.
+    if (this._lohUses > 0 && _uploader) {
+      const ub = _rollupByChar[_uploader] || (_rollupByChar[_uploader] = {
+        by_skill: {}, total_hits: 0, total_damage: 0, self_attack_count: 0,
+      });
+      ub.by_skill['lay on hands'] = { hits: this._lohUses, dmg: 0 };
+    }
+    // Monk weave: from the uploader's own swings (see _weaveOf). Beside by_skill, not inside it.
+    const _weave = _uploader ? _weaveOf(this.events) : undefined;
+    if (_weave && _rollupByChar[_uploader]) _rollupByChar[_uploader].weave = _weave;
     const _rollup = Object.keys(_rollupByChar).length
       ? { by_char: _rollupByChar }
       : undefined;
@@ -47065,6 +47287,9 @@ function parseCursorFull(line, character) {
 // we record the COUNT (reagent_qty=0) and the display layer multiplies count ×
 // that paladin's max HP (from /who or char data) to get the heal total. When the
 // line DOES carry a heal number we record it directly.
+// ⚠ 2026-11: the two regexes below have never matched a live line (fun_events holds no harm_touch / lay_on_hands
+// rows). The working path is EncounterBuilder._noteAbilityLand, which pairs the verified landing text from
+// eqemu_spells with the damage line and pushes these same fun-event types. Left in place, not deleted.
 const HARM_TOUCH_RX = /\b(?:you|your)\s+harm[\s-]?touch(?:es|ed)?\b[^\d]*?(\d+)\s+points?\s+of\s+damage/i;
 const LAY_ON_HANDS_RX = /\byou\s+lay\s+(?:your\s+)?hands?\s+on\b/i;
 // Optional heal amount on the LoH line / its companion heal message.
@@ -69710,7 +69935,7 @@ module.exports = {
   _isGuestChar, setGuestCharacter, _guestCharList, shouldUploadForCharacter,
   // Local item icons (2026-10-21): cut from the player's own dragitem sheets. See the block above module.exports.
   _iconCellOf, _iconDecodeTga, _iconDecodeDds, _iconPng, _iconCut, _localIconPng, _localIconRoute,
-  parseEvent, shouldKeep, parseEqTimestamp,
+  parseEvent, shouldKeep, parseEqTimestamp, histQuantile, funEventBuffer,
   DEFAULT_DROP_PATTERNS, KEEP_PATTERNS,
   buildFeedbackLogSlice, _feedbackLineAllowed,
   // Mimic's Chat overlay feed (2026-10-14). The buffers are exposed so a test can prove nothing here lands in an upload queue.

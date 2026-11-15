@@ -229,8 +229,8 @@ describe('#75 golden log — encounter replay', () => {
   });
 
   it('rolls damage up per character and per skill', () => {
-    expect(d().rollup.Draggomir.by_skill['Ice Comet']).toEqual({ hits: 1, dmg: 1104 });
-    expect(d().rollup.Brambleth.by_skill['ds:legacy of spike']).toEqual({ hits: 1, dmg: 24 });
+    expect(d().rollup.Draggomir.by_skill['Ice Comet']).toEqual({ hits: 1, dmg: 1104, max: 1104, min: 1104 });
+    expect(d().rollup.Brambleth.by_skill['ds:legacy of spike']).toEqual({ hits: 1, dmg: 24, max: 24, min: 24 });
   });
 
   it('trims the fight to active combat seconds and flags the raid window', () => {
