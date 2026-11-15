@@ -944,6 +944,15 @@ async function upsertCombatRollup(encounterId, agentVersion, rollupByChar, scope
   // rows are sent, and opposite orders were the 40P01 deadlocks in the postgres log (4 in 24 h, 2026-10-20).
   rows.sort((a, b) => (a.character_name < b.character_name ? -1 : a.character_name > b.character_name ? 1 : 0));
   await _asGuild(scoped, () => upsert('encounter_combat_rollup', rows, 'encounter_id,character_name'));
+  // The weave tally (agent 4.0.86+) comes only on the uploader's own bucket. It goes in a write of its own, so another
+  // uploader's copy of the same fight, which has no weave for this character, never blanks it.
+  const weaves = Object.entries(rollupByChar)
+    .filter(([, b]) => b && b.weave && typeof b.weave === 'object')
+    .map(([characterName, b]) => ({
+      guild_id: scoped ? scoped.guildId : _guildId(), encounter_id: encounterId, character_name: characterName, weave: b.weave,
+    }))
+    .sort((a, b) => (a.character_name < b.character_name ? -1 : a.character_name > b.character_name ? 1 : 0));
+  if (weaves.length) await _asGuild(scoped, () => upsert('encounter_combat_rollup', weaves, 'encounter_id,character_name'));
 }
 
 // The character's OWN incoming swings for one fight, onto their encounter_combat_rollup row (column `taken`).
