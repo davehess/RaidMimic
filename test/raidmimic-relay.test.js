@@ -334,6 +334,105 @@ describe('the migration', () => {
   });
 });
 
+describe('shared timers', () => {
+  const MIN = 60000;
+  const tm = (o = {}) => ({ kind: 'debuff', spell: 'Tashan', target: "a Shik`nar Forager", caster: 'Aldenmar', endsAt: T0 + 5 * MIN, ...o });
+  const run = (timers, character = 'Aldenmar') => lib.validatePub({ type: 'pub', timers }, T0, character);
+
+  it('keeps a good timer and rebuilds it field by field', () => {
+    const v = run([{ ...tm(), may_break: true, junk: 1 }]);
+    expect(v.ok).toBe(true);
+    expect(v.pub.timers).toEqual([{ kind: 'debuff', spell: 'Tashan', target: "a Shik`nar Forager", caster: 'Aldenmar', endsAt: T0 + 5 * MIN, may_break: true }]);
+  });
+  it('a frame without timers leaves them null (keep the previous set); [] is a snapshot', () => {
+    expect(lib.validatePub({ type: 'pub' }, T0, 'Aldenmar').pub.timers).toBeNull();
+    expect(run([]).pub.timers).toEqual([]);
+    expect(lib.validatePub({ type: 'pub', timers: 'x' }, T0, 'Aldenmar').ok).toBe(false);
+  });
+  it('drops only the bad timer, never the frame', () => {
+    const v = lib.validatePub({ type: 'pub', perPlayer: { Aldenmar: { dmg: 5 } }, timers: [
+      tm(), tm({ spell: '' }), tm({ spell: 'x'.repeat(61) }), tm({ spell: 'bad\nspell' }), tm({ kind: 'nuke' }),
+      tm({ caster: 'Brackwyn' }), tm({ caster: 'Alden1' }), tm({ target: 'a<b>' }), tm({ target: 'x'.repeat(65) }),
+      tm({ endsAt: T0 - 1 }), tm({ endsAt: T0 }), tm({ endsAt: '99' }), tm({ endsAt: NaN }), 'str', null,
+    ] }, T0, 'Aldenmar');
+    expect(v.ok).toBe(true);
+    expect(v.pub.perPlayer.get('Aldenmar').dmg).toBe(5);
+    expect(v.pub.timers).toHaveLength(1);
+  });
+  it('drops a timer that has already ended', () => {
+    expect(run([tm({ endsAt: T0 - 1 }), tm({ spell: 'Now', endsAt: T0 }), tm({ spell: 'Ok', endsAt: T0 + 1 })]).pub.timers.map((t) => t.spell)).toEqual(['Ok']);
+  });
+  it('accepts only timers the member cast itself (caster must be its own character)', () => {
+    expect(run([tm({ caster: 'Brackwyn' })]).pub.timers).toEqual([]);
+    expect(run([tm()], null).pub.timers).toEqual([]);          // no known character → nothing accepted
+  });
+  it('allows a mob name with digits, spaces, hyphens and apostrophes', () => {
+    expect(run([tm({ target: "Lord Nagafen-2 's" })]).pub.timers).toHaveLength(1);
+  });
+  it('clamps buffs and debuffs to 20 minutes and charms to 3 hours', () => {
+    const v = run([tm({ kind: 'buff', endsAt: T0 + 90 * MIN }), tm({ spell: 'D', endsAt: T0 + 90 * MIN }),
+      tm({ kind: 'charm', spell: 'Tunare\'s Request', endsAt: T0 + 3 * 60 * MIN }), tm({ kind: 'charm', spell: 'Allure', endsAt: T0 + 9 * 60 * MIN })]);
+    const by = Object.fromEntries(v.pub.timers.map((t) => [t.spell, t.endsAt]));
+    expect(by.Tashan).toBe(T0 + 20 * MIN);
+    expect(by.D).toBe(T0 + 20 * MIN);
+    expect(by["Tunare's Request"]).toBe(T0 + 180 * MIN);
+    expect(by.Allure).toBe(T0 + 180 * MIN);
+  });
+  it('drops the 101st timer', () => {
+    const many = Array.from({ length: 101 }, (_, i) => tm({ spell: `S${i}` }));
+    const v = run(many);
+    expect(v.pub.timers).toHaveLength(100);
+    expect(v.pub.timers.some((t) => t.spell === 'S100')).toBe(false);
+  });
+
+  const party = () => { const p = new lib.Party('ABC234', T0); p.add(member('a', 'free', { character: 'Aldenmar' })); p.add(member('b', 'free', { character: 'Brackwyn' })); return p; };
+  const pubT = (timers, character, at = T0) => lib.validatePub({ type: 'pub', timers }, at, character).pub;
+
+  it('a newer frame from the same caster replaces the entry, and a dropped timer is removed', () => {
+    const p = party();
+    p.ingest('a', pubT([tm(), tm({ spell: 'Other' })], 'Aldenmar'), T0);
+    expect(p.view(T0).timers.map((t) => t.spell).sort()).toEqual(['Other', 'Tashan']);
+    p.ingest('a', pubT([tm({ endsAt: T0 + 9 * MIN })], 'Aldenmar', T0 + 2000), T0 + 2000);
+    const t = p.view(T0 + 2000).timers;
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ spell: 'Tashan', endsAt: T0 + 9 * MIN });
+  });
+  it('a frame with no timers field keeps them; an empty list clears only that caster', () => {
+    const p = party();
+    p.ingest('a', pubT([tm()], 'Aldenmar'), T0);
+    p.ingest('b', pubT([tm({ caster: 'Brackwyn', spell: 'Slow' })], 'Brackwyn'), T0);
+    p.ingest('a', pub({ Aldenmar: { dmg: 1 } }), T0 + 2000);
+    expect(p.view(T0 + 2000).timers).toHaveLength(2);
+    p.ingest('a', pubT([], 'Aldenmar', T0 + 4000), T0 + 4000);
+    expect(p.view(T0 + 4000).timers.map((t) => t.caster)).toEqual(['Brackwyn']);
+  });
+  it('sorts by endsAt, caps the view at 200 and is in every tier', () => {
+    const p = party();
+    p.ingest('a', pubT([tm({ spell: 'Late', endsAt: T0 + 9 * MIN }), tm({ spell: 'Soon', endsAt: T0 + MIN })], 'Aldenmar'), T0);
+    const v = p.view(T0);
+    expect(v.tier).toBe('free');
+    expect(v.timers.map((t) => t.spell)).toEqual(['Soon', 'Late']);
+    const big = new lib.Party('ZZZ234', T0);
+    for (let i = 0; i < 3; i++) { const c = `Mem${'abc'[i]}`; big.add(member(c, 'pro', { character: c })); }
+    for (let i = 0; i < 3; i++) { const c = `Mem${'abc'[i]}`; big.ingest(c, pubT(Array.from({ length: 100 }, (_, j) => tm({ caster: c, spell: `S${j}`, endsAt: T0 + MIN + j })), c), T0); }
+    expect(big.view(T0).timers).toHaveLength(200);
+  });
+  it('prunes expired timers on every view', () => {
+    const p = party();
+    p.ingest('a', pubT([tm({ endsAt: T0 + MIN }), tm({ spell: 'Long', endsAt: T0 + 10 * MIN })], 'Aldenmar'), T0);
+    expect(p.view(T0 + MIN - 1).timers).toHaveLength(2);
+    expect(p.view(T0 + MIN).timers.map((t) => t.spell)).toEqual(['Long']);
+    expect(p.timers.size).toBe(1);
+  });
+  it('a member leaving keeps its timers until they end', () => {
+    const p = party();
+    p.ingest('a', pubT([tm()], 'Aldenmar'), T0);
+    p.remove('a', T0 + 1000);
+    expect(p.view(T0 + 2000).timers).toHaveLength(1);
+    expect(p.view(T0 + 5 * MIN).timers).toHaveLength(0);
+  });
+});
+
 // ── End to end: a real ws client against the real server on an ephemeral port, the RPC stubbed ───────────────
 let ws;
 try { ws = require('../apps/raidmimic-relay/node_modules/ws'); } catch { ws = null; }
@@ -419,6 +518,28 @@ e2e('end to end', () => {
 
     b.send(JSON.stringify({ type: 'history' }));
     expect((await next(b, 'history')).party).toBe(w.party);
+  });
+
+  it('shares timers: each member sees the other\'s, and one cannot publish as the other', async () => {
+    const port = await boot();
+    const a = client(port); await a.opened;
+    hello(a, { token: TOKEN('a'), create: true, character: 'Aldenmar' });
+    const w = await next(a, 'welcome');
+    const b = client(port); await b.opened;
+    hello(b, { token: TOKEN('b'), party: w.party, character: 'Brackwyn' });
+    await next(b, 'welcome');
+    const at = Date.now();
+    a.send(JSON.stringify({ type: 'pub', timers: [{ kind: 'debuff', spell: 'Tashan', target: 'a gnoll', caster: 'Aldenmar', endsAt: at + 5 * 60000 }] }));
+    b.send(JSON.stringify({ type: 'pub', timers: [
+      { kind: 'charm', spell: 'Allure', target: 'an orc', caster: 'Brackwyn', endsAt: at + 60 * 60000 },
+      { kind: 'buff', spell: 'Spoof', target: 'Aldenmar', caster: 'Aldenmar', endsAt: at + 60000 }] }));
+    const both = (m) => m.type === 'view' && m.timers.length === 2;
+    const va = await until(() => [...a.inbox].reverse().find(both));
+    const vb = await until(() => [...b.inbox].reverse().find(both));
+    expect(va.timers.map((t) => t.caster).sort()).toEqual(['Aldenmar', 'Brackwyn']);
+    expect(vb.timers).toEqual(va.timers);
+    expect(va.timers.find((t) => t.spell === 'Allure')).toMatchObject({ kind: 'charm', target: 'an orc', may_break: false });
+    expect(va.timers.some((t) => t.spell === 'Spoof')).toBe(false);
   });
 
   it('starts the trial when a free creator makes a party, once', async () => {

@@ -10,7 +10,7 @@
 // Protocol (WebSocket, /v1/party, JSON text frames):
 //   client → hello {token, party? | create:true, character, agent_version}     first message, within 10 s
 //   server → welcome {party, tier, member}   or   error {code}  then close
-//   client → pub {perPlayer?, target?, casting?, roster?, fires?}              latest wins, about every 2 s
+//   client → pub {perPlayer?, target?, casting?, roster?, fires?, timers?}      latest wins, about every 2 s
 //   server → view {...}                                                        every 2 s, same view to every member
 //   client → history {}      server → history {frames}                         paid parties only
 //   client → bye {}                                                            leave now
@@ -107,7 +107,7 @@ function createRelay({ rpc, allowedOrigins = [], now = Date.now, randomInt, maxC
     if (!msg) return;                                           // a bad frame is dropped, not echoed, not fatal
     const t = now();
     if (msg.type === 'pub') {
-      const v = lib.validatePub(msg, t);
+      const v = lib.validatePub(msg, t, ws.party.members.get(ws.memberKey)?.character);
       if (v.ok) ws.party.ingest(ws.memberKey, v.pub, t);
     } else if (msg.type === 'history') {
       if (ws.party.tier(t) === 'free') return send(ws, { type: 'error', code: 'tier' });
