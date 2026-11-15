@@ -90,7 +90,7 @@ describe('validation drops bad frames', () => {
     expect(lib.parseFrame('')).toBeNull();
     expect(lib.parseFrame(Buffer.from('{"type":"pub"}'))).toEqual({ type: 'pub' });
   });
-  it('clamps a fire time into the last 10 minutes', () => {
+  it('clamps a fire time into the history window', () => {
     const v = lib.validatePub({ type: 'pub', fires: [{ text: 'a', at: T0 + 9e6 }, { text: 'b', at: 1 }] }, T0);
     expect(v.pub.fires.map((f) => f.at)).toEqual([T0, T0 - lib.HISTORY_SPAN_MS]);
   });
@@ -232,17 +232,18 @@ describe('party lifecycle and history', () => {
   it('an abandoned new code expires too', () => {
     expect(new lib.Party('ABC234', T0).expired(T0 + lib.PARTY_GRACE_MS)).toBe(true);
   });
-  it('keeps merged frames every 10 s for 10 minutes and no more', () => {
+  it('keeps merged frames every 10 s for 20 minutes and no more', () => {
+    expect(lib.HISTORY_SPAN_MS).toBe(20 * 60000);
     const p = new lib.Party('ABC234', T0);
     p.add(member('a'));
     let sampled = 0;
-    for (let t = T0; t <= T0 + 20 * 60000; t += 2000) {
+    for (let t = T0; t <= T0 + 40 * 60000; t += 2000) {
       p.ingest('a', pub({ Aldenmar: { dmg: (t - T0) / 1000 } }), t);
       if (p.sampleHistory(t)) sampled++;
     }
-    expect(sampled).toBe(121);                                // one per 10 s over 20 min
-    expect(p.history.length).toBeLessThanOrEqual(61);
-    expect(p.history[0].t).toBeGreaterThanOrEqual(T0 + 10 * 60000);
+    expect(sampled).toBe(241);                                // one per 10 s over 40 min
+    expect(p.history.length).toBeLessThanOrEqual(121);
+    expect(p.history[0].t).toBeGreaterThanOrEqual(T0 + 20 * 60000);
     expect(JSON.stringify(p.history)).not.toMatch(/wpms_|age/);
   });
 });
