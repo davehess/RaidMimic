@@ -77,7 +77,8 @@ describe('the page', () => {
     const t = everythingShown();
     expect(t).toMatch(/dropped there first/);
     expect(t).toMatch(/only on your own computer/);
-    expect(t).toMatch(/Nothing is stored/);
+    // The relay writes one row of its own (the trial start), so the promise is about what is SHARED.
+    expect(t).toMatch(/What you share is never stored/);
     expect(t).toMatch(/must belong to your account/);
   });
   it('the agent really binds 127.0.0.1 only (the claim above rests on this, so it is checked, not trusted)', () => {

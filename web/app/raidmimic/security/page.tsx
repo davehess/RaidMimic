@@ -170,9 +170,10 @@ export default function RaidmimicSecurityPage() {
           {/* apps/raidmimic-relay/index.js: every hello checked with rpc.owns; not_your_character */}
           <li>The character you share as <B>must belong to your account</B>. It is checked each time you connect.</li>
           {/* apps/raidmimic-relay/lib.js: in-memory maps, HISTORY_SPAN_MS = 20 min; no fs writes */}
-          <li><B>Nothing is stored.</B> It lives in memory only, for about 20 minutes, and a restart empties it.</li>
-          {/* apps/raidmimic-relay/index.js line 20 env: only the anon key; lib.js comment: SECURITY DEFINER RPCs */}
-          <li>The party service holds <B>no key that can read a guild’s data</B>. It can only ask who a sign-in belongs to.</li>
+          <li><B>What you share is never stored.</B> It lives in memory only, for about 20 minutes, and a restart empties it.</li>
+          {/* apps/raidmimic-relay/index.js line 20 env: only the anon key; lib.js comment: SECURITY DEFINER RPCs; relay_start_trial (20261115150000) */}
+          <li>The party service holds <B>no key that can read a guild’s data</B>. It can only ask who a sign-in belongs to,
+            and note the day your first party started a free trial.</li>
           {/* apps/raidmimic-relay/lib.js validation + failed-hello limiter */}
           <li>Every message is checked, malformed ones are dropped, and failed attempts are <B>rate-limited</B>.</li>
         </Bullets>

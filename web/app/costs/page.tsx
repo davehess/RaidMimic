@@ -35,7 +35,7 @@ export default function CostsPage() {
         <section aria-label="What is free" className="mt-5">
           <h2 className="text-lg text-text">What is free, and why</h2>
           <div className={`${CARD} mt-2 space-y-2 text-sm text-text`}>
-            <p className="m-0"><span className="text-gold">Live party merging.</span> Kept in memory for 10 minutes, stores nothing. Paid for by donations.</p>
+            <p className="m-0"><span className="text-gold">Live party merging.</span> Kept in memory for about 20 minutes, never stored. Paid for by donations.</p>
             <p className="m-0"><span className="text-gold">PoP flags, characters, My raids.</span> Small database rows.</p>
             <p className="m-0"><span className="text-gold">Recaps.</span> The night&rsquo;s summary, about {recapSize.mb} MB per guild per week.</p>
             <p className="m-0"><span className="text-gold">Overlays.</span> Run on your PC from your own log.</p>

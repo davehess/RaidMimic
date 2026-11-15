@@ -106,17 +106,20 @@ describe('what the pages must say', () => {
     expect(src).toMatch(/CONTACT_EMAIL/);
     expect(src).toMatch(/Raid Mimic team/);
     for (const who of ['Supabase', 'Railway', 'Vercel', 'GitHub', 'Anthropic', 'Discord']) expect(src, who).toContain(who);
-    expect(src).toMatch(/A guild owns its members’ raid records/);
+    expect(src).toMatch(/A guild owns its raid records/);
     expect(src).toMatch(/never used to train AI models/i);
     expect(src).toMatch(/not for children under \{MIN_AGE\}/i);
     expect(src).toMatch(/No ads, no selling, no tracking scripts/);
     expect(src).toMatch(/sign-in cookie/);
-    expect(src).toMatch(/How long we keep it/);
+    expect(src).toMatch(/What we keep about you, and for how long/);
     expect(src).toMatch(/Never used to train AI models/);
+    expect(src).toMatch(/updated=\{PRIVACY_UPDATED\}/);
+    expect(L.PRIVACY_UPDATED).toBe('November 15, 2026');
   });
   it('privacy: download and delete yourself under Your data (shipped 2026-11-01), with email for the rest', () => {
     const src = code(PAGES.privacy);
-    expect(src).toMatch(/Download and delete it yourself:<\/B> sign in and open/);
+    expect(src).toMatch(/Download and delete it yourself:<\/B> <a href=\{YOUR_DATA_PATH\}/);
+    expect(src).toMatch(/<B>Delete everything:<\/B>/);
     expect(src).not.toMatch(/being built now/);
     expect(src).toMatch(/href=\{YOUR_DATA_PATH\}/);
     expect(src).toMatch(/Anything else/);
