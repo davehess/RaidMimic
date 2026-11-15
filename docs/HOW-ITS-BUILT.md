@@ -1535,6 +1535,7 @@ Tests: `test/feedback-log-slice.test.js` (agent + card), `test/feedback-ingest.t
   `index.js`, every 10 min, watermark `guild_interest_notified_at` in `bot_kv`; sanitizer + card in `utils/guildInterestNotice.js`, test `test/guild-interest-notice.test.js`).
 - **Legal pages:** `web/app/raidmimic/{privacy,terms,refunds}/page.tsx` + `_legal/LegalParts.tsx`, words and version in `web/lib/legal.ts`, `AgreeLine.tsx`,
   `LegalLinks.tsx`, `recordTermsAcceptance` (`web/lib/termsAcceptance.ts`, called from both sign-in callbacks). Test: `test/legal-pages.test.js`.
+- **Security page:** `web/app/raidmimic/security/page.tsx` (`https://raidmimic.com/security`), words in `LEGAL_META.security` and its date in `SECURITY_UPDATED` (`web/lib/legal.ts`), the `/security` rewrite in `web/lib/raidmimicHost.ts`, the footer link in `LegalLinks.tsx`. Public: protections only, each claim cited in a comment. Test: `test/raidmimic-security-page.test.js`.
 - **Your data:** `web/app/me/data/` (`YourData.tsx`, `DeleteAccount.tsx`, `actions.ts`, `export/route.ts`), `web/app/guilds/data/export/route.ts`, `web/lib/selfData.ts` +
   `selfDataRoute.ts`, RPCs `member_self_delete` / `member_self_unlink_batch`. Test: `test/self-serve-data.test.js`.
 - **Officer surfaces:** the departed-member pop-up (`web/components/DepartedMemberNotice.tsx` + `DepartedMemberPopup.tsx`, `web/lib/departedMembers*.ts`, on `/` and `/admin`;

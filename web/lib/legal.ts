@@ -16,6 +16,9 @@ export const CONTACT_HREF = `mailto:${CONTACT_EMAIL}`;
 export const TERMS_VERSION = '2026-11-01';
 export const LEGAL_UPDATED = 'November 1, 2026';
 
+/** The security page's own date (it is not part of the terms version, so it moves without asking anyone to agree again). */
+export const SECURITY_UPDATED = 'November 15, 2026';
+
 /** The youngest person these services are for (the same floor Discord, which every sign-in goes through, sets). */
 export const MIN_AGE = 13;
 
@@ -31,6 +34,10 @@ export const LEGAL_META = {
     title: '[beta] Raid Mimic privacy',
     description: 'Plain words on what Raid Mimic stores about you and your guild, who else handles it, how long it is kept, and how to see it or have it removed.',
   },
+  security: {
+    title: '[beta] Raid Mimic security',
+    description: 'Plain words on how Raid Mimic keeps your account and your guild’s data safe: sign-in, what is stored and how it is separated, what Mimic does on your PC, and how to report a problem.',
+  },
   terms: {
     title: '[beta] Raid Mimic terms',
     description: 'The short, plain terms for using Raid Mimic: the free tier, Pro billing, what is not allowed, who owns what, and how an account can end.',
@@ -41,7 +48,7 @@ export const LEGAL_META = {
   },
 } as const;
 
-export interface LegalPaths { home: string; privacy: string; terms: string; refunds: string }
+export interface LegalPaths { home: string; privacy: string; security: string; terms: string; refunds: string }
 
 /**
  * Where the legal pages are, from the visitor's side. On a raidmimic host (raidmimic.com and sisters) the middleware
@@ -50,6 +57,6 @@ export interface LegalPaths { home: string; privacy: string; terms: string; refu
  */
 export function legalPaths(onHost: boolean): LegalPaths {
   return onHost
-    ? { home: '/', privacy: '/privacy', terms: '/terms', refunds: '/refunds' }
-    : { home: '/raidmimic', privacy: '/raidmimic/privacy', terms: '/terms', refunds: '/raidmimic/refunds' };
+    ? { home: '/', privacy: '/privacy', security: '/security', terms: '/terms', refunds: '/refunds' }
+    : { home: '/raidmimic', privacy: '/raidmimic/privacy', security: '/raidmimic/security', terms: '/terms', refunds: '/raidmimic/refunds' };
 }

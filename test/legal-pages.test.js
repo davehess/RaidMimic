@@ -56,8 +56,8 @@ describe('web/lib/legal.ts', () => {
     expect(read('web/lib/legal.ts')).toMatch(/still has to CREATE/);
   });
   it('the legal pages are at the root of a raidmimic host and at their real paths on the Wolf Pack hosts; /terms is real on both', () => {
-    expect(L.legalPaths(true)).toEqual({ home: '/', privacy: '/privacy', terms: '/terms', refunds: '/refunds' });
-    expect(L.legalPaths(false)).toEqual({ home: '/raidmimic', privacy: '/raidmimic/privacy', terms: '/terms', refunds: '/raidmimic/refunds' });
+    expect(L.legalPaths(true)).toEqual({ home: '/', privacy: '/privacy', security: '/security', terms: '/terms', refunds: '/refunds' });
+    expect(L.legalPaths(false)).toEqual({ home: '/raidmimic', privacy: '/raidmimic/privacy', security: '/raidmimic/security', terms: '/terms', refunds: '/raidmimic/refunds' });
   });
 });
 
@@ -221,7 +221,7 @@ describe('raidmimic hosts serve /privacy /terms /refunds', () => {
   it('the sitemap lists them at their canonical addresses', async () => {
     const { GET } = await import('../web/app/raidmimic/sitemap.xml/route.ts');
     const xml = await GET().text();
-    for (const p of ['/', '/setup', '/register', '/privacy', '/terms', '/refunds']) expect(xml).toContain(`<loc>https://raidmimic.com${p}</loc>`);
+    for (const p of ['/', '/setup', '/register', '/privacy', '/security', '/terms', '/refunds']) expect(xml).toContain(`<loc>https://raidmimic.com${p}</loc>`);
   });
 });
 
@@ -443,7 +443,7 @@ describe('the landing page additions', () => {
     expect(s.indexOf('data-renewal')).toBeGreaterThan(s.indexOf('{t.note}'));
     expect(s.indexOf('data-renewal')).toBeLessThan(s.indexOf('t.points.map'));
   });
-  it('the footer carries Privacy · Terms · Refunds · Contact, from the shared component, and the page passes the host through', () => {
+  it('the footer carries Privacy · Security · Terms · Refunds · Contact, from the shared component, and the page passes the host through', () => {
     const f = code('web/app/raidmimic/_landing/Parts.tsx');
     expect(f).toMatch(/<LegalLinks onHost=\{onHost\} \/>/);
     expect(f).toMatch(/export function Footer\(\{ onHost = false \}/);
@@ -451,7 +451,7 @@ describe('the landing page additions', () => {
     expect(page).toMatch(/<Footer onHost=\{onHost\} \/>/);
     expect(page).toMatch(/<Pricing setup=\{ctx\.setup\} onHost=\{onHost\} \/>/);
     const links = code('web/components/LegalLinks.tsx');
-    expect(links).toMatch(/\['Privacy', p\.privacy\], \['Terms', p\.terms\], \['Refunds', p\.refunds\], \['Contact', CONTACT_HREF\]/);
+    expect(links).toMatch(/\['Privacy', p\.privacy\], \['Security', p\.security\], \['Terms', p\.terms\], \['Refunds', p\.refunds\], \['Contact', CONTACT_HREF\]/);
   });
   it('the mailto lives in lib/legal.ts alone (no page hard-codes the address)', () => {
     for (const f of ['web/app/raidmimic/_landing/Parts.tsx', 'web/app/raidmimic/_landing/StoryParts.tsx', 'web/components/LegalLinks.tsx', ...Object.values(PAGES)]) {

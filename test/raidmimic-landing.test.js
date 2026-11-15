@@ -119,7 +119,7 @@ describe('search engines: indexed on the raidmimic hosts, noindex everywhere els
     const xml = await res.text();
     expect([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1])).toEqual([
       'https://raidmimic.com/', 'https://raidmimic.com/setup', 'https://raidmimic.com/register',
-      'https://raidmimic.com/privacy', 'https://raidmimic.com/terms', 'https://raidmimic.com/refunds',
+      'https://raidmimic.com/privacy', 'https://raidmimic.com/security', 'https://raidmimic.com/terms', 'https://raidmimic.com/refunds',
     ]);
   });
   it('wolfpack.quest keeps its own robots.txt (the share links and the API stay out of search), untouched', () => {
