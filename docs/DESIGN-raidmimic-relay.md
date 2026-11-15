@@ -24,14 +24,29 @@ HTTP `GET /health` → `{ok, version, parties, clients}` (no secrets). WebSocket
 |---|---|---|
 | client → | `hello {token, party?, create?, character, agent_version}` | first message, within 10 s. Exactly one of `party` (a 6-letter code) or `create:true`. `token` is the Mimic session token `wpms_` + 64 hex |
 | ← server | `welcome {party, tier, member}` or `error {code}` then close | codes: `bad_hello` `bad_token` `bad_character` `bad_party` `unknown_session` `no_party` `party_full` `slow_down` `busy` `unavailable` `hello_timeout` `replaced` |
-| client → | `pub {perPlayer?, target?, casting?, roster?, fires?}` | latest wins, no queue. `perPlayer: {Name: {dmg, heal, took, threat}}` |
-| ← server | `view {party, tier, trial_ends_at, members, players, roster, fires, target?, casting?, stale}` | every 2 s, the same view to every member; `players[i].age_ms` carries each stat's age |
+| client → | `pub {perPlayer?, target?, casting?, roster?, fires?, timers?}` | latest wins, no queue. `perPlayer: {Name: {dmg, heal, took, threat}}`; `timers` see Timers below |
+| ← server | `view {party, tier, trial_ends_at, members, players, roster, fires, target?, casting?, timers, stale}` | every 2 s, the same view to every member; `players[i].age_ms` carries each stat's age |
 | client → | `history {}` | ← `history {party, frames}`: the last 20 minutes of merged frames, one per 10 s (20 since 2026-11-15: "10 minutes is too short for charmers") |
 | client → | `bye {}` | leave now |
 
 Validation is strict and silent: a name is letters and apostrophes, at most 24; at most 80 rows; numbers finite and non-negative;
 text at most 120 characters; the frame at most 32 KB. Any violation drops the whole frame, and the reply never repeats what was sent.
 A client publishing faster than every 500 ms has the extra frames dropped.
+
+## Timers (relay 1.1.0)
+
+A shared stream of the buff, debuff and charm timers members cast, so the party sees one another's. Every tier gets it, free included (§588).
+
+- **Frame:** `timers: [{kind: 'buff'|'debuff'|'charm', spell, target, caster, endsAt, may_break?}]`, at most 100 per frame. `spell` is plain
+  text up to 60 characters; `target` is a mob or player name (letters, digits, space, apostrophe, backtick, hyphen, up to 64); `caster` is a
+  name; `endsAt` is an absolute epoch in ms and must be in the future.
+- **Own casts only:** `caster` must equal the publishing member's character from the hello. An observed timer of someone else is dropped.
+- **Clamps:** buff and debuff `endsAt` is cut to now + 20 min; charm to now + 3 h (charms run to their own end; Tunare's Request is 3 h).
+- **Per-item drops:** unlike rows, a bad timer drops only itself, not the frame (a snapshot of 100 timers is worth keeping for one bad entry).
+- **Snapshot:** a frame with a `timers` list replaces that member's previous set (a timer it no longer lists is removed; `[]` clears).
+  A frame with no `timers` field changes nothing.
+- **Party map** keyed `kind|spell|target|caster`; expired entries are pruned on every view. A member leaving keeps its timers until `endsAt`.
+- **View:** `timers: [{kind, spell, target, caster, endsAt, may_break}]` sorted by `endsAt`, at most 200. History does not carry timers.
 
 ## The merge
 
