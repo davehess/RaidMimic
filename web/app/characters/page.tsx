@@ -11,10 +11,8 @@ import type { Metadata } from 'next';
 import { supabaseServer } from '@/lib/supabase-server';
 import { discordIdOf } from '@/lib/lockout';
 import { isRaidmimicHost } from '@/lib/raidmimicHost';
-import { EQMIMIC_ORIGIN } from '@/lib/raidmimicLanding';
 import { loadMine } from '@/lib/hubMine';
 import { MAX_CHARACTERS_PER_PLAYER } from '@/lib/hubImport';
-import NewPageTag from '@/components/NewPageTag';
 import SignInButton from '@/components/SignInButton';
 import HostFrame from '@/components/RaidmimicFrame';
 import UploadForm from './UploadForm';
@@ -26,7 +24,7 @@ import { matrixRows } from '@/lib/hubCharactersView';
 import RemoveButton from './RemoveButton';
 
 const GATE_CHOICES = GATES.map(g => ({ key: g.key, name: g.name, short: g.short }));
-const TITLE = '[beta] My characters';
+const TITLE = 'My characters';
 const DESCRIPTION = 'Load your characters on Raid Mimic from the PoPFlags file Zeal saves when you camp, and see each one’s Planes of Power flag progress and what it needs next.';
 
 // On a raidmimic host the tab says Raid Mimic, not the root layout's WolfPack.quest suffix.
@@ -47,7 +45,8 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
   const onHost = isRaidmimicHost(headers().get('host'));
   const { data: { user } } = await supabaseServer().auth.getUser();
   const discordId = discordIdOf(user);
-  const note = <NewPageTag note="New page: load your characters from the PoPFlags file Zeal saves." href={onHost ? `${EQMIMIC_ORIGIN}/feedback` : '/feedback'} />;
+  // The [beta] tag came off 2026-11-15 (the guild lead: "remove the beta tag once it's live").
+  const note = null;
 
   if (!user || !discordId) {
     return (
