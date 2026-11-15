@@ -59,7 +59,7 @@ export function guildHostUrl(slug: string): string {
 // The page's own images sit under /raidmimic/<folder>/ (the Raid Mimic header's mascot): raidmimicHost.ts isRaidmimicAsset.
 export function isGuildHostOpenPath(pathname: string): boolean {
   return pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/') || pathname.startsWith('/_next/')
-    || pathname === '/characters' || pathname === '/guilds' || pathname.startsWith('/guilds/');
+    || pathname === '/characters' || pathname.startsWith('/characters/') || pathname === '/guilds' || pathname.startsWith('/guilds/');
 }
 
 // The platform's own pages (the story, the demo, the set-up guide, the interest form, the legal pages). The Raid Mimic

@@ -545,6 +545,7 @@ const UNIQUE_KEYS = {
   contributions: [['id']],   // primary key (pg_index, 2026-10-23); the night panel pages the deaths sub-array of a night's contributions (web/lib/nightSlicesLoad.ts)
   pop_flags: [['id']],
   hub_flags: [['id']],   // identity primary key (20261102210000_hub_sync.sql); raidmimic.com /characters pages a player's flags
+  hub_inventory: [['id']],   // identity primary key (20261115230000_hub_inventory.sql); the raidmimic.com character page pages a player's items
   raid_roster: [['uploaded_by_discord_id', 'name']],   // pkey (guild_id, uploaded_by_discord_id, name), 20260611210000; /pop/latest pages it
   pop_guide_ticks: [['character_name', 'item_key']],
   looted_items: [['id']],

@@ -123,6 +123,11 @@ writes.
   Flags are stored and read only under the session player's id (`test/hub-characters-poisoning.test.js`); names two players hold
   show to officers at `https://wolfpack.quest/admin/hub-conflicts` (`web/lib/hubConflicts.ts`, read-only). The signed-out
   landing carries a "Track your PoP flags" button. `test/hub-characters-import.test.js`, `test/hub-characters-paste.test.js`.
+  **Character page, `https://raidmimic.com/characters/<name>` (web 2.2.2; the guild lead, 2026-11-15).** One of the signed-in player's own characters (any
+  other name is a 404): the flag summary (`FlagsBody`, shared with the card) plus gear and bags from an uploaded Zeal `<Name>-Inventory.txt` or `<Name>Quarmy.txt`
+  (`web/lib/hubInventory.ts` readers, `hubInventoryDb.ts` reads/writes, table `hub_inventory`, migration `20261115230000`; Quarmy keeps worn + bags only). Needs the
+  character's flags loaded first. The self-delete function covers it in `20261115230100` (hand paste). Mimic uploads a hub player's PoP flags only; its
+  automatic inventory/Quarmy upload is Wolf Pack members' only, which the page says. `test/hub-inventory.test.js`.
 - **Flag events board, `/pop/flag-events` (web 2.1.99 on `main`, `[beta]`, 2026-11-02; DECISIONS §522 pick A).** Officers post
   a target (catalog `web/lib/flagTargets.ts`, 12 targets, each a set of gate pieces from `popGatePieces.ts`; the demo shares it)
   and an Eastern date/time, an optional note and an optional Raid-Helper event (`actions.ts`: session + `isOfficer` re-checked,
