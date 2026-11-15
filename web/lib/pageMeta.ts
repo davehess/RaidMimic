@@ -149,6 +149,7 @@ export const ADMIN_TITLES: Record<string, string> = {
   '/admin/encounters':         'Encounter repair',
   '/admin/extra-spells':       'Extra PoP spells',
   '/admin/flag-lab':           '[beta] Flag lab',
+  '/admin/hub-conflicts':      'Contested names',
   '/admin/feedback':           'Feedback',
   '/admin/feedback/anonymous': 'Anonymous feedback',
   '/admin/interest':           '[beta] Guild interest',

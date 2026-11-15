@@ -15,12 +15,11 @@ import { loadMine } from '@/lib/hubMine';
 import { MAX_CHARACTERS_PER_PLAYER } from '@/lib/hubImport';
 import SignInButton from '@/components/SignInButton';
 import HostFrame from '@/components/RaidmimicFrame';
-import UploadForm from './UploadForm';
-import PasteForm from './PasteForm';
+import LoadBlock from './LoadBlock';
 import GateTable from '@/app/pop/guide/GateTable';
 import { GATES } from '@/lib/popGatePieces';
 import { gateKeyOr } from '@/lib/popGateStatus';
-import { matrixRows } from '@/lib/hubCharactersView';
+import { matrixRows, overallRows, wantsOverall } from '@/lib/hubCharactersView';
 import RemoveButton from './RemoveButton';
 
 const GATE_CHOICES = GATES.map(g => ({ key: g.key, name: g.name, short: g.short }));
@@ -63,6 +62,7 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
 
   const mine = await loadMine(discordId);
   const gateKey = gateKeyOr(searchParams?.gate);
+  const overall = wantsOverall(searchParams?.gate);
   return (
     <HostFrame onHost={onHost}>
       <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
@@ -71,17 +71,14 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
         <p className="mt-1 text-sm text-dim">Signed in with Discord. Only you can see this page.</p>
 
         <section aria-label="Load characters" className="mt-4">
-          <UploadForm max={MAX_CHARACTERS_PER_PLAYER} held={mine.length} />
-        </section>
-
-        <section aria-label="Paste flags" className="mt-4">
-          <PasteForm />
+          <LoadBlock max={MAX_CHARACTERS_PER_PLAYER} held={mine.length} />
         </section>
 
         {mine.length > 0 && (
           <section aria-label="Flag matrix" className="mt-6">
             <GateTable gates={GATE_CHOICES} selected={gateKey} rows={matrixRows(mine, gateKey)}
-              hrefFor={k => `/characters?gate=${k}`} singleHref="#your-characters" />
+              hrefFor={k => `/characters?gate=${k}`} singleHref="#your-characters"
+              overall={{ href: '/characters?gate=overall', active: overall, rows: overallRows(mine) }} />
             <p className="mt-1 text-xs text-dim">Most flags first. Each card below says what that character needs next.</p>
           </section>
         )}
