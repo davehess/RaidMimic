@@ -5092,6 +5092,118 @@ function wpRaidCodeOpen() {
   window.addEventListener('hashchange', go);
 })();
 
+// ── 🐺 Raid Mimic party (Logsync tab, above the raid code; the tray's "Raid Mimic party…" opens it) ──
+// Raiders who join one party code share their numbers live: every Mimic publishes its own and gets back ONE merged
+// view (per player the highest value anyone saw, never a sum), which the DPS HUD shows as its Party view. Free for
+// everyone (DECISIONS §588); the tier shows only as a small tag. The state lives in the agent (GET/POST /api/party,
+// and `s.partyView` on /api/state). The card paints from the poll and prints nothing that ticks (no "3s ago", no
+// countdown), so its HTML is byte-stable and the section does not rewrite every 2 s.
+var _wpPt = { note: '', tone: '' };
+function wpPtTag(p) {
+  if (!p) return '';
+  if (p.tier === 'pro') return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro</span>';
+  if (p.tier === 'trial') {
+    var d = p.trial_ends_at ? Math.max(0, Math.ceil((Date.parse(p.trial_ends_at) - Date.now()) / 86400000)) : null;
+    return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro trial' + (d != null ? ' · ' + d + ' day' + (d === 1 ? '' : 's') + ' left' : '') + '</span>';
+  }
+  return '';
+}
+function wpPtHtml(s) {
+  var p = s && s.partyView;
+  var h = '';
+  var inParty = p && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
+  if (inParty) {
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">';
+    if (p.code) {
+      h += '<span id="wpPtActive" style="font-size:20px;font-weight:700;letter-spacing:2px;border:1px solid var(--blue);border-radius:6px;padding:2px 12px">' + esc(p.code) + '</span>'
+        + '<button type="button" class="wp-btn" onclick="wpPtCopy()" title="Copy the code to paste into Discord or /rs">📋 Copy code</button>';
+    }
+    h += wpPtTag(p)
+      + '<button type="button" class="wp-btn" onclick="wpPtLeave()">✕ Leave party</button></div>';
+    var line;
+    if (p.status === 'joined') {
+      line = '<b>' + (p.members || 1) + '</b> in the party' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live')
+        + '. Open the DPS HUD and switch it to <b>Party</b> to see everyone, merged.';
+    } else if (p.status === 'paused') {
+      line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' The code is kept and it reconnects by itself.';
+    } else {
+      line = 'Connecting to the party relay' + (p.status === 'reconnecting' ? ' (it will keep trying)' : '') + '…'
+        + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    }
+    h += '<div style="font-size:12px;margin-bottom:6px">' + line + '</div>';
+  } else {
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">'
+       + '<input id="wpPtCode" type="text" maxlength="12" placeholder="K7M2QX" autocomplete="off" spellcheck="false" style="width:120px;text-transform:uppercase;font-size:14px;letter-spacing:2px" onkeydown="if (event.key === \'Enter\') wpPtJoin()">'
+       + '<button type="button" class="wp-btn pri" onclick="wpPtJoin()">🐺 Join</button>'
+       + '<span class="dim">or</span>'
+       + '<button type="button" class="wp-btn" onclick="wpPtCreate()" title="Makes a new party and shows its code, to give to your group or raid">＋ Create a party</button></div>';
+    if (p && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
+  }
+  if (_wpPt.note) h += '<div id="wpPtNote" style="color:' + (_wpPt.tone === 'ok' ? 'var(--green)' : 'var(--orange)') + ';font-size:12px;margin-bottom:6px">' + esc(_wpPt.note) + '</div>';
+  return h;
+}
+function wpPtRepaint(s) {
+  var el = document.getElementById('wpParty');
+  if (!el) return;
+  if (!document.getElementById('wpPtBody')) {
+    el.innerHTML = '<h2>🐺 Raid Mimic party</h2>'
+      + '<div class="subtle">Share your numbers live with the people you play with. One of you creates a party and gives out the code; everyone else joins with it. '
+      + 'Each Mimic sends its own damage, healing, damage taken, threat, target and group health, and gets back one merged list, the highest value anyone saw for each player, never added together. '
+      + 'It sends only during a fight or while you are in a group or raid, and nothing else leaves your PC. Needs Mimic signed in with Discord.</div>'
+      + '<div id="wpPtBody"></div>';
+    el._wpLastHtml = null;
+  }
+  morphInto(document.getElementById('wpPtBody'), wpPtHtml(s));
+}
+function renderPartyCard(s) { wpPtRepaint(s); }
+function wpPtPost(body) {
+  return fetch('/api/party', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+}
+function wpPtRefresh() {
+  fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { wpPtRepaint(s); }, function () { });
+}
+function wpPtAct(body, okNote) {
+  wpPtPost(body).then(function (x) {
+    _wpPt.note = x.ok ? (okNote || '') : ((x.j && x.j.error) || 'Could not do that.'); _wpPt.tone = x.ok ? 'ok' : '';
+    wpPtRefresh();
+  }, function () { _wpPt.note = 'The agent did not answer.'; _wpPt.tone = ''; wpPtRefresh(); });
+}
+function wpPtCreate() { wpPtAct({ action: 'create' }, ''); }
+function wpPtJoin() { var inp = document.getElementById('wpPtCode'); wpPtAct({ action: 'join', code: inp ? inp.value : '' }, ''); }
+function wpPtLeave() { wpPtAct({ action: 'leave' }, 'Left the party.'); }
+function wpPtCopy() {
+  var a = document.getElementById('wpPtActive');
+  var code = a ? a.textContent : '';
+  var done = function (ok) { _wpPt.note = ok ? 'Copied ' + code + '.' : 'Could not copy; select the code and copy it.'; _wpPt.tone = ok ? 'ok' : ''; wpPtRefresh(); };
+  try { navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+}
+// The tray's "Raid Mimic party…": the Logsync tab, scrolled to the card.
+function wpPartyOpen() {
+  var tab = document.querySelector('.nav button[data-tab="optin"]');
+  if (tab && !tab.classList.contains('active')) tab.click();
+  var go = function (n) {
+    var card = document.getElementById('wpParty');
+    if (!card) { if (n < 12) setTimeout(function () { go(n + 1); }, 200); return; }
+    var bar = document.getElementById('wpTopBar');
+    var pad = (bar ? bar.getBoundingClientRect().height : 0) + 10;
+    window.scrollTo({ top: Math.max(0, card.getBoundingClientRect().top + window.scrollY - pad), behavior: 'smooth' });
+    var inp = document.getElementById('wpPtCode');
+    if (inp) { try { inp.focus(); } catch (e) { void e; } }
+  };
+  go(0);
+}
+// #party opens the card, the way #raidcode does.
+(function () {
+  function go() {
+    if ((location.hash || '').toLowerCase() !== '#party') return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { void e; }
+    wpPartyOpen();
+  }
+  go();
+  window.addEventListener('hashchange', go);
+})();
+
 // ── 📈 My parses ────────────────────────────────────────────────────────────
 // A member asked (2026-10-06) for "a page in Mimic that graphs my parses over a variable time window"; the
 // guild lead picked this tab plus a page on wolfpack.quest. The numbers are the guild's record of YOUR fights,
@@ -9434,6 +9546,7 @@ function renderOptin(o) {
   // 🔁 Rebuild from my logs (the guild lead, 2026-10-21): its own placeholder, filled by renderRebuildCard, so the
   // progress it shows does not rewrite this whole tab every poll.
   wpRebuildSetFiles(o);
+  h += '<div id="wpParty" class="card wide"></div>';   // 🐺 Raid Mimic party: filled by renderPartyCard
   h += '<div id="wpRaidCode" class="card wide"></div>';   // 🎟 Join a raid with a code: filled by renderRaidCodeCard
   h += '<div id="wpRebuild" class="card wide"></div>';
   h += '<div id="wpPopCapture" class="card wide"></div>';   // 📥 Capture latest PoP flags, Seer and Maelin messages: filled by renderPopCaptureCard
@@ -9810,6 +9923,7 @@ async function refresh() {
                      ['diag', renderDiag],
                      ['netmeter', renderNetMeter],
                      ['rebuild', renderRebuildCard], ['raidcode', renderRaidCodeCard], ['popcapture', renderPopCaptureCard],
+                     ['party', renderPartyCard],
                      ['zealcard', renderZealCard],
                      ['recentfires', renderRecentFires], ['mutedtimers', renderMutedTimers], ['replaystatus', renderReplayStatus],
                      ['charmdiag', renderCharmDiag], ['petbuffdiag', renderPetBuffDiag], ['triggerjournal', renderTriggerJournal],

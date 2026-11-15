@@ -384,6 +384,17 @@
     📊 Open Resource use…
   </button>
 
+  <h2>Raid Mimic party</h2>
+  <div class="hint" style="margin-bottom:8px">
+    Share your numbers live with the people you play with: one of you creates a party and gives out the code, the rest join
+    with it, and the DPS HUD's <b>Party</b> switch shows everyone's numbers merged. Free for everyone. Create, join and leave
+    are on the dashboard's Logsync tab (the same card the tray opens).
+  </div>
+  <button id="openPartyBtn" type="button"
+    style="margin-top:4px;background:#21262d;color:var(--wp-text);border:1px solid var(--wp-border);border-radius:6px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:12px">
+    🐺 Open the party card…
+  </button>
+
   <div id="parserCard" style="display:none">
     <h2>Old standalone Parser <span style="background:#5a1d1d;color:#ff9b9b;border:1px solid #a04040;border-radius:3px;font-size:9px;padding:1px 5px;margin-left:6px;vertical-align:middle;letter-spacing:1px">FOUND</span></h2>
     <div class="hint" style="margin-bottom:8px">
@@ -2053,6 +2064,18 @@
     if (!(window.mimic && window.mimic.openResources)) { btn.style.display = 'none'; return; }
     btn.addEventListener('click', function () {
       try { window.mimic.openResources(); } catch (e) { void e; }
+    });
+  })();
+
+  // ── Raid Mimic party ──────────────────────────────────────────────────────
+  // A way in to the dashboard's party card (create / join / leave live there, one implementation). Same internals as the
+  // tray's "Raid Mimic party…" item.
+  (function () {
+    var btn = document.getElementById('openPartyBtn');
+    if (!btn) return;
+    if (!(window.mimic && window.mimic.openPartyCard)) { btn.style.display = 'none'; return; }
+    btn.addEventListener('click', function () {
+      try { window.mimic.openPartyCard(); } catch (e) { void e; }
     });
   })();
 

@@ -11270,6 +11270,31 @@ function _raidCodeTrayItems() {
     { label: '✕ Leave raid code', click: () => { _agentCall('POST', '/api/raid-code', { clear: true }).then(() => { _raidCodeTray = null; _raidCodeTrayAt = 0; try { buildTrayMenu(); } catch (e) { void e; } }); } },
   ];
 }
+// 🐺 Raid Mimic party: the agent owns it (GET/POST /api/party); the tray keeps the last answer for at most 20 s and
+// rebuilds its menu when the code changes. Create and join are typed on the dashboard card (the tray has no text box);
+// the tray opens it and can leave.
+let _partyTray = null;
+let _partyTrayAt = 0;
+function _partyTrayRefresh() {
+  const now = Date.now();
+  if (!agentPort || now - _partyTrayAt < 20000) return;
+  _partyTrayAt = now;
+  _agentCall('GET', '/api/party').then((r) => {
+    const next = r && r.ok && r.code && r.status && r.status !== 'off' && r.status !== 'ended' ? { code: r.code, members: r.members || 0 } : null;
+    const was = _partyTray && _partyTray.code;
+    _partyTray = next;
+    if ((next && next.code) !== was) { try { buildTrayMenu(); } catch (e) { void e; } }
+  });
+}
+function _partyTrayItems() {
+  _partyTrayRefresh();
+  const p = _partyTray;
+  if (!p) return [{ label: '🐺 Raid Mimic party…', click: () => showDashboardTab('party') }];
+  return [
+    { label: `🐺 Raid Mimic party ${p.code}${p.members ? ` · ${p.members} in it` : ''}`, click: () => showDashboardTab('party') },
+    { label: '✕ Leave party', click: () => { _agentCall('POST', '/api/party', { action: 'leave' }).then(() => { _partyTray = null; _partyTrayAt = 0; try { buildTrayMenu(); } catch (e) { void e; } }); } },
+  ];
+}
 function buildTrayMenu() {
   if (!tray) return;
   const s = currentStatus();
@@ -11661,6 +11686,8 @@ function buildTrayMenu() {
     // Tray ↔ dashboard parity: the dashboard rail's "On this PC › Join a raid with a code" is the other half. A code is
     // typed on the dashboard card (the tray has no text box); the tray shows the pass while it runs and can end it.
     ..._raidCodeTrayItems(),
+    // Tray ↔ dashboard parity: the Logsync tab's "Raid Mimic party" card is the other half (create / join there).
+    ..._partyTrayItems(),
     { label: 'Open wolfpack.quest ↗', click: () => shell.openExternal(WOLFPACK_URL) },
     { label: 'Open dashboard in browser', click: () => shell.openExternal(`http://127.0.0.1:${agentPort}/`) },
     // Same folder as the dashboard's Sounds card button: drop .wav / .mp3 / .ogg files here to use them in triggers.
@@ -15529,6 +15556,7 @@ ipcMain.handle('open-settings', (_e, section) => { openSettings(section); return
 // Dashboard ⏻ Quit — the tray's Quit, same internals (tray ↔ dashboard parity).
 ipcMain.handle('quit-app', () => { setImmediate(_quitMimic); return true; });
 ipcMain.handle('open-resources', () => { openResources(); return true; });
+ipcMain.handle('open-party-card', () => { showDashboardTab('party'); return true; });   // 🐺 Raid Mimic party (Settings' button)
 // 💬 Feedback in its own window (the dashboard button and the tray item). False = no agent port yet.
 ipcMain.handle('open-feedback', () => openFeedback());
 // 🎒 "On this PC" pages (the dashboard rail group and the tray item). False = no agent port yet.
