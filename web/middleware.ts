@@ -19,7 +19,8 @@
 import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { isEqmimicHost, eqmimicLandingTarget } from './lib/eqmimicHost';
-import { isRaidmimicAsset, isRaidmimicHost, isRaidmimicOpenPath, raidmimicLandingTarget } from './lib/raidmimicHost';
+import { isRaidmimicAsset, isRaidmimicBetaHost, isRaidmimicHost, isRaidmimicOpenPath, raidmimicLandingTarget, RAIDMIMIC_LANDING_PATH } from './lib/raidmimicHost';
+import { isHomeVariant } from './lib/lab/fixtures/rm-home';
 import { otherGuildHostSlug, otherGuildHostRedirect } from './lib/guildHost';
 import { isLockedOut } from './lib/lockout';
 import { ADMIN_SHELL_COOKIE, ADMIN_SHELL_MAX_AGE, adminShellChoice, isAdminPath } from './lib/adminShell';
@@ -134,6 +135,9 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     const to = raidmimicLandingTarget(request.nextUrl.pathname);
     url.pathname = to.pathname;
     url.search = to.search;
+    // b.raidmimic.com only: the landing's ?v=a|b|c design drafts (rm-home) need their query to survive the rewrite.
+    const draft = request.nextUrl.searchParams.get('v');
+    if (isRaidmimicBetaHost(request.headers.get('host')) && to.pathname === RAIDMIMIC_LANDING_PATH && isHomeVariant(draft)) url.search = `?v=${draft}`;
     return NextResponse.rewrite(url);
   }
 

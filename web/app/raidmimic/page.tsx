@@ -32,6 +32,8 @@ import { CtaBand, Footer, type Ctx } from './_landing/Parts';
 import StoryStage from './_landing/StoryStage';
 import { FeatureBlocks, Pricing, RaidManagement } from './_landing/StoryParts';
 import { HostBar } from '@/components/RaidmimicFrame';
+import RmHomeSwitch from '@/components/lab/rm-home/RmHomeSwitch';
+import { VariantA, VariantB, VariantC, type HomeVariantProps } from '@/components/lab/rm-home/Variants';
 
 const TITLE = 'Raid Mimic · free EverQuest raid overlays';
 const DESCRIPTION =
@@ -62,10 +64,12 @@ export default async function RaidmimicPage() {
   const discordId = discordIdOf(user);
   const signedIn = !!(user && discordId);
   let top = <StoryStage downloadUrl={DOWNLOAD_URL} onHost={onHost} />;
+  let panelData: HomeVariantProps['panel'] = null;
   if (signedIn) {
     // The Dashboard (the guild lead picked option B, 2026-11-09): who you are, your characters, your guilds, Mimic.
     const [mine, guilds] = await Promise.all([loadMine(discordId!), loadHomeGuilds(discordId!)]);
     const { displayName, avatarUrl } = profileOf(user!);
+    panelData = { name: displayName, avatarUrl, mine, guilds };
     top = <HomePanelGate downloadUrl={DOWNLOAD_URL} onHost={onHost}
       panel={<HomeDashboard name={displayName} avatarUrl={avatarUrl} mine={mine} guilds={guilds} downloadUrl={DOWNLOAD_URL} />} />;
   }
@@ -75,7 +79,7 @@ export default async function RaidmimicPage() {
   }
   // The stage is outside the width cap so it can span the viewport; the page under it is a reading column. No query is read:
   // a raidmimic host drops every one in the middleware, and the Wolf Pack hosts show the same page.
-  return (
+  const page = (
     <div id="raidmimic-home">
       {/* Signed in, the bar comes FIRST (the guild lead, 2026-11-09: the bar sat under the panel). */}
       {signedIn && onHost && <div className="mx-auto max-w-5xl"><HostBar /></div>}
@@ -92,4 +96,10 @@ export default async function RaidmimicPage() {
       </div>
     </div>
   );
+  // Beta builds only (b.raidmimic.com, b.wolfpack.quest): ?v=a|b|c swaps the page for a player-first draft (the guild lead,
+  // 2026-11-15: "the pages should be user focused and less on the guild leaders at the top"). Production renders `page`
+  // alone. The query is read in RmHomeSwitch, never here.
+  if (process.env.NEXT_PUBLIC_IS_BETA !== '1') return page;
+  const vp: HomeVariantProps = { ctx, downloadUrl: DOWNLOAD_URL, demoHref: onHost ? '/demo' : RAIDMIMIC_DEMO_PATH, signedIn, panel: panelData };
+  return <RmHomeSwitch a={<VariantA {...vp} />} b={<VariantB {...vp} />} c={<VariantC {...vp} />}>{page}</RmHomeSwitch>;
 }
