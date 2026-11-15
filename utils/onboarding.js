@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.0': [
+    'Raid Mimic opens to every player: track your PoP flags and raids on raidmimic.com, and share live overlay numbers and timers with your group or raid through the new party service. Nothing changes for Wolf Pack raid nights.',
+  ],
   '4.0.86': [
     'Mimic timers: the bot now hands Mimic the items that lengthen spell durations, so your own buff, debuff and charm timers can count your worn focus (with the newest Mimic beta).',
   ],

@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-open-2026-11-15',
+    title: 'Raid Mimic for every player',
+    version: 'Web 2.2.0 · Bot 4.1.0',
+    date: '2026-11-15',
+    headline: 'raidmimic.com opens to every player: your PoP flags, your raids, and live numbers shared with your group.',
+    features: [
+      { name: 'My characters', blurb: 'Drop in your PoP flags file or paste the Seer’s words for up to 50 characters, and see a flag matrix, what each can enter and the next step behind every missing flag.' },
+      { name: 'My raids', blurb: 'Your guilds’ raid days, the next 14 days with targets, a calendar, and what each of your characters still needs.' },
+      { name: 'Party sharing (Mimic beta)', blurb: 'Make a party code and your group or raid sees each other’s live numbers and timers, worked out with your own AAs and focus items. Free.' },
+      { name: 'What it costs to run', blurb: 'A page with the real monthly bill, what is free, what will be paid, and a Ko-fi link.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'running-costs-2026-11-15',
     title: 'What Raid Mimic costs to run',
     version: 'Web 2.1.147',
