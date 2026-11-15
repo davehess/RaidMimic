@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'my-raids-2026-11-15',
+    title: 'My raids on Raid Mimic',
+    version: 'Web 2.1.146',
+    date: '2026-11-15',
+    headline: 'A new My raids page on raidmimic.com: your next raids, what to kill, and which of your characters is ready.',
+    features: [
+      { name: 'Upcoming raids', blurb: 'The next two weeks of raids for every guild you raid with, each with a target you can pick, and for every character whether they are ready, still need something, or are not sure.' },
+      { name: 'Calendar', blurb: 'The same raids as a month calendar, with the target in each day.' },
+      { name: 'Your own raid days', blurb: 'Add each guild you raid with, pick its days, start time and time zone, or follow the schedule the guild already set.' },
+      { name: 'Characters by guild', blurb: 'Choose which guild each of your characters raids with from a drop-down.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'track-pop-flags-2026-11-15',
     title: 'Track your PoP flags on Raid Mimic',
     version: 'Web 2.1.144',

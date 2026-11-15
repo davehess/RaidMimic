@@ -29,6 +29,9 @@ export const HOME_WORDS = {
 
 export const DASH_WORDS = {
   welcome: 'Welcome back',
+  raids: 'Upcoming raids',
+  raidsBlurb: 'Your raid days, the target for each night, and which of your characters is ready for it.',
+  raidsButton: 'Open My raids',
   characters: 'Your characters',
   charactersEmpty: 'No characters loaded yet. Load them from Zeal’s PoPFlags file and your flags and what you need next show up here.',
   charactersButton: 'Load your characters',

@@ -8,6 +8,9 @@ import { Footer } from '@/app/raidmimic/_landing/Parts';
 import { GUILDS_STAY_PATH } from '@/lib/guildSites';
 
 const NAV = [
+  // The player's own pages first (the guild lead, 2026-11-15: "the pages should be user focused and less on the guild leaders").
+  { label: 'My raids', href: '/raids' },
+  { label: 'My characters', href: '/characters' },
   { label: 'Demo', href: '/demo' },
   // stay=1: "Your guilds" means "manage my Raid Mimic account", so it must not bounce a player to their guild's own site.
   { label: 'Your guilds', href: GUILDS_STAY_PATH },

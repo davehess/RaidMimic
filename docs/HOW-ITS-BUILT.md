@@ -104,6 +104,11 @@ writes.
   `handleRequest`) writes `hub_flags` and `hub_characters` (migration `20261102210000_hub_sync.sql`, RLS on, no policies);
   dispatched from `_handleAgentPopFlags` before any Wolf Pack write. `web/lib/mimicLinkHub.ts` lets any raidmimic.com player
   claim a player code. `test/hub-sync.test.js`, `test/mimic-link-hub.test.js`.
+- **My raids, `https://raidmimic.com/raids` (web 2.1.146, `[beta]`).** A player's own guild list (`hub_player_guilds`, up to 10: a registered
+  `hub_guilds` row or a typed name, raid days/start/length/zone, or "use the guild's schedule" from `guild_settings`), the next 14 days of raids
+  with a target (the player's own pick in `hub_player_targets`, or one the guild posted in `flag_events`, which wins) and each linked character's
+  ready / needs / not sure (`flagEventNeeds.ts` over `popGateStatus.ts`), and `?view=calendar`. Schedule maths is `guildSettings.ts windowsAround`;
+  rules in `web/lib/myRaids.ts`, player-scoped writes in `myRaidsWrite.ts`, forms in `web/app/raids/`. `test/my-raids.test.js`.
 - **My characters, `https://raidmimic.com/characters` (web 2.1.144 on `main`, `[beta]`; DECISIONS §545).** Three ways in, one path:
   drop Zeal's `<Name>-PoPFlags.txt` files (`UploadForm.tsx` → `importCharacters`), or paste the `#popflags` lines, a file's text
   or the Seer's words with a name (`PasteForm.tsx` → `importPaste`; `pasteToFile` in `web/lib/hubImport.ts`: 64 KB / 800 line caps
