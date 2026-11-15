@@ -48,9 +48,9 @@ export const bill: BillLine[] = [
     key: 'vercel',
     name: 'Vercel',
     what: 'The website you are reading.',
-    monthly: 0,
-    display: '$0 today (it would be $20 the day money is taken)',
-    source: 'docs/COSTS.md §2 (Hobby, $0) and §8a (Pro, $20, needed once we charge)',
+    monthly: 20,
+    display: '$20 (Pro plan)',
+    source: 'The guild lead, 2026-11-15: "vercel isn\'t free" (Pro, $20 a month per docs/COSTS.md §8a; COSTS.md §2 still said Hobby $0)',
   },
   {
     key: 'domains',
