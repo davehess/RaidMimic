@@ -14206,7 +14206,7 @@ async function _loadUiSource(cfg, token, character, id) {
   if (localVersions.isLocalId(id)) {
     const files = localVersions.readVersion(_localVersionsRoot(), character, id);
     if (!files) throw new Error('that saved version is gone');
-    return { files: filterRestorable(files).files, overlays: null, source_width: _eqResOf(files) ? _eqResOf(files).w : null,
+    return { files: filterRestorable(files).files, overlays: typeof files[overlayBackup.FILE] === 'string' ? overlayBackup.parse(files[overlayBackup.FILE]) : null, source_width: _eqResOf(files) ? _eqResOf(files).w : null,
       source_height: _eqResOf(files) ? _eqResOf(files).h : null, label: null, local: true };
   }
   if (!token) throw new Error('no token configured');
@@ -14233,7 +14233,7 @@ function _uiSnapSource(snap) {
 }
 
 // ── Overlay positions as a part of a backup (the guild lead, 2026-11-11) ─────────────────────────────────────
-function _overlayBackupText() {
+function _overlayBackupText(stable) {
   try {
     if (_agentOnly()) return null;
     const cfg = loadConfig();
@@ -14245,7 +14245,7 @@ function _overlayBackupText() {
     const rects = Object.assign({}, remembered, _overlayRectsNow());
     const eq = _eqMainWindow(10 * 60 * 1000);
     return overlayBackup.build({
-      rects, flags, sig, machine: _thisMachine(), now: Date.now(),
+      rects, flags, sig, machine: _thisMachine(), now: stable ? 1 : Date.now(),
       displays: screen.getAllDisplays().map(d => d.bounds),
       eq: eq ? { x: eq.client.x, y: eq.client.y, width: eq.client.width, height: eq.client.height } : null,
     });
@@ -14525,6 +14525,19 @@ function _uiSyncPatchState(character, patch) {
   cfg.uiSyncState[k] = { ...(cfg.uiSyncState[k] || {}), ...patch };
   saveConfig(cfg);
 }
+// What a copy kept on THIS PC holds: the character's EverQuest files WHOLE (it never leaves the machine, and a
+// restore of a redacted eqclient.ini would wipe the player's channel passwords — the guild lead, 2026-11-11), plus
+// Mimic's own overlay layout as mimic-overlays.json (overlayBackup.js; a restore writes only .ini names, so the
+// layout never lands in the EQ folder). The layout is stamped with a fixed time so an unchanged layout is not a new
+// version. Works with no account and no network.
+function _localBackupFiles(whole) {
+  const files = { ...whole };
+  const ob = _overlayBackupText(true);
+  if (ob) files[overlayBackup.FILE] = ob;
+  return files;
+}
+// The same view of "the files now" and of a kept version, so the Changes panel compares like with like.
+const _comparableFiles = (f) => { const o = uiSync.redactForAutoBackup(f); delete o[overlayBackup.FILE]; return o; };
 const _uiAutoTimers = new Map();
 // Called when a character leaves the Zeal pipe (camped, swapped, client closed). EQ writes its files on the way
 // out, so the backup waits 15 s, and skips itself if the character came straight back.
@@ -14545,7 +14558,7 @@ async function _uiAutoBackup(character) {
   // The last few versions of the character's files stay on THIS computer (newest 5, only when something changed),
   // so a mess-up can be undone offline (the guild lead, 2026-11-11). Kept whole: it never leaves the machine.
   // source 'game': the files as the game left them on camp, so the Changes panel can show what the game changed.
-  try { localVersions.saveVersion(_localVersionsRoot(), character, whole, undefined, undefined, { source: 'game' }); } catch { /* best effort */ }
+  try { localVersions.saveVersion(_localVersionsRoot(), character, _localBackupFiles(whole), undefined, undefined, { source: 'game' }); } catch { /* best effort */ }
   if (!_uiSyncCfg().autoBackup) return;
   const files = uiSync.redactForAutoBackup(whole);
   const hash = uiSync.bundleHash(files);
@@ -14761,12 +14774,25 @@ function _uiStudioDiskCharacters() {
 // whether this PC has files for it. The per-character calls above all start from a name read off the disk, so a
 // person with no files here could not reach their own backups (the guild lead, 2026-11-10).
 // The versions of one character's files this PC kept itself, newest first (localVersions.js).
+// "Back up on this PC": a kept copy now, no account and no network. -> { ok, created, file_count }.
+ipcMain.handle('ui-local-backup-now', (_e, params) => {
+  try {
+    const character = String(params?.character || '').trim(), eqDir = String(params?.eqDir || '').trim();
+    if (!/^[A-Za-z]+$/.test(character) || !eqDir) return { ok: false, error: 'character + eqDir required' };
+    const whole = _readUiBundle(eqDir, character);
+    if (!Object.keys(whole).length) return { ok: false, error: 'no ini files found for this character' };
+    const files = _localBackupFiles(whole);
+    const r = localVersions.snapshot(_localVersionsRoot(), character, files, undefined, undefined, { source: 'manual' });
+    return r ? { ok: true, created: !!r.created, file_count: Object.keys(files).length } : { ok: false, error: 'could not write the backup' };
+  } catch (err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
+});
 ipcMain.handle('ui-local-versions', (_e, character) => localVersions.listVersions(_localVersionsRoot(), character));
 
 // UI Studio's "Changes since previous version" panel (the guild lead, 2026-11-11). The versions this PC kept for the
 // character, each marked `same` when it is exactly what is on disk now (so the panel defaults to the newest one that
 // is not), and the key-by-key diff of one of them against the files now.
-const _sameFiles = (a, b) => {
+const _sameFiles = (a0, b0) => {
+  const a = _comparableFiles(a0), b = _comparableFiles(b0);
   const ka = Object.keys(a || {}).sort(), kb = Object.keys(b || {}).sort();
   return ka.length === kb.length && ka.every((n, i) => n === kb[i] && a[n] === b[n]);
 };
@@ -14798,7 +14824,7 @@ ipcMain.handle('ui-studio-diff', (_e, character, eqDir, id) => {
       if (!m) { complete = false; continue; }
       for (const w of (Array.isArray(m.writes) ? m.writes : [])) records.push(w);
     }
-    const diff = iniDiff.diffBundles(prev, _readUiBundle(d, c), { origin: iniDiff.makeOrigin(records, complete) });
+    const diff = iniDiff.diffBundles(_comparableFiles(prev), _comparableFiles(_readUiBundle(d, c)), { origin: iniDiff.makeOrigin(records, complete) });
     return { ok: true, base: list[at], complete, ...diff };
   } catch (err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
 });

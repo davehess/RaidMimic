@@ -1784,6 +1784,7 @@ contextBridge.exposeInMainWorld('mimic', {
   // Compare-first restore, Keep in sync and This PC (main.js "compare-first restore" block).
   uiRestorePlan:          (params)  => ipcRenderer.invoke('ui-restore-plan', params),
   uiRestoreParts:         (params)  => ipcRenderer.invoke('ui-restore-parts', params),
+  uiLocalBackupNow:       (params)  => ipcRenderer.invoke('ui-local-backup-now', params),
   uiLocalVersions:        (character) => ipcRenderer.invoke('ui-local-versions', character),
   // UI Studio's Changes panel: the kept versions, and the key-by-key diff of one against the files now.
   uiStudioVersions:       (character, eqDir) => ipcRenderer.invoke('ui-studio-versions', character, eqDir),
