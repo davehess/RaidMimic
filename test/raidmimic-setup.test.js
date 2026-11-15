@@ -70,7 +70,7 @@ describe('the middleware, run', () => {
   }
 
   it.each(RAIDMIMIC_HOSTS)('%s /setup -> the guide, query dropped', async (h) => {
-    const { to } = await run(`https://${h}/setup?v=b&utm=1&token=secret`);
+    const { to } = await run(`https://${h}/setup?v=q&utm=1&token=secret`);   // not b|c|a: on the beta host those are the shell previews and redirect first (test/raidmimic-shell.test.js)
     expect(to.pathname).toBe('/raidmimic/setup');
     expect(to.search).toBe('');
   });
