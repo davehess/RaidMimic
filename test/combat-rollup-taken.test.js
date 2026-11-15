@@ -73,6 +73,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('weave ingest (agent 4.0.86+)', () => {
+  const rollupWrites = (calls) => calls.filter((c) => c.method === 'POST' && c.path === '/encounter_combat_rollup');
+  it('stores the uploader\'s weave in a weave-only row, and the main rollup row never carries weave', async () => {
+    const { calls, fetchStub } = fakeRest();
+    vi.stubGlobal('fetch', fetchStub);
+    const weave = { rounds: 40, roundsWithSpecial: 30, specials: 31, avgRoundGapMs: 3600, lateRounds: 2 };
+    await run({ rollupByChar: {
+      Aldenmar: { by_skill: { kick: { hits: 31, dmg: 900 } }, total_hits: 31, total_damage: 900, weave },
+      Brackwyn: { by_skill: { slash: { hits: 3, dmg: 90 } }, total_hits: 3, total_damage: 90 },
+    } });
+    const w = rollupWrites(calls);
+    const main = w.find((c) => c.body.some((r) => 'by_skill' in r));
+    expect(main.body.every((r) => !('weave' in r))).toBe(true);
+    const wv = w.filter((c) => c.body.some((r) => 'weave' in r));
+    expect(wv).toHaveLength(1);
+    expect(wv[0].body).toEqual([{ guild_id: 'wolfpack', encounter_id: 'enc-uuid-1', character_name: 'Aldenmar', weave }]);
+  });
+  it('sends no weave row when no bucket carries one', async () => {
+    const { calls, fetchStub } = fakeRest();
+    vi.stubGlobal('fetch', fetchStub);
+    await run();
+    expect(rollupWrites(calls).some((c) => c.body.some((r) => 'weave' in r))).toBe(false);
+  });
+});
+
 describe('taken ingest', () => {
   it('writes only the uploader\'s own defender row, as a taken-only row', async () => {
     const { calls, fetchStub } = fakeRest();
