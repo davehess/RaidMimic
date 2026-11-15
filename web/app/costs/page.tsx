@@ -30,22 +30,22 @@ export default function CostsPage() {
       <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
         <p className="m-0 text-xs uppercase tracking-widest text-orange">[beta]</p>
         <h1 className="text-2xl text-gold">{TITLE}</h1>
-        <p className="mt-1 text-sm text-dim">Figures measured {measuredAt}. We would rather show you the bill than ask you to trust us.</p>
+        <p className="mt-1 text-sm text-dim">Measured {measuredAt}.</p>
 
         <section aria-label="What is free" className="mt-5">
           <h2 className="text-lg text-text">What is free, and why</h2>
           <div className={`${CARD} mt-2 space-y-2 text-sm text-text`}>
-            <p className="m-0"><span className="text-gold">Live party merging.</span> Your group&rsquo;s overlay numbers are merged for everyone while you play. It lives in memory for 10 minutes and stores nothing, so it costs almost nothing to keep running. It is free, and paid for by donations.</p>
-            <p className="m-0"><span className="text-gold">Your PoP flags, your characters and My raids.</span> Small rows in the database. Free.</p>
-            <p className="m-0"><span className="text-gold">Recaps.</span> The summary of a raid night: positions per minute, drops, rolls, attendance and per-ability totals. About {recapSize.mb} MB per guild per week. We are eating that for now.</p>
-            <p className="m-0"><span className="text-gold">Overlays on your own PC.</span> They run on your computer from your own log, so they cost us nothing.</p>
+            <p className="m-0"><span className="text-gold">Live party merging.</span> Kept in memory for 10 minutes, stores nothing. Paid for by donations.</p>
+            <p className="m-0"><span className="text-gold">PoP flags, characters, My raids.</span> Small database rows.</p>
+            <p className="m-0"><span className="text-gold">Recaps.</span> The night&rsquo;s summary, about {recapSize.mb} MB per guild per week.</p>
+            <p className="m-0"><span className="text-gold">Overlays.</span> Run on your PC from your own log.</p>
           </div>
         </section>
 
         <section aria-label="What we will charge for" className="mt-6">
           <h2 className="text-lg text-text">What we will charge for, and why</h2>
           <div className={`${CARD} mt-2 text-sm text-text`}>
-            <p className="m-0"><span className="text-gold">Hosted replays.</span> A replay is the fight second by second, and keeping it for you is the one thing that costs real money: about {replaySize.mb} MB per guild per week, more than ten times a recap. Without hosting, a replay still lives on your own Mimic, free.</p>
+            <p className="m-0"><span className="text-gold">Hosted replays.</span> About {replaySize.mb} MB per guild per week, over ten times a recap. Unhosted, a replay stays on your own Mimic, free.</p>
             <ul className="mb-0 mt-3 list-none space-y-1 p-0">
               {replayParts.map((p) => (
                 <li key={p.key} className="flex justify-between gap-3 border-t border-border pt-1">
@@ -53,8 +53,8 @@ export default function CostsPage() {
                 </li>
               ))}
             </ul>
-            <p className="mb-0 mt-3"><span className="text-gold">A Raid Mimic bot in your guild&apos;s Discord.</span> Timers, raid cards and the rest in your own server: a bot connected all the time costs us server time every month.</p>
-            <p className="mb-0 mt-3 text-xs text-dim">The price and how it is taken are not decided yet. Until then, nothing is charged.</p>
+            <p className="mb-0 mt-3"><span className="text-gold">A Raid Mimic bot in your Discord.</span> Always-on server time.</p>
+            <p className="mb-0 mt-3 text-xs text-dim">Price not decided. Nothing is charged yet.</p>
           </div>
         </section>
 
@@ -82,9 +82,10 @@ export default function CostsPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs leading-5 text-dim">
-            Measured {measuredAt}, from our own bills. It leaves out the party service&rsquo;s own usage, which nobody has measured yet. The database plan is shared with another small project, so part of it is not strictly Raid Mimic&rsquo;s. It also leaves out the biggest cost, the evenings it takes to build and run this, which are unpaid and not priced here.
-          </p>
+          <details className="mt-2 text-xs leading-5 text-dim">
+            <summary className="cursor-pointer text-blue">How this works</summary>
+            <p className="mt-1">From our own bills. Leaves out the party service&rsquo;s usage (not measured) and the unpaid evenings of building it. The database plan is shared with another small project.</p>
+          </details>
         </section>
 
         <section aria-label="Chip in" className="mt-6">

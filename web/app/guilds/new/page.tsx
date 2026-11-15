@@ -36,7 +36,7 @@ export default async function NewGuildPage({ searchParams }: { searchParams?: { 
       <NewPageTag note="New page: start a guild and invite your raiders." href={onHost ? `${EQMIMIC_ORIGIN}/feedback` : '/feedback'} />
       <h1 className="text-2xl text-gold">Start a guild</h1>
       <p className="mt-1 text-sm text-dim">
-        You become its owner. Once it exists you can make invite codes and hand them to your raiders. One guild a day per person.
+        You become its owner and can make invite codes. One guild a day per person.
       </p>
       {startFree && (
         <div className="mt-4">

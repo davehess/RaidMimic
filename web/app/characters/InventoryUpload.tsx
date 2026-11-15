@@ -27,8 +27,7 @@ export default function InventoryUpload({ only, heading }: { only?: string; head
     <form onSubmit={submit} className="rounded-lg border border-border bg-panel p-4">
       <label htmlFor={id} className="block text-sm font-medium text-text">{heading ?? 'Inventory and Quarmy files'}</label>
       <p className="mt-1 text-xs text-dim">
-        In EverQuest type <code>/output inventory</code> (Zeal) for <code>Name-Inventory.txt</code>, or run the Quarmy export for <code>NameQuarmy.txt</code>;
-        both land in the EverQuest folder. Choose one or both. The character needs its PoP flags loaded first.
+        <code>/output inventory</code> gives <code>Name-Inventory.txt</code>; the Quarmy export gives <code>NameQuarmy.txt</code>. Both land in the EverQuest folder. Load the character&rsquo;s flags first.
       </p>
       {only && <input type="hidden" name="only" value={only} />}
       <input id={id} ref={input} name="files" type="file" multiple accept=".txt,text/plain"

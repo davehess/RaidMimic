@@ -4,8 +4,7 @@
 export default function MimicNote() {
   return (
     <p className="mt-2 text-xs text-dim">
-      Mimic, the Raid Mimic desktop app, already sends your PoP flags for you. It can send inventory and Quarmy files
-      automatically too, but that works only for Wolf Pack members&rsquo; characters so far, so upload them here for now.
+      The Mimic app sends your PoP flags itself. Inventory and Quarmy files: upload them here.
     </p>
   );
 }

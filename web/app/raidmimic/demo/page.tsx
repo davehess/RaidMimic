@@ -33,7 +33,7 @@ export default function DemoHomePage() {
 
   return (
     <DemoShell active="home" title="Raid night at a glance"
-      lead="What a guild leader sees when they open Raid Mimic: the next night, how far the guild has come, and who needs what. Click anything.">
+      lead="The next night, flags progress, who needs what. An invented guild.">
       <div className="flex flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-3">
           <section aria-labelledby="next-title" className={`${PANEL} flex flex-col gap-1.5`}>
@@ -60,7 +60,7 @@ export default function DemoHomePage() {
           <section aria-labelledby="wait-title" className={`${PANEL} flex flex-col gap-1.5`}>
             <h2 id="wait-title" className="m-0 text-[11px] uppercase tracking-wide text-dim">Waiting for an owner</h2>
             <p className="m-0 text-base text-[#f2ede1]">{waiting.reduce((n, c) => n + (c.reported?.flags.length ?? 0), 0)} reported flags</p>
-            <p className="m-0 text-xs text-dim">for {waiting.map(c => c.name).join(' and ')}, recorded by a raid leader. Shown ✅ <span className="text-gold">reported</span> until each owner confirms.</p>
+            <p className="m-0 text-xs text-dim">for {waiting.map(c => c.name).join(' and ')}, until each owner confirms.</p>
             <a href={`${BASE}/capture`} className="mt-auto pt-1 text-xs text-blue hover:underline">How that works →</a>
           </section>
         </div>
@@ -94,11 +94,7 @@ export default function DemoHomePage() {
         </section>
 
         <section aria-labelledby="more-title" className="flex flex-col gap-2">
-          <h2 id="more-title" className="m-0 text-sm text-gold font-semibold">Coordinating flag events: two ways to do it</h2>
-          <p className="m-0 max-w-[66ch] text-xs leading-5 text-dim">
-            Raid leaders post some events already, but scheduling goes one by one. These two boards answer &quot;when, and who needs it&quot;
-            from different ends. Look at both and pick one.
-          </p>
+          <h2 id="more-title" className="m-0 text-sm text-gold font-semibold">Flag events: two ways</h2>
           <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3">
             {links.map(l => (
               <li key={l.href}>
