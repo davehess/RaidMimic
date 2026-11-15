@@ -306,12 +306,19 @@ describe('the wiring', () => {
     expect(meta.title).toMatch(/My raids/);
     expect(meta.description.length).toBeGreaterThan(40);
   });
-  it('the nav leads with My raids and My characters', () => {
-    const nav = stripJs(src('web/components/RaidmimicFrame.tsx'));
-    const at = (s) => nav.indexOf(s);
-    expect(at("label: 'My raids'")).toBeGreaterThan(0);
-    expect(at("label: 'My raids'")).toBeLessThan(at("label: 'My characters'"));
-    expect(at("label: 'My characters'")).toBeLessThan(at("label: 'Demo'"));
+  // On beta the nav is sectioned (lib/raidmimicNav.ts): My raids leads the Raids section; on main it leads the flat NAV.
+  it('the nav leads with My raids', () => {
+    const flat = stripJs(src('web/components/RaidmimicFrame.tsx'));
+    if (flat.includes("label: 'My raids'")) {
+      const at = (s) => flat.indexOf(s);
+      expect(at("label: 'My raids'")).toBeLessThan(at("label: 'My characters'"));
+      expect(at("label: 'My characters'")).toBeLessThan(at("label: 'Demo'"));
+    } else {
+      const nav = stripJs(src('web/lib/raidmimicNav.ts'));
+      const raids = nav.slice(nav.indexOf("key: 'raids'"));
+      expect(raids.indexOf("href: '/raids'")).toBeGreaterThan(0);
+      expect(raids.indexOf("label: 'My raids'")).toBeLessThan(raids.indexOf("label: 'Tonight"));
+    }
   });
   it('the signed-in home leads with an Upcoming raids card linking to /raids', () => {
     const dash = stripJs(src('web/app/raidmimic/_landing/HomeDashboard.tsx'));

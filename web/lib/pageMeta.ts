@@ -91,6 +91,7 @@ const STATIC_META: Record<string, PageMeta> = {
   '/guilds':       { title: '[beta] Your guilds', description: 'The guilds you are in on Raid Mimic, with a way to join one by invite code, find the ones you already belong to, or start your own.' },
   '/characters':   { title: 'My characters', description: 'Load your characters on Raid Mimic from the PoPFlags file Zeal saves when you camp, and see each one’s Planes of Power flag progress and what it needs next.' },
   '/raids':        { title: '[beta] My raids', description: 'Your upcoming raids on Raid Mimic: the days each of your guilds raids, the target for each night, and which of your characters is ready or still needs a flag for it.' },
+  '/costs':        { title: '[beta] What Raid Mimic costs to run', description: 'What it costs to run Raid Mimic each month, what is free and why, what we will charge for (hosted replays), and how to chip in on Ko-fi.' },
   '/guilds/new':   { title: '[beta] Start a guild', description: 'Start a guild on Raid Mimic: name it, pick its address and optionally link its Discord server, then invite your raiders with codes.' },
   '/feedback':     { title: 'Feedback', description: 'Bugs, ideas, kudos — straight to the officer inbox.' },
   '/roadmap':      { title: 'Roadmap', description: 'What’s shipped and what’s next for the Wolf Pack platform.' },
