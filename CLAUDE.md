@@ -727,6 +727,13 @@ MCP call stalls at its approval step (it did four times on 2026-10-19 with
 nothing reaching the database), the guild lead pastes the file into the
 Supabase SQL Editor instead.
 
+**RULE — warn before any approval prompt, and push a notification (the guild lead, 2026-11-15):** *"if you have a prompt
+for supabase you have to tell me up front and send a push notification. I can do the notification I just need a heads
+up. I'm often working on other things."* An `apply_migration` (or any tool call that waits on the guild lead's approval)
+is preceded, in the same turn, by (1) a chat line saying what is about to ask and what it changes, and (2) a
+`PushNotification` ("Supabase approval coming in 1 min: <migration>"). Then make the call. Two prompts on 2026-11-15
+timed out unanswered because neither was announced; the prompt waits about four minutes and does not retry.
+
 ### When git state looks wrong
 This environment's local clone can come up with stale refs (it has happened —
 "my commits vanished"). Before concluding work was lost or force-pushing
