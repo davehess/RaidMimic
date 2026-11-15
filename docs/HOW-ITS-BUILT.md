@@ -3430,6 +3430,11 @@ Personal data lives on each player's PC; the hub keeps the shared raid record. N
   are kept (kind `hub_encounter`, 120 days). ⚠ The hub route (change cursor + tombstones) is not applied yet: it needs a
   migration and lives on an unpushed bot branch, so on a guild install the difference says "the guild server does not offer
   the guild record yet" until it ships. Test: `test/local-parses.test.js`.
+- **Raid Mimic party (agent 4.0.87, 2026-11-15; relay `apps/raidmimic-relay/`, design `DESIGN-raidmimic-relay.md` "The Mimic client").** Surfaces:
+  agent (`index.js`, block "Raid Mimic party": `MiniWebSocket`, `partyBuildPub`, `createPartyClient`, `_partyRoute` = `GET/POST /api/party`,
+  `partyView` on `/api/state`), dashboard Logsync tab card `#wpParty` (`dashboard.html`, `wpPt*`), DPS HUD Party switch (`apps/mimic/overlay.html`,
+  `tabParty` / `PARTY_ON` / `_ageDot`), tray item `_partyTrayItems` and Settings button `openPartyBtn` (`apps/mimic/main.js`, `settings.html`,
+  IPC `open-party-card`). Free for everyone; the tier shows as a small tag. Test: `test/party-client.test.js`.
 - **Raid codes (3.8.48).** A code (`BC-7KQ2`: two to four letters, a dash, four to six letters or numbers) is a six-hour label
   kept in `logsync.raidcode.json` (`GET/POST /api/raid-code`). While active, `enqueueUpload` HOLDS the raid-wide kinds
   (`RAID_HOLD_KINDS`) so a member standing in another guild's raid is in neither hub's raid tables; streams about the

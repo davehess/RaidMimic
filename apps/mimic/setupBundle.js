@@ -113,6 +113,7 @@ const PRIVATE_KEYS = new Set([
   'wp:settings:draft',                    // an unsaved Settings form
   'uiInspectorWidth',                     // a dialog's width
   'wpTargetPgFilter', 'wp.damageHistView', 'wp.histSource', // which history filter / view this person last looked at
+  'wp.damagePartyView',                   // whether the DPS HUD shows the party's merged rows (a party exists only for a night)
 ]);
 const PRIVATE_PREFIXES = ['wp-map-', 'wpChatMore:', 'wpChatMoreSet:', 'wpChatHistH:', 'wpChatBrkOff:'];
 

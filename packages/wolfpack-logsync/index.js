@@ -54,6 +54,8 @@ const https = require('https');
 const http  = require('http');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const netSock = require('net');   // the party relay's WebSocket client (see "Raid Mimic party")
+const tlsSock = require('tls');
 const { URL } = require('url');
 
 // Read version from package.json so we only have to bump it in one place per release.
@@ -19754,6 +19756,9 @@ function _serializeForDashboard() {
     localOnly:          _localOnly(),
     // The raid code this PC joined (null when none): the dashboard card and Mimic's tray read it.
     raidCode:           _raidCodeStatus(),
+    // The Raid Mimic party (null when none): status, code, tier tag and the merged per-player view. The dashboard card,
+    // the tray and the DPS HUD's Party view read it.
+    partyView:          _partyStateForDashboard(),
     // #120 — token present (signed in) but identity may not be confirmed yet.
     // Lets the header show a soft "verifying" state instead of the hard "not
     // signed in" banner, and gate the scary banner on the no-token case only.
@@ -25895,6 +25900,118 @@ function wpRaidCodeOpen() {
   window.addEventListener('hashchange', go);
 })();
 
+// ── 🐺 Raid Mimic party (Logsync tab, above the raid code; the tray's "Raid Mimic party…" opens it) ──
+// Raiders who join one party code share their numbers live: every Mimic publishes its own and gets back ONE merged
+// view (per player the highest value anyone saw, never a sum), which the DPS HUD shows as its Party view. Free for
+// everyone (DECISIONS §588); the tier shows only as a small tag. The state lives in the agent (GET/POST /api/party,
+// and \`s.partyView\` on /api/state). The card paints from the poll and prints nothing that ticks (no "3s ago", no
+// countdown), so its HTML is byte-stable and the section does not rewrite every 2 s.
+var _wpPt = { note: '', tone: '' };
+function wpPtTag(p) {
+  if (!p) return '';
+  if (p.tier === 'pro') return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro</span>';
+  if (p.tier === 'trial') {
+    var d = p.trial_ends_at ? Math.max(0, Math.ceil((Date.parse(p.trial_ends_at) - Date.now()) / 86400000)) : null;
+    return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro trial' + (d != null ? ' · ' + d + ' day' + (d === 1 ? '' : 's') + ' left' : '') + '</span>';
+  }
+  return '';
+}
+function wpPtHtml(s) {
+  var p = s && s.partyView;
+  var h = '';
+  var inParty = p && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
+  if (inParty) {
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">';
+    if (p.code) {
+      h += '<span id="wpPtActive" style="font-size:20px;font-weight:700;letter-spacing:2px;border:1px solid var(--blue);border-radius:6px;padding:2px 12px">' + esc(p.code) + '</span>'
+        + '<button type="button" class="wp-btn" onclick="wpPtCopy()" title="Copy the code to paste into Discord or /rs">📋 Copy code</button>';
+    }
+    h += wpPtTag(p)
+      + '<button type="button" class="wp-btn" onclick="wpPtLeave()">✕ Leave party</button></div>';
+    var line;
+    if (p.status === 'joined') {
+      line = '<b>' + (p.members || 1) + '</b> in the party' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live')
+        + '. Open the DPS HUD and switch it to <b>Party</b> to see everyone, merged.';
+    } else if (p.status === 'paused') {
+      line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' The code is kept and it reconnects by itself.';
+    } else {
+      line = 'Connecting to the party relay' + (p.status === 'reconnecting' ? ' (it will keep trying)' : '') + '…'
+        + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    }
+    h += '<div style="font-size:12px;margin-bottom:6px">' + line + '</div>';
+  } else {
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">'
+       + '<input id="wpPtCode" type="text" maxlength="12" placeholder="K7M2QX" autocomplete="off" spellcheck="false" style="width:120px;text-transform:uppercase;font-size:14px;letter-spacing:2px" onkeydown="if (event.key === \\'Enter\\') wpPtJoin()">'
+       + '<button type="button" class="wp-btn pri" onclick="wpPtJoin()">🐺 Join</button>'
+       + '<span class="dim">or</span>'
+       + '<button type="button" class="wp-btn" onclick="wpPtCreate()" title="Makes a new party and shows its code, to give to your group or raid">＋ Create a party</button></div>';
+    if (p && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
+  }
+  if (_wpPt.note) h += '<div id="wpPtNote" style="color:' + (_wpPt.tone === 'ok' ? 'var(--green)' : 'var(--orange)') + ';font-size:12px;margin-bottom:6px">' + esc(_wpPt.note) + '</div>';
+  return h;
+}
+function wpPtRepaint(s) {
+  var el = document.getElementById('wpParty');
+  if (!el) return;
+  if (!document.getElementById('wpPtBody')) {
+    el.innerHTML = '<h2>🐺 Raid Mimic party</h2>'
+      + '<div class="subtle">Share your numbers live with the people you play with. One of you creates a party and gives out the code; everyone else joins with it. '
+      + 'Each Mimic sends its own damage, healing, damage taken, threat, target and group health, and gets back one merged list, the highest value anyone saw for each player, never added together. '
+      + 'It sends only during a fight or while you are in a group or raid, and nothing else leaves your PC. Needs Mimic signed in with Discord.</div>'
+      + '<div id="wpPtBody"></div>';
+    el._wpLastHtml = null;
+  }
+  morphInto(document.getElementById('wpPtBody'), wpPtHtml(s));
+}
+function renderPartyCard(s) { wpPtRepaint(s); }
+function wpPtPost(body) {
+  return fetch('/api/party', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+}
+function wpPtRefresh() {
+  fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { wpPtRepaint(s); }, function () { });
+}
+function wpPtAct(body, okNote) {
+  wpPtPost(body).then(function (x) {
+    _wpPt.note = x.ok ? (okNote || '') : ((x.j && x.j.error) || 'Could not do that.'); _wpPt.tone = x.ok ? 'ok' : '';
+    wpPtRefresh();
+  }, function () { _wpPt.note = 'The agent did not answer.'; _wpPt.tone = ''; wpPtRefresh(); });
+}
+function wpPtCreate() { wpPtAct({ action: 'create' }, ''); }
+function wpPtJoin() { var inp = document.getElementById('wpPtCode'); wpPtAct({ action: 'join', code: inp ? inp.value : '' }, ''); }
+function wpPtLeave() { wpPtAct({ action: 'leave' }, 'Left the party.'); }
+function wpPtCopy() {
+  var a = document.getElementById('wpPtActive');
+  var code = a ? a.textContent : '';
+  var done = function (ok) { _wpPt.note = ok ? 'Copied ' + code + '.' : 'Could not copy; select the code and copy it.'; _wpPt.tone = ok ? 'ok' : ''; wpPtRefresh(); };
+  try { navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+}
+// The tray's "Raid Mimic party…": the Logsync tab, scrolled to the card.
+function wpPartyOpen() {
+  var tab = document.querySelector('.nav button[data-tab="optin"]');
+  if (tab && !tab.classList.contains('active')) tab.click();
+  var go = function (n) {
+    var card = document.getElementById('wpParty');
+    if (!card) { if (n < 12) setTimeout(function () { go(n + 1); }, 200); return; }
+    var bar = document.getElementById('wpTopBar');
+    var pad = (bar ? bar.getBoundingClientRect().height : 0) + 10;
+    window.scrollTo({ top: Math.max(0, card.getBoundingClientRect().top + window.scrollY - pad), behavior: 'smooth' });
+    var inp = document.getElementById('wpPtCode');
+    if (inp) { try { inp.focus(); } catch (e) { void e; } }
+  };
+  go(0);
+}
+// #party opens the card, the way #raidcode does.
+(function () {
+  function go() {
+    if ((location.hash || '').toLowerCase() !== '#party') return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { void e; }
+    wpPartyOpen();
+  }
+  go();
+  window.addEventListener('hashchange', go);
+})();
+
 // ── 📈 My parses ────────────────────────────────────────────────────────────
 // A member asked (2026-10-06) for "a page in Mimic that graphs my parses over a variable time window"; the
 // guild lead picked this tab plus a page on wolfpack.quest. The numbers are the guild's record of YOUR fights,
@@ -30237,6 +30354,7 @@ function renderOptin(o) {
   // 🔁 Rebuild from my logs (the guild lead, 2026-10-21): its own placeholder, filled by renderRebuildCard, so the
   // progress it shows does not rewrite this whole tab every poll.
   wpRebuildSetFiles(o);
+  h += '<div id="wpParty" class="card wide"></div>';   // 🐺 Raid Mimic party: filled by renderPartyCard
   h += '<div id="wpRaidCode" class="card wide"></div>';   // 🎟 Join a raid with a code: filled by renderRaidCodeCard
   h += '<div id="wpRebuild" class="card wide"></div>';
   h += '<div id="wpPopCapture" class="card wide"></div>';   // 📥 Capture latest PoP flags, Seer and Maelin messages: filled by renderPopCaptureCard
@@ -30613,6 +30731,7 @@ async function refresh() {
                      ['diag', renderDiag],
                      ['netmeter', renderNetMeter],
                      ['rebuild', renderRebuildCard], ['raidcode', renderRaidCodeCard], ['popcapture', renderPopCaptureCard],
+                     ['party', renderPartyCard],
                      ['zealcard', renderZealCard],
                      ['recentfires', renderRecentFires], ['mutedtimers', renderMutedTimers], ['replaystatus', renderReplayStatus],
                      ['charmdiag', renderCharmDiag], ['petbuffdiag', renderPetBuffDiag], ['triggerjournal', renderTriggerJournal],
@@ -37676,6 +37795,8 @@ function startWebDashboard(port) {
       if (await _localPopRescanRoute(req, res)) return;
       if (_localParsesRoute(req, res)) return;
       if (await _raidCodeRoute(req, res)) return;
+      // Raid Mimic party: GET/POST /api/party (create / join / leave, and the merged view). Local only.
+      if (await _partyRoute(req, res)) return;
       // Item icons cut from this PC's own EQ files (local-first slice 2). Never uploaded.
       if (_localIconRoute(req, res)) return;
       // Tank overlay snapshot (the guild lead, 2026-06-25). Aggregates everything the
@@ -63937,7 +64058,7 @@ function _fireTriggerActions(t, captures, tsMs, test, isRelay) {
   // which callouts went off. Skip test/rehearsal fires. Windowed into the
   // encounter at flush time; hard-capped so it can't grow unbounded.
   if (!test) {
-    _fireLog.push({ at: tsMs || Date.now(), name: t.name || t.key || 'trigger' });
+    _fireLog.push({ at: tsMs || Date.now(), name: t.name || t.key || 'trigger', guild: t._scope !== 'personal' });
     if (_fireLog.length > 600) _fireLog.splice(0, _fireLog.length - 600);
   }
   for (const a of (t.actions || [])) {
@@ -65698,6 +65819,7 @@ async function main() {
   // the existing pet timers + stats back instead of starting blank. TTLs in
   // the loader drop entries old enough to be stale.
   _loadPetStateFromDisk();
+  try { _partyBoot(); } catch (e) { void e; }   // a party remembered from before this restart rejoins (Raid Mimic party)
   if (!dryRun && token) {
     fetchSpellCatalog({ botUrl, token }).catch(() => {});
     fetchItemClickies({ botUrl, token }).catch(() => {});
@@ -69914,8 +70036,499 @@ function _localIconRoute(req, res, o) {
   return true;
 }
 
+// ── Raid Mimic party (2026-11-15) ──────────────────────────────────────────────────────────────────────────
+// The client half of the party relay (apps/raidmimic-relay/, docs/DESIGN-raidmimic-relay.md). Raiders who join one party
+// code publish their own numbers about every 2 s and get back ONE merged view (per player, per stat the MAX across
+// submitters, never the sum) that the DPS HUD shows as its Party view. Live merging is free for everyone (DECISIONS §588):
+// nothing here gates on a tier; the view's tier is shown as a small tag only.
+//   * WebSocket: this agent runs under Electron's Node 20 (global WebSocket absent or behind a flag), under a member's own
+//     Node >= 18 for Parser.bat, and under Node 16 on the Windows 7 build. No dependency is allowed, so the small client
+//     below speaks RFC 6455 over tls/net itself (text frames, ping/pong, close, permessage-deflate with no context
+//     takeover). One path for every runtime, tested against the real relay.
+//   * Auth: the Mimic session token (wpms_...), the same one that rides to the bot as X-Wolfpack-Mimic-Session.
+//   * Stand-down: dry-run, no session, a hidden / guest / off-guild character (shouldUploadForCharacter) and the control
+//     plane (_controlStandDown) all close the socket and publish nothing; a party code stays wanted and resumes by itself.
+//   * Publishes only during a live (or just-ended) fight, or while the Zeal raid/group list is fresh.
+//   * Routes: GET/POST /api/party. State: `partyView` on /api/state (the DPS HUD reads it).
+const PARTY_RELAY_URL = 'wss://raidmimic-relay-production.up.railway.app/v1/party';   // WOLFPACK_PARTY_RELAY_URL overrides (dev, tests)
+const PARTY_FILE = path.join(__dirname, 'logsync.party.json');
+const PARTY_PUB_MS = 2000;
+const PARTY_REJOIN_MAX_AGE_MS = 4 * 3600_000;   // a code remembered across an agent restart is dropped after this
+const PARTY_RX_IDLE_MS = 15_000;                // the relay sends a view every 2 s; silence this long means a dead socket
+const PARTY_BACKOFF_MS = [1000, 2000, 5000, 10_000, 20_000, 30_000, 60_000];
+const PARTY_CODE_RX = /^[2-9A-HJKMNP-Z]{6}$/;
+const PARTY_NAME_RX = /^[A-Za-z']{1,24}$/;
+const PARTY_MAX_ROWS = 80, PARTY_MAX_TEXT = 120, PARTY_MAX_FIRES = 20, PARTY_MAX_NUM = 1e12, PARTY_MAX_FRAME = 32 * 1024;
+// Closing codes after which reconnecting is pointless: the relay said no, and saying it again changes nothing.
+const PARTY_FATAL = {
+  replaced:        'This party was joined from another Mimic with the same character, which took your place. Join again to take it back.',
+  party_full:      'This party is full (72 members).',
+  unknown_session: 'The relay does not know this sign-in. Sign in with Discord again in Mimic, then join again.',
+  bad_token:       'The relay did not accept this sign-in. Sign in with Discord again in Mimic.',
+  bad_character:   'This character name cannot be shared (letters only).',
+  bad_party:       'That is not a party code.',
+  no_party:        'That party is gone (it ended 15 minutes after its last member left, or the relay restarted). Create a new one or ask for a fresh code.',
+};
+const PARTY_BLOCK_TEXT = {
+  signed_out:   'Sign in with Discord in Mimic to use a party.',
+  dry_run:      'Dry-run mode sends nothing, so a party cannot connect.',
+  control:      'Paused by the guild control plane; it resumes by itself.',
+  hidden:       'This character does not share live data (hidden from stats, a guest, or on another server).',
+  no_character: 'Waiting for EverQuest: no character is being watched yet.',
+};
+
+// ── the WebSocket client ──
+class MiniWebSocket {
+  // opts: { headers, handshakeMs, maxMessage }. Callbacks: onopen(), onmessage(text), onclose({code, reason}), onerror(err).
+  constructor(url, opts = {}) {
+    const u = new URL(url);
+    this.readyState = 0;          // 0 connecting · 1 open · 2 closing · 3 closed
+    this.onopen = this.onmessage = this.onclose = this.onerror = null;
+    this._maxMessage = opts.maxMessage || 1024 * 1024;
+    this._buf = Buffer.alloc(0);
+    this._frags = null;           // { compressed, parts, size } while a fragmented message is in flight
+    this._deflate = false;
+    this._closed = false;
+    const secure = u.protocol === 'wss:';
+    const port = Number(u.port) || (secure ? 443 : 80);
+    const key = crypto.randomBytes(16).toString('base64');
+    const sock = secure ? tlsSock.connect({ host: u.hostname, port, servername: u.hostname }) : netSock.connect({ host: u.hostname, port });
+    this._sock = sock;
+    this._shaken = false;
+    const fail = (err) => { try { if (this.onerror) this.onerror(err); } catch (e) { void e; } this._finish(1006, 'error'); };
+    const timer = setTimeout(() => fail(new Error('handshake timed out')), opts.handshakeMs || 10_000);
+    if (timer.unref) timer.unref();
+    this._hsTimer = timer;
+    sock.setNoDelay(true);
+    sock.on(secure ? 'secureConnect' : 'connect', () => {
+      const h = [
+        `GET ${u.pathname || '/'}${u.search || ''} HTTP/1.1`,
+        `Host: ${u.host}`,
+        'Upgrade: websocket', 'Connection: Upgrade',
+        `Sec-WebSocket-Key: ${key}`, 'Sec-WebSocket-Version: 13',
+        'Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_no_context_takeover',
+      ];
+      for (const [k, v] of Object.entries(opts.headers || {})) h.push(`${k}: ${v}`);
+      sock.write(h.join('\r\n') + '\r\n\r\n');
+    });
+    sock.on('data', (chunk) => {
+      try {
+        this._buf = this._buf.length ? Buffer.concat([this._buf, chunk]) : chunk;
+        if (!this._shaken) {
+          const end = this._buf.indexOf('\r\n\r\n');
+          if (end < 0) { if (this._buf.length > 8192) fail(new Error('handshake too long')); return; }
+          const head = this._buf.subarray(0, end).toString('latin1').split('\r\n');
+          this._buf = this._buf.subarray(end + 4);
+          const hdr = {};
+          for (const line of head.slice(1)) { const i = line.indexOf(':'); if (i > 0) hdr[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim(); }
+          const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+          if (!/^HTTP\/1\.1 101\b/.test(head[0] || '') || hdr['sec-websocket-accept'] !== accept) return fail(new Error('upgrade refused: ' + String(head[0] || '').slice(0, 60)));
+          const ext = String(hdr['sec-websocket-extensions'] || '');
+          if (ext) {
+            if (!/permessage-deflate/.test(ext) || !/server_no_context_takeover/.test(ext)) return fail(new Error('unsupported extension'));
+            this._deflate = true;
+          }
+          this._shaken = true;
+          clearTimeout(this._hsTimer);
+          this.readyState = 1;
+          if (this.onopen) this.onopen();
+        }
+        this._parse();
+      } catch (e) { fail(e); }
+    });
+    sock.on('error', (e) => fail(e));
+    sock.on('close', () => this._finish(1006, 'closed'));
+  }
+  _parse() {
+    for (;;) {
+      if (this._dead) return;
+      const b = this._buf;
+      if (b.length < 2) return;
+      const fin = (b[0] & 0x80) !== 0, rsv1 = (b[0] & 0x40) !== 0, op = b[0] & 0x0f, masked = (b[1] & 0x80) !== 0;
+      let len = b[1] & 0x7f, off = 2;
+      if (len === 126) { if (b.length < 4) return; len = b.readUInt16BE(2); off = 4; }
+      else if (len === 127) {
+        if (b.length < 10) return;
+        if (b.readUInt32BE(2) > 0) return this._protocolError(1009);
+        len = b.readUInt32BE(6); off = 10;
+      }
+      if (masked || (b[0] & 0x30)) return this._protocolError(1002);     // a server never masks; rsv2/3 are unused
+      if (len > this._maxMessage) return this._protocolError(1009);
+      if (b.length < off + len) return;
+      const payload = b.subarray(off, off + len);
+      this._buf = b.subarray(off + len);
+      if (op >= 8) {
+        if (!fin || len > 125) return this._protocolError(1002);
+        if (op === 8) {
+          const code = len >= 2 ? payload.readUInt16BE(0) : 1005;
+          if (this.readyState === 1) this._send(8, payload.subarray(0, Math.min(len, 2)));   // echo the code, as the RFC asks
+          return this._finish(code, len > 2 ? payload.subarray(2).toString('utf8') : '');
+        }
+        if (op === 9) this._send(10, payload);
+        continue;                                                          // pong: nothing to do
+      }
+      if (op === 0) {
+        if (!this._frags) return this._protocolError(1002);
+      } else {
+        if (this._frags) return this._protocolError(1002);
+        if (op !== 1 && op !== 2) return this._protocolError(1002);
+        if (rsv1 && !this._deflate) return this._protocolError(1002);
+        this._frags = { binary: op === 2, compressed: rsv1, parts: [], size: 0 };
+      }
+      const f = this._frags;
+      f.parts.push(Buffer.from(payload)); f.size += len;
+      if (f.size > this._maxMessage) return this._protocolError(1009);
+      if (!fin) continue;
+      this._frags = null;
+      let data = f.parts.length === 1 ? f.parts[0] : Buffer.concat(f.parts);
+      if (f.compressed) {
+        // A permessage-deflate message ends in a sync flush, not a final block: without Z_SYNC_FLUSH zlib calls it truncated.
+        try { data = zlib.inflateRawSync(Buffer.concat([data, Buffer.from([0, 0, 0xff, 0xff])]), { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: this._maxMessage }); }
+        catch { return this._protocolError(1007); }
+      }
+      if (!f.binary && this.onmessage) { try { this.onmessage(data.toString('utf8')); } catch (e) { void e; } }
+    }
+  }
+  _send(op, payload) {
+    if (this._closed || !this._sock || !this._sock.writable) return false;
+    const p = payload || Buffer.alloc(0), n = p.length;
+    const mask = crypto.randomBytes(4);
+    const head = n < 126 ? Buffer.from([0x80 | op, 0x80 | n]) : n < 65536 ? Buffer.from([0x80 | op, 0x80 | 126, n >> 8, n & 255])
+      : (() => { const h = Buffer.alloc(10); h[0] = 0x80 | op; h[1] = 0x80 | 127; h.writeUInt32BE(n, 6); return h; })();
+    const body = Buffer.allocUnsafe(n);
+    for (let i = 0; i < n; i++) body[i] = p[i] ^ mask[i & 3];
+    this._sock.write(Buffer.concat([head, mask, body]));
+    return true;
+  }
+  sendText(text) { if (this.readyState !== 1) return false; return this._send(1, Buffer.from(String(text), 'utf8')); }
+  close(code = 1000) {
+    if (this.readyState >= 2) return;
+    if (this.readyState === 0) return this.terminate();
+    this.readyState = 2;
+    const c = Buffer.alloc(2); c.writeUInt16BE(code, 0);
+    this._send(8, c);
+    const t = setTimeout(() => this.terminate(), 1500);    // a peer that never answers the close is cut off
+    if (t.unref) t.unref();
+  }
+  terminate() { try { if (this._sock) this._sock.destroy(); } catch (e) { void e; } this._finish(1006, 'terminated'); }
+  _protocolError(code) { this._dead = true; this.close(code); this._buf = Buffer.alloc(0); }
+  _finish(code, reason) {
+    if (this._closed) return;
+    this._closed = true;
+    this.readyState = 3;
+    clearTimeout(this._hsTimer);
+    try { if (this._sock) this._sock.destroy(); } catch (e) { void e; }
+    if (this.onclose) { try { this.onclose({ code, reason }); } catch (e) { void e; } }
+  }
+}
+
+// ── pure parts: frames, backoff ──
+const _partyClean = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, PARTY_MAX_TEXT);
+const _partyNum = (n) => { n = Math.round(Number(n)); return Number.isFinite(n) && n >= 0 ? Math.min(n, PARTY_MAX_NUM) : 0; };
+// The relay drops a WHOLE frame for one bad name, number or over-long string, so every value is made valid here instead:
+// a name it would refuse (a pet's "a skeleton", a possessive with a backtick) leaves the frame, a number is clamped, a text
+// is cut. src = { perPlayer: {name: threat-snapshot row}, target, casting, roster: [{name, hp_pct}], fires: [{at, name}] }.
+// Returns the frame, or null when there is nothing to send.
+function partyBuildPub(src, now = Date.now()) {
+  const out = { type: 'pub' };
+  const rows = [];
+  for (const [name, r] of Object.entries((src && src.perPlayer) || {})) {
+    if (!PARTY_NAME_RX.test(name) || !r || typeof r !== 'object') continue;
+    rows.push([name, { dmg: _partyNum(r.dmg), heal: _partyNum(r.healRaw != null ? r.healRaw : r.heal), took: _partyNum(r.took), threat: _partyNum(r.total != null ? r.total : r.threat) }]);
+  }
+  if (rows.length) {
+    rows.sort((a, b) => b[1].dmg - a[1].dmg);
+    out.perPlayer = Object.fromEntries(rows.slice(0, PARTY_MAX_ROWS));
+  }
+  const t = _partyClean(String((src && src.target) || '').replace(/^#/, '')), c = _partyClean(src && src.casting);
+  if (t) out.target = t;
+  if (c) out.casting = c;
+  const roster = [];
+  for (const m of ((src && src.roster) || [])) {
+    const hp = Number(m && (m.hp_pct != null ? m.hp_pct : m.hp));
+    if (m && PARTY_NAME_RX.test(String(m.name)) && Number.isFinite(hp)) roster.push({ name: String(m.name), hp: Math.max(0, Math.min(100, Math.round(hp))) });
+  }
+  if (roster.length) out.roster = roster.slice(0, PARTY_MAX_ROWS);
+  const fires = [];
+  for (const f of ((src && src.fires) || [])) {
+    const text = _partyClean(f && f.name != null ? f.name : f && f.text), at = Number(f && f.at);
+    if (text && Number.isFinite(at) && at > 0) fires.push({ text, at: Math.round(Math.min(at, now)) });
+  }
+  if (fires.length) out.fires = fires.slice(-PARTY_MAX_FIRES);
+  if (Object.keys(out).length === 1) return null;
+  // 80 rows of four numbers are about 7 KB, far under the cap; this only guards a pathological name-and-text mix.
+  while (JSON.stringify(out).length > PARTY_MAX_FRAME - 512 && out.perPlayer && Object.keys(out.perPlayer).length > 1) {
+    const keys = Object.keys(out.perPlayer);
+    out.perPlayer = Object.fromEntries(keys.slice(0, Math.ceil(keys.length / 2)).map((k) => [k, out.perPlayer[k]]));
+  }
+  return out;
+}
+// Reconnect delay for the nth failed attempt (0-based): 1, 2, 5, 10, 20, 30, 60 s, then 60 s, with up to 20% jitter so a
+// relay restart does not bring the whole fleet back in the same second. A relay that said `slow_down` waits at least 30 s.
+function partyBackoffMs(attempt, rand = Math.random, minMs = 0) {
+  const base = PARTY_BACKOFF_MS[Math.min(Math.max(0, attempt | 0), PARTY_BACKOFF_MS.length - 1)];
+  return Math.max(minMs, Math.round(base * (1 + 0.2 * rand())));
+}
+
+// ── the client (a factory so a test can run two in one process) ──
+// d: { url(), WS, getToken(), getCharacter(), blocked() -> reason|null, collect() -> src|null, version, now, pubMs,
+//      store: { load() -> {code, at}|null, save(obj|null) }, log(msg), rand }
+function createPartyClient(d) {
+  const now = d.now || Date.now;
+  const WS = d.WS || MiniWebSocket;
+  const pubMs = d.pubMs || PARTY_PUB_MS;
+  const S = {
+    want: null,            // null | { create: true } | { code }
+    status: 'off',         // off | connecting | joined | reconnecting | paused | ended
+    code: null, tier: null, trialEndsAt: null, members: 0, character: null,
+    view: null, viewAt: 0, error: null, pausedFor: null, retryAt: 0, attempts: 0, lastRx: 0,
+  };
+  let ws = null, timer = null, retry = null, gen = 0;
+  const log = d.log || (() => {});
+
+  const setError = (code, message) => { S.error = code ? { code, message } : null; };
+  function drop(close) {
+    gen++;                                  // events from the old socket are ignored from here on
+    const w = ws; ws = null;
+    if (w) { w.onopen = w.onmessage = w.onclose = w.onerror = null; try { close ? w.close(1000) : w.terminate(); } catch (e) { void e; } }
+    clearTimeout(retry); retry = null;
+  }
+  function persist() { try { d.store && d.store.save(S.want && S.want.code ? { code: S.want.code, at: now() } : null); } catch (e) { void e; } }
+  function scheduleRetry(minMs) {
+    drop(false);
+    const wait = partyBackoffMs(S.attempts++, d.rand || Math.random, minMs || 0);
+    S.status = 'reconnecting'; S.retryAt = now() + wait;
+    retry = setTimeout(() => { retry = null; connect(); }, wait);
+    if (retry.unref) retry.unref();
+  }
+  function end(code) {
+    drop(false);
+    S.status = 'ended'; S.retryAt = 0;
+    setError(code, PARTY_FATAL[code] || 'The party relay closed the connection.');
+    S.want = null; persist();
+    log('[party] ended: ' + code);
+  }
+  function connect() {
+    if (!S.want) return;
+    const reason = d.blocked();
+    if (reason) { drop(true); S.status = 'paused'; S.pausedFor = reason; return; }
+    const character = d.getCharacter(), token = d.getToken();
+    if (!character || !token) { drop(true); S.status = 'paused'; S.pausedFor = token ? 'no_character' : 'signed_out'; return; }
+    S.pausedFor = null; S.character = character;
+    drop(false);
+    S.status = 'connecting';
+    const my = ++gen;
+    let sock;
+    try { sock = new WS(d.url(), { headers: { 'User-Agent': 'wolfpack-logsync/' + (d.version || '') } }); }
+    catch { return scheduleRetry(); }
+    ws = sock;
+    const live = () => my === gen;
+    sock.onopen = () => {
+      if (!live()) return;
+      S.lastRx = now();
+      const hello = { type: 'hello', token, character, agent_version: String(d.version || '').slice(0, 24) };
+      if (S.want.code) hello.party = S.want.code; else hello.create = true;
+      sock.sendText(JSON.stringify(hello));
+    };
+    sock.onmessage = (text) => {
+      if (!live()) return;
+      S.lastRx = now();
+      let m; try { m = JSON.parse(text); } catch { return; }
+      if (!m || typeof m !== 'object') return;
+      if (m.type === 'welcome') {
+        S.code = String(m.party || ''); S.tier = m.tier || null; S.status = 'joined'; S.attempts = 0; S.retryAt = 0; setError(null);
+        S.want = { code: S.code };            // from here on a reconnect JOINS this party, never mints another
+        persist();
+      } else if (m.type === 'view') {
+        S.view = m; S.viewAt = now(); S.tier = m.tier || S.tier; S.members = Number(m.members) || 0; S.trialEndsAt = m.trial_ends_at || null;
+      } else if (m.type === 'error') {
+        const code = String(m.code || '');
+        if (PARTY_FATAL[code]) end(code);
+        else { setError(code, 'The relay said ' + code + '; trying again.'); scheduleRetry(code === 'slow_down' ? 30_000 : 0); }
+      }
+    };
+    sock.onclose = () => { if (live() && S.want && S.status !== 'ended') scheduleRetry(); };
+    sock.onerror = (e) => { if (live()) setError('network', 'Could not reach the party relay (' + String((e && e.message) || e).slice(0, 80) + ').'); };
+  }
+  function publish() {
+    if (!ws || S.status !== 'joined' || ws.readyState !== 1) return;
+    let src = null;
+    try { src = d.collect(); } catch { src = null; }
+    const frame = src ? partyBuildPub(src, now()) : null;
+    if (frame) ws.sendText(JSON.stringify(frame));
+  }
+  function tick() {
+    if (!S.want) return;
+    const reason = d.blocked();
+    if (reason) {                          // stand down: close the socket, keep the code wanted
+      if (S.status !== 'paused' || S.pausedFor !== reason) { drop(true); S.status = 'paused'; S.pausedFor = reason; }
+      return;
+    }
+    if (S.status === 'paused') return connect();   // no longer blocked: resume
+    if (S.status === 'joined') {
+      if (now() - S.lastRx > PARTY_RX_IDLE_MS) { scheduleRetry(); return; }
+      publish();
+    }
+  }
+  function start() { if (!timer) { timer = setInterval(tick, pubMs); if (timer.unref) timer.unref(); } }
+
+  function request(want) {
+    const reason = d.blocked();
+    if (reason) return { ok: false, error: PARTY_BLOCK_TEXT[reason] || 'A party is not available right now.', reason };
+    drop(true);
+    Object.assign(S, { want, code: want.code || null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, attempts: 0, retryAt: 0, pausedFor: null });
+    start(); connect(); persist();
+    return { ok: true };
+  }
+  const api = {
+    create: () => request({ create: true }),
+    join(raw) {
+      const code = String(raw == null ? '' : raw).trim().toUpperCase().replace(/[\s-]+/g, '');
+      if (!PARTY_CODE_RX.test(code)) return { ok: false, error: 'A party code is 6 letters or numbers, like K7M2QX.' };
+      return request({ code });
+    },
+    leave() {
+      if (ws && ws.readyState === 1) { try { ws.sendText(JSON.stringify({ type: 'bye' })); } catch (e) { void e; } }
+      drop(true);
+      Object.assign(S, { want: null, status: 'off', code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, pausedFor: null, retryAt: 0, attempts: 0 });
+      persist();
+      return { ok: true };
+    },
+    // Resume a party remembered across an agent restart.
+    resume() {
+      let saved = null; try { saved = d.store && d.store.load(); } catch { saved = null; }
+      if (!saved || !PARTY_CODE_RX.test(String(saved.code)) || !(now() - Number(saved.at) < PARTY_REJOIN_MAX_AGE_MS)) return false;
+      Object.assign(S, { want: { code: saved.code }, code: saved.code, status: 'connecting' });
+      start(); connect();
+      return true;
+    },
+    // The small, public state (the dashboard, the tray, the DPS HUD).
+    status() {
+      const t = now();
+      return {
+        status: S.status, code: S.code, tier: S.tier, trial_ends_at: S.trialEndsAt, members: S.members, character: S.character,
+        stale: !!(S.view && (S.view.stale || t - S.viewAt > 10_000)), view_age_ms: S.viewAt ? t - S.viewAt : null,
+        error: S.error, paused_for: S.pausedFor, paused_text: S.pausedFor ? (PARTY_BLOCK_TEXT[S.pausedFor] || null) : null,
+        retry_in_ms: S.status === 'reconnecting' ? Math.max(0, S.retryAt - t) : null,
+      };
+    },
+    // The merged view, shaped for the HUD.
+    view() {
+      const v = S.view;
+      if (!v) return null;
+      return { players: v.players || [], roster: v.roster || [], fires: v.fires || [], target: v.target || null, casting: v.casting || null, at: S.viewAt };
+    },
+    tick, destroy() { clearInterval(timer); timer = null; drop(false); S.want = null; },
+    _state: S,
+  };
+  return api;
+}
+
+// ── agent wiring ──
+let _partyClientInst = null;
+let _partyFile = PARTY_FILE;
+let _partyCharacterOverride = null;   // tests only
+function _partyCharacter() {
+  if (_partyCharacterOverride) return _partyCharacterOverride;
+  let best = null, bestTs = 0;
+  for (const ch of Object.keys(_zealState || {})) {
+    const ts = (_zealState[ch] && _zealState[ch].updatedAt) || 0;
+    if (ts > bestTs && Date.now() - ts < 60_000 && PARTY_NAME_RX.test(ch)) { bestTs = ts; best = ch; }
+  }
+  if (best) return best;
+  const p = _primaryCharacter();
+  return p && PARTY_NAME_RX.test(p) ? p : null;
+}
+function _partyBlocked() {
+  if (_uploadOpts && _uploadOpts.dryRun) return 'dry_run';
+  if (!_mimicSessionToken) return 'signed_out';
+  if (_controlStandDown().down) return 'control';
+  const c = _partyCharacter();
+  if (!c) return 'no_character';
+  if (!shouldUploadForCharacter(c)) return 'hidden';
+  return null;
+}
+// What this agent publishes now. Null = nothing to say (not fighting, not in a raid or group).
+function _partyCollect() {
+  const ch = _partyCharacter();
+  if (!ch) return null;
+  const cl = ch.toLowerCase(), now = Date.now();
+  const et = _freshEncounterThreat((stats.currentEncounterThreatByChar || {})[cl] || stats.currentEncounterThreat);
+  const src = { perPlayer: et && et.perPlayer ? et.perPlayer : null, target: null, casting: null, roster: null, fires: null };
+  if (_lastRaidPipe && now - _lastRaidPipe.at < 15_000 && Array.isArray(_lastRaidPipe.members)) {
+    src.roster = _lastRaidPipe.members.filter((m) => m && typeof m.hp_pct === 'number');
+  } else {
+    // Not in a raid: the group window's bars (slots 11..15) from this character's own Zeal state.
+    const st = _zealState[ch] || _zealState[Object.keys(_zealState).find((k) => k.toLowerCase() === cl)];
+    if (st && now - (st.updatedAt || 0) < 15_000 && Array.isArray(st.gauges)) {
+      src.roster = st.gauges.filter((g) => g && g.text && g.slot >= 11 && g.slot <= 15 && typeof g.hp_pct === 'number').map((g) => ({ name: g.text, hp_pct: g.hp_pct }));
+    }
+  }
+  if (!src.perPlayer && !(src.roster && src.roster.length)) return null;
+  src.target = _zealTargetForChar(cl);
+  const cast = _lastCastRelay.get(cl);
+  if (cast && cast.spell && now - cast.at < ((Number(cast.castSecs) || 3) + 1.5) * 1000) src.casting = cast.target ? `${cast.spell} on ${cast.target}` : cast.spell;
+  // Guild trigger fires only: a personal trigger's name stays on this PC, like its relay to the bot.
+  src.fires = _fireLog.filter((f) => f.guild && now - f.at < 60_000).slice(-PARTY_MAX_FIRES);
+  return src;
+}
+function _partyStoreFile(file) {
+  return {
+    load() { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } },
+    save(o) {
+      try {
+        if (!o) { try { fs.unlinkSync(file); } catch (e) { if (!e || e.code !== 'ENOENT') throw e; } return; }
+        fs.writeFileSync(file + '.tmp', JSON.stringify({ v: 1, code: o.code, at: o.at })); fs.renameSync(file + '.tmp', file);
+      } catch (e) { void e; }
+    },
+  };
+}
+function _partyClient() {
+  if (!_partyClientInst) {
+    _partyClientInst = createPartyClient({
+      url: () => process.env.WOLFPACK_PARTY_RELAY_URL || PARTY_RELAY_URL,
+      getToken: () => _mimicSessionToken || '', getCharacter: _partyCharacter, blocked: _partyBlocked, collect: _partyCollect,
+      version: AGENT_VERSION, store: _partyStoreFile(_partyFile), log: (m) => console.log(m),
+    });
+  }
+  return _partyClientInst;
+}
+// The boot hook (main): a party remembered from before an agent restart rejoins by itself; otherwise the client does not exist.
+function _partyBoot() { if (_partyStoreFile(_partyFile).load()) _partyClient().resume(); }
+// null when there is no party, else the status plus the merged view for the DPS HUD (/api/state, GET /api/party).
+function _partyStateForDashboard() {
+  if (!_partyClientInst) return null;
+  const st = _partyClientInst.status();
+  if (st.status === 'off' && !st.error) return null;
+  return { ...st, ..._partyClientInst.view() };
+}
+// Returns true when it answered. Called from the dashboard router, after the local guard.
+async function _partyRoute(req, res) {
+  const url = req && req.url;
+  if (!url || url.split('?')[0] !== '/api/party') return false;
+  const send = (status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); return true; };
+  if (req.method === 'GET') return send(200, { ok: true, ...(_partyClientInst ? _partyClientInst.status() : { status: 'off' }), ...(_partyClientInst ? _partyClientInst.view() : null) });
+  if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return send(405, { error: 'method not allowed' }); }
+  let body = {};
+  try { const raw = await _readBody(req, 2 * 1024); if (raw && raw.trim()) body = JSON.parse(raw); } catch { return send(400, { error: 'invalid json' }); }
+  const act = body && body.action;
+  if (act !== 'create' && act !== 'join' && act !== 'leave') return send(400, { error: 'action must be create, join or leave' });
+  const c = _partyClient();
+  const r = act === 'leave' ? c.leave() : act === 'create' ? c.create() : c.join(body.code);
+  if (!r.ok) return send(400, { ok: false, error: r.error, reason: r.reason || null });
+  _stateJsonCache = { at: 0, body: null };      // the dashboard's next poll sees the new state, not the 400 ms copy
+  return send(200, { ok: true, ...c.status(), ...c.view() });
+}
+
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
+  // Raid Mimic party (2026-11-15): see the block above module.exports.
+  MiniWebSocket, createPartyClient, partyBuildPub, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
+  _partyResetForTest: () => { if (_partyClientInst) _partyClientInst.destroy(); _partyClientInst = null; },
+  _partySetFileForTest: (f) => { _partyFile = f || PARTY_FILE; },
+  _partyCharacterForTest: (c) => { _partyCharacterOverride = c || null; },
+  _setMimicSessionForTest: (t) => { _mimicSessionToken = t || ''; },
+  PARTY_FATAL, PARTY_BACKOFF_MS, PARTY_MAX_ROWS,
   // Rebuild from my logs (2026-10-21): see the block above module.exports.
   _rebuildStart, _rebuildStop, _rebuildStatus, _rebuildRaids, _rebuildScheduleMatch, _rebuildDkpPass, _rebuildDkpMode, _localBackfillRoute,
   _rebuildStartRequest, _rebuildSetCandidatesForTest, _rebuildResetForTest, _rebuildWait: () => _rb.promise,
