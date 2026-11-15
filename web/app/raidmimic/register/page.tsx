@@ -43,16 +43,15 @@ export default function RaidmimicRegisterPage() {
         <p className="text-xs uppercase tracking-widest text-gold">Raid Mimic</p>
         <h1 className="mt-1 text-3xl leading-tight text-text">Register your guild</h1>
         <p className="mt-3 max-w-[60ch] text-sm leading-6 text-text">
-          Tell us about your raid and we will count your guild in. There is no sign-in and no account, and nothing is sent
-          to your guild. Only the guild name is required.
+          No sign-in. Only the guild name is required.
         </p>
       </header>
 
       <RegisterForm downloadHref={RELEASES_URL} setupHref={setup} />
 
       <p className="mt-6 text-xs leading-6 text-dim">
-        We keep what you type here, and a scrambled one-way form of your network address for one day, used only to limit how
-        often one person can send. Links, email addresses and anything that looks like a password are removed before saving.{' '}
+        We keep what you type, plus a one-way scramble of your network address for one day to limit spam. Links, emails and
+        anything that looks like a password are removed before saving.{' '}
         <a href={landing}>Back to Raid Mimic</a>
       </p>
     </div>

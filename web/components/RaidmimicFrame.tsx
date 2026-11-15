@@ -6,6 +6,7 @@
 // Server component; its two path-aware pieces (the five top links and the section row, RaidmimicSubnav.tsx) are client. Lives in components/ because web/app/raidmimic/_landing/ is pinned to the landing page's files.
 import { Footer } from '@/app/raidmimic/_landing/Parts';
 import RaidmimicSubnav, { RaidmimicTopLinks } from '@/components/RaidmimicSubnav';
+import ShellFrame, { currentShell } from '@/components/RaidmimicShell';
 
 export function HostBar() {
   return (
@@ -34,6 +35,9 @@ export default function HostFrame({ onHost, width = 'max-w-3xl', children }: {
   onHost: boolean; width?: string; children: React.ReactNode;
 }) {
   if (!onHost) return <>{children}</>;
+  // The ?v=b|c shells (beta only; currentShell() answers `a` everywhere else): Wolf Pack's header and footer around the page.
+  const shell = currentShell();
+  if (shell !== 'a') return <ShellFrame variant={shell}>{children}</ShellFrame>;
   return (
     <div className={`mx-auto w-full ${width}`}>
       <HostBar />

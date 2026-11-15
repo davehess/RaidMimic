@@ -104,7 +104,7 @@ export default async function GuildsPage({ searchParams }: { searchParams: { fin
       <NewPageTag note="New page: the guilds you are in, and how to join or start one." href={onHost ? `${EQMIMIC_ORIGIN}/feedback` : '/feedback'} />
       <h1 className="text-2xl text-gold">Your guilds</h1>
       <p className="mt-1 text-sm text-dim">
-        Signed in with Discord. Only you can see this page.{' '}
+        Only you can see this page.{' '}
         <a href={onHost ? '#your-data' : '/me#your-data'} className="whitespace-nowrap text-blue hover:underline">Your data →</a>
       </p>
 
@@ -141,7 +141,7 @@ export default async function GuildsPage({ searchParams }: { searchParams: { fin
           <div className={CARD} aria-label="Guilds you're in on Discord">
             <h2 className="text-base text-[#f2ede1]">Guilds you&rsquo;re in on Discord</h2>
             <p className="mt-1 text-xs leading-5 text-dim">
-              These need an invite code, so you were not added. Ask an officer for an invite code, then enter it under &ldquo;Join a guild&rdquo;.
+              Ask an officer for an invite code, then use &ldquo;Join a guild&rdquo;.
             </p>
             <ul className="m-0 mt-2 list-disc space-y-1 pl-5 text-sm text-text marker:text-dim">
               {closed.map(g => <li key={g.guild_id}>{g.name}</li>)}
@@ -150,7 +150,7 @@ export default async function GuildsPage({ searchParams }: { searchParams: { fin
         )}
         {!wolf && hub.length === 0 && closed.length === 0 && (
           <p className={`${CARD} text-sm text-dim`}>
-            You are not in a guild on Raid Mimic yet. Join one with an invite code below, or find the ones you already belong to.
+            No guilds yet.
           </p>
         )}
       </section>
@@ -158,7 +158,7 @@ export default async function GuildsPage({ searchParams }: { searchParams: { fin
       <section aria-label="Add a guild" className="mt-6 grid gap-3 sm:grid-cols-3">
         <div className={CARD}>
           <h2 className="text-base text-[#f2ede1]">Join a guild</h2>
-          <p className="mt-1 text-xs leading-5 text-dim">Your guild&rsquo;s officer gives you a six-character code.</p>
+          <p className="mt-1 text-xs leading-5 text-dim">Six-character code from an officer.</p>
           <JoinForm />
         </div>
 
@@ -167,8 +167,7 @@ export default async function GuildsPage({ searchParams }: { searchParams: { fin
           {onHost ? (
             <>
               <p className="mt-1 text-xs leading-5 text-dim">
-                Asks Discord once for the list of servers you are in, adds you to the ones that are guilds here, and
-                keeps nothing else. Optional: an invite code works without it.
+                Asks Discord once for your servers and keeps nothing else. Optional.
               </p>
               <div className="mt-3"><SignInButton next="/guilds" flow="guilds" label="Find my guilds" /></div>
             </>
@@ -182,7 +181,7 @@ export default async function GuildsPage({ searchParams }: { searchParams: { fin
 
         <div className={CARD}>
           <h2 className="text-base text-[#f2ede1]">Start a guild</h2>
-          <p className="mt-1 text-xs leading-5 text-dim">Name it, pick its address, and invite your raiders with codes. You become its owner.</p>
+          <p className="mt-1 text-xs leading-5 text-dim">You become its owner and invite raiders with codes.</p>
           <p className="mt-2"><a href="/guilds/new" className={LINK}>Start a guild →</a></p>
         </div>
       </section>
