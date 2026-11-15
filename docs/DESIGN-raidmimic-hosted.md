@@ -430,6 +430,7 @@ below is checked against what it costs, measured on 2026-11-02 (whole-history ta
 | A Raid Mimic bot in the guild's own Discord (timers, raid cards, role wizard) | bot compute and its connection per server | today's one bot ≈ $2 a month; per-guild bots cost more | Pro · Guild |
 | Cloud backups of a player's UI and layouts | storage per player | 10 MB today, grows per player | Pro · Individual |
 | Anything a page or overlay reads from us every few seconds | egress (Supabase bills reads, not writes) | not measurable from here (dashboard only) | Pro |
+| Live party view: every member's numbers merged and pushed every 2 s (`DESIGN-raidmimic-relay.md`) | relay compute and egress, in memory only; roster/HP and trigger fires are free for up to 6 | ~cents a night for one party, ~$3-5 a month for 10, ~$50-90 a month for 100 full parties (estimate, unmeasured) | Pro (trial 14 days) |
 
 Consequences: free syncing must send flags and kills ONLY (the server enforces it, so a free player's agent cannot fill the
 fight-feed tables); the Free tile's "your own parses" means the meter on the player's PC, and a parse uploaded to us is a

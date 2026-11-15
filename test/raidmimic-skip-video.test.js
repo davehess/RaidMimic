@@ -36,7 +36,9 @@ describe('the page: signed out gets the stage, signed in gets the panel', () => 
   it('reads no query at all, and no variant or redirect survives', () => {
     expect(page).not.toMatch(/searchParams|\bv === |\?v=|redirect\(|bigSkip/);
     expect(page).toMatch(/export default async function RaidmimicPage\(\)/);
-    expect(chars).not.toMatch(/searchParams|doorway|rewatch|\?v=/i);
+    // /characters reads ONE query, the matrix's gate picker (?gate=); no variant switch
+    expect(chars.replace(/searchParams\?\.gate/g, '').replace(/\{ searchParams \}: \{ searchParams\?: \{ gate\?: string \} \}/, '')).not.toMatch(/searchParams|doorway|rewatch|\?v=/i);
+    expect(chars).toMatch(/gateKeyOr\(searchParams\?\.gate\)/);
     expect(chars).toMatch(/from '@\/lib\/hubMine'/);
     expect(chars).not.toMatch(/from\('hub_characters'\)/);
     expect(chars).toMatch(/<h1 className="text-2xl text-gold">/);

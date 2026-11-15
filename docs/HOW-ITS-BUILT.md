@@ -104,6 +104,21 @@ writes.
   `handleRequest`) writes `hub_flags` and `hub_characters` (migration `20261102210000_hub_sync.sql`, RLS on, no policies);
   dispatched from `_handleAgentPopFlags` before any Wolf Pack write. `web/lib/mimicLinkHub.ts` lets any raidmimic.com player
   claim a player code. `test/hub-sync.test.js`, `test/mimic-link-hub.test.js`.
+- **My raids, `https://raidmimic.com/raids` (web 2.1.146, `[beta]`).** A player's own guild list (`hub_player_guilds`, up to 10: a registered
+  `hub_guilds` row or a typed name, raid days/start/length/zone, or "use the guild's schedule" from `guild_settings`), the next 14 days of raids
+  with a target (the player's own pick in `hub_player_targets`, or one the guild posted in `flag_events`, which wins) and each linked character's
+  ready / needs / not sure (`flagEventNeeds.ts` over `popGateStatus.ts`), and `?view=calendar`. Schedule maths is `guildSettings.ts windowsAround`;
+  rules in `web/lib/myRaids.ts`, player-scoped writes in `myRaidsWrite.ts`, forms in `web/app/raids/`. `test/my-raids.test.js`.
+- **My characters, `https://raidmimic.com/characters` (web 2.1.144 on `main`, `[beta]`; DECISIONS §545).** Three ways in, one path:
+  drop Zeal's `<Name>-PoPFlags.txt` files (`UploadForm.tsx` → `importCharacters`), or paste the `#popflags` lines, a file's text
+  or the Seer's words with a name (`PasteForm.tsx` → `importPaste`; `pasteToFile` in `web/lib/hubImport.ts`: 64 KB / 800 line caps
+  and the NUL check BEFORE parsing, header name must match the field, only catalog keys stored, unrecognised lines only counted).
+  Both go through `importExports` (50-character and 50-file caps, `hubClaim.ts`, dedupe; `normalizeText` first: curly quotes, NBSP, dashes, zero-width) and the two-layer limiter: in-memory 10 per 10 min, then
+  `hub_import_attempts` (20 an hour per player, `web/lib/hubImportLimit.ts`, fails OPEN; migration `20261115120000`, pruned at 1 day
+  by the bot's midnight chain). Each card shows Needs next, a "Can enter" zone list (`zoneEntry` in `hubCharactersView.ts`, from
+  `zoneAccess` / `missingFor` over `heldClosure`), the flags it has, and "Remove this character" (`removeCharacter`). Above the cards, the demo's `GateTable` draws the flag matrix from the
+  player's real flags (`matrixRows`: most flags first, ties by name; `?gate=` picks the gate). The signed-out
+  landing carries a "Track your PoP flags" button. `test/hub-characters-import.test.js`, `test/hub-characters-paste.test.js`.
 - **Flag events board, `/pop/flag-events` (web 2.1.99 on `main`, `[beta]`, 2026-11-02; DECISIONS §522 pick A).** Officers post
   a target (catalog `web/lib/flagTargets.ts`, 12 targets, each a set of gate pieces from `popGatePieces.ts`; the demo shares it)
   and an Eastern date/time, an optional note and an optional Raid-Helper event (`actions.ts`: session + `isOfficer` re-checked,
@@ -3350,6 +3365,13 @@ Records only opted-in members (`/bristlebane optin|optout|forget|status`) as `<n
 .opusraw` (`[u32 arrival_ms][u16 len][opus]`) + `session.json` under `/data/recordings`; consent in
 `/data/consent.json`. Ogg conversion is still a README TODO. Tests: `test/bristlebane.test.js`,
 `test/raid-live.test.js`.
+
+### Raid Mimic party relay — live party view (relay 1.0.0, not deployed)
+`apps/raidmimic-relay/` (`index.js` = sockets, `lib.js` = validation, tier rule, per-player MAX merge, `Party`, session cache).
+WebSocket `/v1/party`; the first message carries a Mimic session token, resolved through the anon-key RPC
+`relay_resolve_session` (migration `20261115150000_raidmimic_relay.sql`; the relay never holds the service-role key). Parties live
+in memory only. Free: 6 members, roster/HP + trigger fires; trial/pro: 72 members, every stream, 10-minute history. Design:
+`docs/DESIGN-raidmimic-relay.md`. Test: `test/raidmimic-relay.test.js`. No Mimic client yet.
 
 ### Raid-night appearance (bot 3.1.208, §166)
 `utils/raidAppearance.js` `noteMinute()` is called by `raidTrack._writeMinute` after a minute row lands:

@@ -22,6 +22,12 @@ export default function HomeDashboard({ name, avatarUrl, mine, guilds, downloadU
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className={`${CARD} md:col-span-3`} data-card="raids">
+          <h2 className="m-0 text-base text-text">{W.raids}</h2>
+          <p className="mt-2 text-sm text-dim">{W.raidsBlurb}</p>
+          <p className="mt-3"><a href="/raids" className={BTN}>{W.raidsButton}</a></p>
+        </div>
+
         <div className={CARD} data-card="characters">
           <h2 className="m-0 text-base text-text">{W.characters}</h2>
           {mine.length === 0 ? (

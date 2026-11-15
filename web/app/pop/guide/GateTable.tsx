@@ -43,7 +43,9 @@ export default function GateTable({ gates, selected, rows, hrefFor, singleHref, 
       {rows.length === 0 ? (
         <p className="text-sm text-dim">No characters to show yet.</p>
       ) : (
-        <div className="overflow-x-auto -mx-3 px-3 pb-1">
+        // No side padding on the scroller: the sticky name column sticks at the scroller's edge, and padding there let
+        // the scrolling cells show to its left (the guild lead's phone, 2026-11-15).
+        <div className="overflow-x-auto pb-1">
           <table className="border-collapse text-[11px] min-w-max">
             <thead>
               <tr>
@@ -71,12 +73,37 @@ export default function GateTable({ gates, selected, rows, hrefFor, singleHref, 
                   {r.pieces.map(p => {
                     const ui = STATE_UI[p.state];
                     const why = p.state === 'missing' ? `needs ${p.needs}` : p.detail;
-                    return (
-                      <td key={p.key} className="px-2 py-1.5 align-top" title={`${ui.word}${why ? `: ${why}` : ''}`}>
+                    const mark = (
+                      <>
                         <span aria-hidden className={ui.cls}>{ui.icon}</span>
                         <span className={`block text-[10px] ${ui.cls}`}>
                           {p.state === 'pending' ? 'Seer' : p.killOnly ? 'kill only' : ui.word}
                         </span>
+                      </>
+                    );
+                    if (p.state === 'done') {
+                      return <td key={p.key} className="px-2 py-1.5 align-top" title={ui.word}>{mark}</td>;
+                    }
+                    // Not done: tap the mark to see the steps behind it (the guild lead, 2026-11-15).
+                    return (
+                      <td key={p.key} className="px-2 py-1.5 align-top">
+                        <details>
+                          <summary className="cursor-pointer list-none" title={`${ui.word}${why ? `: ${why}` : ''}`}>{mark}</summary>
+                          <div className="mt-1 w-[13rem] whitespace-normal rounded border border-border bg-bg p-2 text-[11px] text-text">
+                            <p>Needs {p.needs}{p.to ? ` (${p.to})` : ''}.</p>
+                            {p.detail && <p className="text-dim">{p.detail}</p>}
+                            {p.steps && p.steps.length > 0 && (
+                              <ol className="mt-1 flex flex-col gap-0.5">
+                                {p.steps.map((s, i) => (
+                                  <li key={i} className={s.done ? 'text-dim line-through' : ''}>
+                                    {s.done ? '✓' : `${i + 1}.`} {s.label}{s.where ? ` (${s.where})` : ''}
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                            {p.note && <p className="mt-1 text-dim">{p.note}</p>}
+                          </div>
+                        </details>
                       </td>
                     );
                   })}

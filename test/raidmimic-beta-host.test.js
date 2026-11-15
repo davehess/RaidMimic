@@ -85,7 +85,7 @@ describe('the middleware serves it like a raidmimic host', () => {
   }
   it('/ and anything else -> the landing page, /setup and /register -> their pages, /robots.txt -> the robots file; query dropped', async () => {
     for (const [u, p] of [
-      ['https://b.raidmimic.com/?v=b', '/raidmimic'], ['https://b.raidmimic.com/me?x=1', '/raidmimic'],
+      ['https://b.raidmimic.com/?x=b', '/raidmimic'], ['https://b.raidmimic.com/me?x=1', '/raidmimic'],
       ['https://b.raidmimic.com/setup?x=1', '/raidmimic/setup'], ['https://b.raidmimic.com/register?x=1', '/raidmimic/register'],
       ['https://b.raidmimic.com/robots.txt', '/raidmimic/robots.txt'],
     ]) {
@@ -94,6 +94,12 @@ describe('the middleware serves it like a raidmimic host', () => {
       expect(to.search, u).toBe('');
     }
     expect(raidmimicLandingTarget('/register').pathname).toBe('/raidmimic/register');
+  });
+  it('the landing keeps ?v=a|b|c on the beta host only (the player-first drafts); any other value is dropped', async () => {
+    expect((await run('https://b.raidmimic.com/?v=b')).search).toBe('?v=b');
+    expect((await run('https://b.raidmimic.com/?v=zzz')).search).toBe('');
+    expect((await run('https://b.raidmimic.com/setup?v=b')).search).toBe('');
+    expect((await run('https://raidmimic.com/?v=b')).search).toBe('');
   });
   it('the layout gives it the bare shell through the same helper (no second host list anywhere)', () => {
     expect(code('web/app/layout.tsx')).toMatch(/isRaidmimicHost\(headers\(\)\.get\('host'\)\)/);
