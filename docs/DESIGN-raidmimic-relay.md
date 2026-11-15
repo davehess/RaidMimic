@@ -1,6 +1,6 @@
 # DESIGN — the Raid Mimic party relay (live party view)
 
-*2026-11-15. First draft, built (`apps/raidmimic-relay/`) and NOT deployed. The Mimic client is not written.*
+*2026-11-15. Built (`apps/raidmimic-relay/`) and live. The Mimic / agent client is built on `beta` (agent 4.0.87): see "The Mimic client" below.*
 
 ## What it is
 
@@ -83,8 +83,44 @@ order of 1-2 GB per raid night; a 6-member free party is a rounding error. CPU i
 
 Measure the first real raid night (the `/health` counts plus Railway's metrics) and replace these numbers.
 
+## The Mimic client (agent 4.0.87, 2026-11-15)
+
+Built in `packages/wolfpack-logsync/index.js` (block "Raid Mimic party"), the DPS HUD (`apps/mimic/overlay.html`) and the dashboard
+(`dashboard.html`). The relay is at `wss://raidmimic-relay-production.up.railway.app/v1/party` (`WOLFPACK_PARTY_RELAY_URL` overrides it).
+
+- **WebSocket.** The agent is zero-dependency and runs under Electron's Node 20 (no global `WebSocket` without a flag), a member's own
+  Node 18+ (`Parser.bat`) and Node 16 (the Windows 7 build), so it carries a small RFC 6455 client over `tls`/`net` rather than
+  depending on a runtime that may not have one: the upgrade and its accept-key check, masked text frames out, text frames in
+  (fragmented messages joined), ping answered with pong, close echoed, a 1 MB message cap, and permessage-deflate offered with
+  `client_no_context_takeover; server_no_context_takeover` (each message inflates on its own; ⚠ a sync-flushed message needs
+  `finishFlush: Z_SYNC_FLUSH`, without which zlib calls every compressed view truncated). The relay compresses views over 512 bytes, so a
+  real party's view is always compressed.
+- **Auth.** The Mimic session token (`wpms_` + 64 hex), the one already forwarded to the bot, not the shared agent token. No session:
+  the card says to sign in and nothing connects.
+- **What it sends** (`pub`, every 2 s while joined): `perPlayer` from the live (or just-ended, 2-minute) threat snapshot as `dmg`,
+  `heal` (raw healing), `took`, `threat` (the weighted total); `target` and `casting` (the character's own target and its cast in
+  flight); `roster` (the Zeal raid list, else the group bars) with HP %; `fires` (guild trigger fires of the last minute: a personal
+  trigger's name stays on the PC). Nothing is sent unless there is a fight or a fresh roster. `partyBuildPub` is the one place frames
+  are made: the relay drops a WHOLE frame for one bad name or number, so a pet's "a skeleton" leaves the map, numbers clamp to
+  0..1e12, text is cut to 120 characters without control characters, rows are the 80 highest by damage, fires the newest 20, and the
+  test runs the result through the relay's own `validatePub`.
+- **Lifecycle.** `create` sends `create:true`; the welcome's code becomes the thing a reconnect JOINS, so a dropped socket can never
+  mint a second party. Backoff 1, 2, 5, 10, 20, 30, 60 s (+ up to 20% jitter; `slow_down` waits at least 30 s) and resets on a welcome.
+  `replaced`, `party_full`, `unknown_session`, `bad_token`, `bad_character`, `bad_party` and `no_party` end it with a plain message and
+  no retry. A socket silent for 15 s (views arrive every 2 s) is dropped and rejoined. The code is kept 4 h in `logsync.party.json`
+  so an agent restart rejoins; leaving or an ending error deletes it.
+- **Stand-down** (the socket closes, the code stays, it resumes by itself): dry-run, no Mimic sign-in, `shouldUploadForCharacter`
+  false (exclude_from_stats, a guest, another server), `_controlStandDown` (fleet kill switch, version floor).
+- **Surfaces.** `GET /api/party` (status, code, members, tier, trial_ends_at, stale, error, and the merged `players` / `roster` /
+  `fires` / `target` / `casting`), `POST /api/party {action: create|join|leave, code?}`, `partyView` on `/api/state`. Dashboard card on the
+  Logsync tab; the tray's "Raid Mimic party…" and Settings' "Open the party card…" open it (tray ↔ dashboard parity); the tray shows the
+  code and Leave while in a party. The DPS HUD's **Party** switch (shown only while a party exists) swaps the board's rows for the merged
+  ones, DPS and Tank (Tank reads merged `took`), each with a freshness dot in three buckets so the rows stay byte-stable; with no party
+  it is ignored and the board stays the machine's own. No new overlay window. The tier shows only as "Pro" or "Pro trial · N days left".
+- **Not in the client yet:** the `history` request (hosted replays are the paid part), a trial-ending notice, and the party's target /
+  casting / fires on the HUD (they are in `partyView` for the next overlay to use).
+
 ## Not built
 
-The Mimic side (the overlay, the Settings card that creates and joins a party, the reconnect loop), the Railway project and its
-domain, applying the migration, and a way for an operator to grant `plan = 'pro'` (today: a service-role insert into
-`hub_player_entitlements`).
+The Railway project's own domain beyond the default, applying the migration if not yet applied, and a way for an operator to grant
+`plan = 'pro'` (today: a service-role insert into `hub_player_entitlements`).

@@ -50,6 +50,7 @@ export function Footer({ onHost = false }: { onHost?: boolean }) {
         <a href={REPO_URL} {...EXT}>Source code</a> <span aria-hidden>&middot;</span>{' '}
         <LegalLinks onHost={onHost} /> <span aria-hidden>&middot;</span>{' '}
         <a href={EQMIMIC_ORIGIN} {...EXT}>The free player tool</a> <span aria-hidden>&middot;</span>{' '}
+        <a href="/costs">What it costs to run</a> <span aria-hidden>&middot;</span>{' '}
         Licensed AGPL-3.0-or-later.
       </p>
     </footer>
