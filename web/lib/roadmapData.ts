@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-characters-overall-2026-11-15',
+    title: 'Every gate at a glance',
+    version: 'Web 2.2.2',
+    date: '2026-11-15',
+    headline: 'My characters on raidmimic.com opens on an overview of every character across every gate, and loading is one tidy line.',
+    features: [
+      { name: 'Overall first', blurb: 'One row per character, most flags first, with how much of each gate is done. Tap a count to open that gate.' },
+      { name: 'Smaller load box', blurb: 'Choose your files, or type a character name and paste the lines. The how-to folds away until you want it.' },
+      { name: 'Your flags stay yours', blurb: 'Whatever you load is kept under your own Discord login. Someone else loading the same name never changes yours, and officers can see names claimed twice.' },
+      { name: 'Security page', blurb: 'raidmimic.com/security explains, in plain words, how your sign-in, your files and your data are kept safe.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'raidmimic-open-2026-11-15',
     title: 'Raid Mimic for every player',
     version: 'Web 2.2.0 · Bot 4.1.0',

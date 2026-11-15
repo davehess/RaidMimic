@@ -93,7 +93,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // /admin/settings forwards to /guilds/<this guild>/settings, the page every hosted guild's officers get (web 2.1.133, DECISIONS §569).
       { links: [{ href: '/admin/theme', label: 'Theme' }, { href: '/admin/settings', label: 'Guild settings' }] },
       { links: [{ href: '/admin/access' }] },
-      { links: [{ href: '/admin/flag-lab' }] },
+      { links: [{ href: '/admin/flag-lab' }, { href: '/admin/hub-conflicts', label: 'Contested names' }] },
     ],
     elsewhere: [
       { href: '/who', label: 'Who' },
