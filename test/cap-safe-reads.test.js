@@ -656,9 +656,21 @@ describe('8c · catalogs read whole, and a failed page is never cached as the ca
       const worn = [{ item_id: 8364, item_name: 'Talisman of Vah Kerrath', ds: 8 }, { item_id: 15805, item_name: 'Shroud of Eternity', ds: 5 }];
       fake = installFakePostgrest({ tables: { eqemu_items: items(), item_worn_damage_shield: worn } });
       const body = JSON.parse((await get(load().handler)).body);
-      expect(body.version).toBe(3);
+      expect(body.version).toBe(4);
       expect(body.worn_ds).toEqual([{ id: 8364, name: 'Talisman of Vah Kerrath', ds: 8 }, { id: 15805, name: 'Shroud of Eternity', ds: 5 }]);
       expect(body.entries.some(e => e.name === 'Talisman of Vah Kerrath')).toBe(false);
+    });
+
+    it('carries the duration-focus items as their own list; an unread view is null, not an empty list (the agent then knows its foci are unknown)', async () => {
+      const foci = [{ item_id: 4001, spell_id: 2217, pct: 15, max_level: 16, type_limit: 1, min_ticks: 8 }, { item_id: 4002, spell_id: 3106, pct: 15, max_level: 65, type_limit: null, min_ticks: 4 }];
+      fake = installFakePostgrest({ tables: { eqemu_items: items(), item_duration_focus: foci } });
+      const body = JSON.parse((await get(load().handler)).body);
+      expect(body.duration_foci).toEqual([{ id: 4001, spell: 2217, pct: 15, max_level: 16, type_limit: 1, min_ticks: 8 }, { id: 4002, spell: 3106, pct: 15, max_level: 65, type_limit: null, min_ticks: 4 }]);
+      fake = installFakePostgrest({ tables: { eqemu_items: items(), item_duration_focus: foci } });
+      fake.failWhen = ({ table }) => table === 'item_duration_focus';
+      const r = await get(load().handler);
+      expect(r.status).toBe(200);
+      expect(JSON.parse(r.body).duration_foci).toBeNull();
     });
 
     it('a failed worn-shield read still serves the clickies, with an empty worn list', async () => {

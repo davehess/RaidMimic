@@ -67,6 +67,7 @@ function fixtureTables() {
     item_catalog_droppable: Array.from({ length: DROPPABLE }, (_, i) => ({ item_id: 100 + i, item_name: `Drop ${i}`, era: i % 3 })),
     item_worn_damage_shield: [{ item_id: 8364, item_name: 'Talisman of Nothing', ds: 8 }],
     item_worn_haste: [{ item_id: 7101, item_name: 'Gauntlets of Nothing', haste: 28 }],
+    item_duration_focus: [{ item_id: 7102, spell_id: 2217, pct: 15, max_level: 16, type_limit: 1, min_ticks: 8 }],
     scripted_npc_turnins: [
       { id: 1, zone_short: 'poair', npc_name: 'Advocent Joran', npc_id: 215002, script_path: 'poair/Advocent_Joran.lua', script_lang: 'lua',
         inputs: [{ item_id: 1, qty: 1 }], outputs: [{ item_id: 2, kind: 'fixed' }], faction_changes: null, cash: null, exp_award: null,
