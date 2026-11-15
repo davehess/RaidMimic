@@ -21,8 +21,14 @@ const MAX_FIRES_PER_FRAME = 20;
 const MAX_TEXT = 120;
 const MAX_NUMBER = 1e12;
 
-const FREE_MEMBER_CAP = 6;
+// Live merging is free for everyone and funded by donations (the guild lead, 2026-11-15, DECISIONS §588: "same day
+// overlay data merging is done on the new bot, donation based up front. the hosted replays are the main point to
+// charge for"). So a free party gets every stream and the full size. Set LIVE_MERGE_FREE to false to bring back the
+// first draft's limits (6 members, roster and trigger fires only) without touching the rest.
+const LIVE_MERGE_FREE = true;
+const limited = (tier) => tier === 'free' && !LIVE_MERGE_FREE;
 const PAID_MEMBER_CAP = 72;
+const FREE_MEMBER_CAP = LIVE_MERGE_FREE ? PAID_MEMBER_CAP : 6;
 const MAX_CLIENTS = 2000;
 
 const PARTY_GRACE_MS = 15 * 60 * 1000;      // a party dies this long after its last member leaves
@@ -187,7 +193,7 @@ class Party {
     if (!m) return false;
     if (m.lastPubAt && now - m.lastPubAt < MIN_PUB_GAP_MS) return false;
     m.lastPubAt = now;
-    const full = this.tier(now) !== 'free';
+    const full = !limited(this.tier(now));
     m.pub = full ? pub : { perPlayer: new Map(), target: null, casting: null, roster: pub.roster, fires: pub.fires };
     m.pubAt = now;
     for (const f of pub.fires) {
@@ -245,17 +251,17 @@ class Party {
     }
     return {
       type: 'view', party: this.code, tier, trial_ends_at: trialEndsAt, members: this.members.size,
-      players: tier === 'free' ? [] : m.players.map((p) => ({ name: p.name, dmg: p.dmg, heal: p.heal, took: p.took, threat: p.threat, age_ms: p.age })),
+      players: limited(tier) ? [] : m.players.map((p) => ({ name: p.name, dmg: p.dmg, heal: p.heal, took: p.took, threat: p.threat, age_ms: p.age })),
       roster: m.roster,
       fires: this.fires.slice(-FIRES_IN_VIEW),
-      ...(tier === 'free' ? {} : { target: m.target, casting: m.casting }),
+      ...(limited(tier) ? {} : { target: m.target, casting: m.casting }),
       stale: m.stale,
     };
   }
 
   // Once per HISTORY_STEP_MS, keep the merged players (paid parties only: free has no per-player numbers).
   sampleHistory(now) {
-    if (now - this.lastHistoryAt < HISTORY_STEP_MS || this.tier(now) === 'free') return false;
+    if (now - this.lastHistoryAt < HISTORY_STEP_MS || limited(this.tier(now))) return false;
     const m = this.merged(now);
     if (m.stale || !m.players.length) return false;
     this.lastHistoryAt = now;

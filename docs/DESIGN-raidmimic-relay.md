@@ -52,15 +52,12 @@ A player's tier (the SQL in `20261115150000_raidmimic_relay.sql`; the same rule 
 
 A **party** is as good as its best member: one Pro member lifts everyone.
 
-| | Free | Trial / Pro |
-|---|---|---|
-| Members | 6 | 72 |
-| Streams | roster/HP and trigger fires | every stream (per-player numbers, target, casting) |
-| History | no | last 10 minutes |
-
-A Pro joiner can enter a full free party (the tier is judged with them in). If the Pro member then leaves, nobody is removed: the party
-simply drops back to the free streams and takes no new members past 6. A trial that ends while a socket is open counts as free from
-that moment. A guild or plan change takes effect at the next reconnect or after the 5-minute resolve cache.
+**Live merging is free for everyone (the guild lead, 2026-11-15, DECISIONS §588)**: *"same day overlay data merging is done on
+the new bot, donation based up front. the hosted replays are the main point to charge for."* Every party gets 72 members, every
+stream and the 10-minute history, whatever its tier. The tier is still resolved and sent in each view (it will matter for hosted
+replays and a supporter tag); `LIVE_MERGE_FREE` in `lib.js` brings back the first draft's limits (free: 6 members, roster/HP
+and trigger fires only) if that call is ever reversed. A party still starts its creator's one 14-day trial; that trial now
+belongs to the hosted-replay plan, not to the relay.
 
 ## Operations
 

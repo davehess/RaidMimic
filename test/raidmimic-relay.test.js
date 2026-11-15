@@ -180,28 +180,25 @@ describe('tiers and caps', () => {
     expect(lib.memberTier({ tier: 'trial', trialEndsAt: ends }, T0)).toBe('trial');
     expect(lib.memberTier({ tier: 'trial', trialEndsAt: ends }, T0 + 2000)).toBe('free');
   });
-  it('a free party caps at 6 members; trial and pro at 72', () => {
+  // Live merging is free for everyone (DECISIONS §588): a free party has the full size and every stream.
+  it('a free party takes up to 72 members, like any other', () => {
     const p = new lib.Party('ABC234', T0);
-    for (let i = 0; i < 6; i++) { expect(p.canJoin(member('m' + i, 'free'), T0)).toBe(true); p.add(member('m' + i, 'free')); }
-    expect(p.canJoin(member('m7', 'free'), T0)).toBe(false);
-    expect(p.canJoin(member('m7', 'trial', { trialEndsAt: new Date(T0 + 1e6).toISOString() }), T0)).toBe(true);   // a trial joiner lifts the cap
-    const q = new lib.Party('XYZ234', T0);
-    for (let i = 0; i < 72; i++) q.add(member('p' + i, 'pro'));
-    expect(q.canJoin(member('p73', 'pro'), T0)).toBe(false);
-    expect(lib.capForTier('free')).toBe(6);
+    for (let i = 0; i < 72; i++) { expect(p.canJoin(member('m' + i, 'free'), T0)).toBe(true); p.add(member('m' + i, 'free')); }
+    expect(p.canJoin(member('m73', 'free'), T0)).toBe(false);
+    expect(lib.capForTier('free')).toBe(72);
     expect(lib.capForTier('trial')).toBe(72);
   });
-  it('a free party gets only roster/HP and fires; per-player numbers, target and casting are withheld', () => {
+  it('a free party gets every stream: per-player numbers, target, casting and history', () => {
     const p = new lib.Party('ABC234', T0);
     p.add(member('a', 'free'));
     p.ingest('a', pub({ Aldenmar: { dmg: 99 } }, { target: 'a gnoll', casting: 'Heal', roster: [{ name: 'Aldenmar', hp: 50 }], fires: [{ text: 'Mez', at: T0 }] }), T0);
     const v = p.view(T0 + 1);
     expect(v.tier).toBe('free');
-    expect(v.players).toEqual([]);
-    expect(v).not.toHaveProperty('target');
+    expect(v.players[0].dmg).toBe(99);
+    expect(v.target).toBe('a gnoll');
     expect(v.roster).toEqual([{ name: 'Aldenmar', hp: 50 }]);
     expect(v.fires).toHaveLength(1);
-    expect(p.sampleHistory(T0 + 20000)).toBe(false);
+    expect(p.sampleHistory(T0 + 1)).toBe(true);   // a fresh sample is kept for a free party too
   });
   it('one paid member lifts the whole party to every stream', () => {
     const p = new lib.Party('ABC234', T0);
@@ -470,21 +467,21 @@ e2e('end to end', () => {
     expect(JSON.stringify(a.inbox)).not.toContain('garbage');
   });
 
-  it('refuses a free party its 7th member and a second connection of the same character replaces the first', async () => {
+  it('lets a free party past 6 members and a second connection of the same character replaces the first', async () => {
     const port = await boot();
     identities[TOKEN('f')] = { player_id: 'pf', tier: 'free', trial_ends_at: new Date(Date.now() - 1000).toISOString() };   // a used-up trial: stays free
     const first = client(port); await first.opened;
     hello(first, { token: TOKEN('f'), create: true, character: 'Aldenmar' });
     const { party } = await next(first, 'welcome');
     expect(trials).toHaveLength(0);
-    // five more distinct characters on one free player join, filling the cap of 6
+    // five more distinct characters on one free player join, then a seventh: live merging has no free cap (§588)
     const extra = [];
     for (const n of ['Brackwyn', 'Corvale', 'Rethlan', 'Nyssara', 'Zarrin']) {
       const c = client(port); await c.opened; hello(c, { token: TOKEN('f'), party, character: n }); await next(c, 'welcome'); extra.push(c);
     }
     const seventh = client(port); await seventh.opened;
     hello(seventh, { token: TOKEN('f'), party, character: 'Eldrith' });
-    expect((await next(seventh, 'error')).code).toBe('party_full');
+    await next(seventh, 'welcome');
     const again = client(port); await again.opened;
     hello(again, { token: TOKEN('f'), party, character: 'Aldenmar' });
     await next(again, 'welcome');
