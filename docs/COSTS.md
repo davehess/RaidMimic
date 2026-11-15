@@ -63,6 +63,11 @@ because it consumes $5.
 Worth stating plainly when someone asks: **the bot is cheap to run.** What costs
 money is the database, and what costs the most is time.
 
+⚠ **Corrected 2026-11-15 (the guild lead: "vercel isn't free"):** Vercel is a paid plan, not Hobby; the costs page
+(https://raidmimic.com/costs, `web/lib/runningCosts.ts`) shows $20 a month (Pro). The plan line in the table above and the
+section below predate that; the Vercel MCP does not report the plan, so confirm the exact plan and seat count in the
+dashboard and correct both.
+
 ### Vercel — genuinely free, and that is conditional
 The web app runs on Hobby, which is $0. ⚠ **Hobby is non-commercial under
 Vercel's terms.** A guild site qualifies. It keeps qualifying under a donation
