@@ -10,7 +10,7 @@ import HostFrame from '@/components/RaidmimicFrame';
 import { bill, donationLine, knownMonthly, KOFI_URL, measuredAt, recapSize, replayParts, replaySize } from '@/lib/runningCosts';
 
 const TITLE = 'What Raid Mimic costs to run';
-const DESCRIPTION = 'What it costs to run Raid Mimic each month, what is free and why, what we will charge for (hosted replays), and how to chip in on Ko-fi.';
+const DESCRIPTION = 'What it costs to run Raid Mimic each month, what is free and why, what we will charge for (hosted replays and a Discord bot), and how to chip in on Ko-fi.';
 
 export function generateMetadata(): Metadata {
   const onHost = isRaidmimicHost(headers().get('host'));
@@ -53,6 +53,7 @@ export default function CostsPage() {
                 </li>
               ))}
             </ul>
+            <p className="mb-0 mt-3"><span className="text-gold">A Raid Mimic bot in your guild&apos;s Discord.</span> Timers, raid cards and the rest in your own server: a bot connected all the time costs us server time every month.</p>
             <p className="mb-0 mt-3 text-xs text-dim">The price and how it is taken are not decided yet. Until then, nothing is charged.</p>
           </div>
         </section>
