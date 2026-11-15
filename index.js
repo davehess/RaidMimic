@@ -11950,6 +11950,7 @@ async function _handleAgentItemClickies(req, res, isPublic) {
     const entries = [];
     let wornDs = [];
     let wornHaste = null;   // null = unread (an older database): the agent then knows it has no gear haste
+    let durationFoci = null;   // null = unread (view not applied yet): the agent then knows its own foci are unknown
     let failed = false;
     try {
       const supabase = require('./utils/supabase');
@@ -11983,6 +11984,11 @@ async function _handleAgentItemClickies(req, res, isPublic) {
       const wornH = await supabase.selectAllPaged('item_worn_haste', 'select=item_id,item_name,haste', 'item_id');
       if (Array.isArray(wornH)) wornHaste = wornH.map(w => ({ id: w.item_id, name: w.item_name, haste: Number(w.haste) || 0 }));
       else console.warn('[item-clickies] worn haste read failed — serving without it');
+      // Items whose FOCUS effect lengthens buffs (SPA 128; view item_duration_focus, 2026-11-15): the agent applies the best worn one
+      // to its own casts (Client::ApplyDurationFocus, zone/spell_effects.cpp:4630, EQMacEmu c2cd265). Same fail-soft as worn_haste.
+      const fociRows = await supabase.selectAllPaged('item_duration_focus', 'select=item_id,spell_id,pct,max_level,type_limit,min_ticks', 'item_id');
+      if (Array.isArray(fociRows)) durationFoci = fociRows.map(f => ({ id: f.item_id, spell: f.spell_id, pct: Number(f.pct) || 0, max_level: f.max_level == null ? null : Number(f.max_level), type_limit: f.type_limit == null ? null : Number(f.type_limit), min_ticks: f.min_ticks == null ? null : Number(f.min_ticks) }));
+      else console.warn('[item-clickies] duration focus read failed — serving without it');
     } catch (err) {
       // Column missing (migration not applied yet) or other transient failure.
       // Nothing from a failed read is cached: the last good catalog keeps serving
@@ -11993,12 +11999,13 @@ async function _handleAgentItemClickies(req, res, isPublic) {
     }
     if (!failed) {
       const body = JSON.stringify({
-        version: 3,                         // 3: + worn_haste · 2: + worn_ds (additive; older agents ignore them)
+        version: 4,                         // 4: + duration_foci · 3: + worn_haste · 2: + worn_ds (additive; older agents ignore them)
         fetched_at: new Date().toISOString(),
         count: entries.length,
         entries,
         worn_ds: wornDs,
         worn_haste: wornHaste,
+        duration_foci: durationFoci,
       });
       const etag = '"' + require('crypto').createHash('sha1').update(body).digest('hex') + '"';
       _itemClickyCache = { fetchedAt: Date.now(), body, etag };

@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.0.86': [
+    'Mimic timers: the bot now hands Mimic the items that lengthen spell durations, so your own buff, debuff and charm timers can count your worn focus (with the newest Mimic beta).',
+  ],
   '4.0.85': [
     'Behind the scenes: the nightly cleanup also clears Raid Mimic\'s hourly import log.',
   ],
