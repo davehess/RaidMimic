@@ -15,6 +15,8 @@ import { GUILD_TAG } from '@/lib/guild';
 import { makeLimiter } from '@/lib/popRecitalSave';
 import { profileOf } from '@/lib/hubRegistry';
 import { importAllowed } from '@/lib/hubImportLimit';
+import { importInventory, MAX_INV_FILES, MAX_INV_FILE_BYTES, type InvResult } from '@/lib/hubInventory';
+import { replaceRows } from '@/lib/hubInventoryDb';
 import {
   importExports, pasteToFile, NAME_RX, MAX_FILE_BYTES, MAX_FILES_PER_UPLOAD,
   type ImportDeps, type ImportResult, type UploadFile,
@@ -127,7 +129,33 @@ export async function importPaste(formData: FormData): Promise<ImportResult & { 
   return result.ok ? { ...result, unrecognised: made.unrecognised } : result;
 }
 
-/** Remove one of the signed-in player's characters and its flags. Only that player's rows, only that name. */
+/** Inventory (`Name-Inventory.txt`) and Quarmy (`NameQuarmy.txt`) files for characters this player already holds. `only` is
+ *  the character page's own name: a file for another character is refused. The player is the session's, the same two
+ *  limiter layers apply, and rows are written only under that player's id (web/lib/hubInventoryDb.ts). */
+export async function importInventoryFiles(formData: FormData): Promise<InvResult> {
+  const entries = formData.getAll('files').filter((f): f is File => typeof f === 'object' && f !== null && 'text' in f);
+  if (entries.length > MAX_INV_FILES) return { ok: false, error: `Up to ${MAX_INV_FILES} files at a time.` };
+  const onlyRaw = String(formData.get('only') ?? '').trim();
+  if (onlyRaw && !NAME_RX.test(onlyRaw)) return { ok: false, error: 'Not a character name.' };
+  const s = await openPlayer();
+  if ('error' in s) return { ok: false, error: s.error };
+  // An oversize file is measured, not read.
+  const files = await Promise.all(entries.map(async f => ({
+    name: String(f.name || 'file'), size: f.size, text: f.size > MAX_INV_FILE_BYTES ? '' : await f.text(),
+  })));
+  const { admin, playerId } = s;
+  const result = await importInventory(files, {
+    playerId, now: Date.now,
+    async heldNames() {
+      const { data, error } = await admin.from('hub_characters').select('name_lc').eq('player_id', playerId).limit(200);
+      return error ? null : (data ?? []).map(r => r.name_lc as string);
+    },
+    replace: (pid, lc, character, source, observedAt, rows) => replaceRows(admin, pid, lc, character, source, observedAt, rows),
+  }, onlyRaw || undefined);
+  if (result.ok) { revalidatePath('/characters'); revalidatePath('/characters/[name]', 'page'); }
+  return result;
+}
+/** Remove one of the signed-in player's characters, its flags and its inventory. Only that player's rows, only that name. */
 export async function removeCharacter(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const name = String(formData.get('name') ?? '').trim();
   if (!NAME_RX.test(name)) return { ok: false, error: 'Not a character name.' };
@@ -139,8 +167,9 @@ export async function removeCharacter(formData: FormData): Promise<{ ok: boolean
   if (!player) return { ok: false, error: 'Nothing to remove.' };
   const lc = name.toLowerCase();
   const flags = await admin.from('hub_flags').delete().eq('player_id', player.player_id).eq('name_lc', lc);
+  const inv = await admin.from('hub_inventory').delete().eq('player_id', player.player_id).eq('name_lc', lc);
   const chars = await admin.from('hub_characters').delete().eq('player_id', player.player_id).eq('name_lc', lc);
-  if (flags.error || chars.error) return { ok: false, error: 'Could not remove it just now. Try again in a minute.' };
+  if (flags.error || inv.error || chars.error) return { ok: false, error: 'Could not remove it just now. Try again in a minute.' };
   revalidatePath('/characters');
   return { ok: true };
 }

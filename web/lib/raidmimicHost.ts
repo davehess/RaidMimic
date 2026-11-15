@@ -75,7 +75,7 @@ export const RAIDMIMIC_COSTS_PATH = '/costs';
 
 export function isRaidmimicOpenPath(pathname: string): boolean {
   return pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/') || pathname === RAIDMIMIC_HUBS_PATH
-    || pathname === RAIDMIMIC_CHARACTERS_PATH || pathname === RAIDMIMIC_RAIDS_PATH || pathname === RAIDMIMIC_COSTS_PATH
+    || pathname === RAIDMIMIC_CHARACTERS_PATH || pathname.startsWith(`${RAIDMIMIC_CHARACTERS_PATH}/`) || pathname === RAIDMIMIC_RAIDS_PATH || pathname === RAIDMIMIC_COSTS_PATH
     || pathname === RAIDMIMIC_GUILDS_PATH || pathname.startsWith(`${RAIDMIMIC_GUILDS_PATH}/`);
 }
 

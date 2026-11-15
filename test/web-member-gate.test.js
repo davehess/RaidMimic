@@ -28,6 +28,7 @@ const OPEN = {
   'share/raid/[token]/page.tsx': 'public share link: the token is the credential',
   'api/share/': 'public share link routes: the token is the credential',
   'api/hubs/route.ts': 'public guild directory read by Mimic\'s picker and raidmimic.com',
+  'characters/': 'raidmimic open path (isRaidmimicOpenPath): any signed-in Discord user, by design; every read is keyed on the session\'s own hub player id (DECISIONS §545)',
   'guilds/': 'raidmimic open path (isRaidmimicOpenPath): any signed-in Discord user, by design (DECISIONS §492)',
   'auth/claim/page.tsx': 'sign-in surface: an officer-issued invite is redeemed here by someone who is not yet signed in',
   'me/': 'own-data pages keyed to the signed-in user; a departed member must still reach them to export or delete their data',

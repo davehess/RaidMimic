@@ -140,6 +140,8 @@ export const SELF_TABLES: TableSpec[] = [
     select: 'id, player_id, guild_id, guild_label, days, start_hhmm, duration_min, tz, use_guild_schedule, created_at, updated_at' },
   { table: 'hub_player_targets', group: 'personal', clauses: [{ col: 'player_id', kind: 'player' }], order: [by('raid_date'), by('player_guild_id')],
     select: 'player_guild_id, player_id, raid_date, target_key' },
+  { table: 'hub_inventory', group: 'personal', clauses: [{ col: 'player_id', kind: 'player' }], order: [by('name_lc'), by('source'), by('slot_label')],
+    select: 'player_id, character, source, slot_label, item_id, item_name, quantity, observed_at' },
   { table: 'hub_flags', group: 'personal', clauses: [{ col: 'player_id', kind: 'player' }], order: [by('earned_at', true), by('id')],
     select: 'id, player_id, character, flag_key, stage, source, earned_at, created_at' },
 
