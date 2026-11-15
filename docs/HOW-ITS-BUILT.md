@@ -3374,6 +3374,15 @@ WebSocket `/v1/party`; the first message carries a Mimic session token, resolved
 in memory only. Free: 6 members, roster/HP + trigger fires; trial/pro: 72 members, every stream, 10-minute history. Design:
 `docs/DESIGN-raidmimic-relay.md`. Test: `test/raidmimic-relay.test.js`. No Mimic client yet.
 
+### Timer durations with our own AAs and foci; party timers (agent 4.0.88, 2026-11-15)
+Agent `_durationWithExtensions` / `_ownDurTicks` / `_castingKit` / `_reinforcementPct` / `_bestDurationFocus` (next to `_durTicksForLevel`):
+formula → Spell Casting Reinforcement (Quarmy AA index 21, Mastery 113; beneficial spells only) → best worn SPA 128 focus
+(`duration_foci` on the `item-clickies` payload, view `item_duration_focus`), cited to `zone/spells.cpp` and `zone/spell_effects.cpp`
+in the code. Used for our own landings (`recordTargetBuffLanding`, `recordPetBuffLanding`), pacify and charm (`_charmDurationSec`).
+`_quarmyLocalItems` now also keeps the export's AAs and class. Party: `_partyOwnTimers` → `partyBuildPub` `timers` (relay 1.1.0) →
+`view.timers` on `/api/party` + `partyView`; shown by `apps/mimic/charm.html` (`#partycharms`) and `apps/mimic/mobinfo.html`
+(`_withPartyTimers`). Test: `test/duration-extensions.test.js`.
+
 ### Raid-night appearance (bot 3.1.208, §166)
 `utils/raidAppearance.js` `noteMinute()` is called by `raidTrack._writeMinute` after a minute row lands:
 `snapshotNight()` on a night's first minute, each raider's first minute and hourly → `raid_night_appearance`

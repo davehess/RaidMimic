@@ -60,6 +60,7 @@ function loadSynth() {
     ]);
     const _spellByNameLower = { get: _spellByNameLower_get };
     function _assumedCasterLevel(){ return 60; }
+    function _durationWithExtensions(e, lvl){ return { ticks: _durTicksForLevel(e.durf, e.dur, lvl) }; }   // the AA / focus chain is not under test here
     function _durTicksForLevel(f, cap, lvl){
       let t;
       switch (Number(f)) {

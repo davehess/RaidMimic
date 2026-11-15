@@ -509,6 +509,8 @@
     }
     var castBy = b.caster || b.owner;
     btTip += (btTip ? ' · ' : '') + (castBy ? 'cast by ' + castBy : 'caster unknown (only Mimic users’ casts are named)');
+    // A party member's charm: the server rolls a break check every tick, so the end is the latest it can run, not a promise.
+    if (b.may_break) btTip += ' · may break before this';
     // FB-83: landed on a mob of this name, not proven to be this spawn — "?" and dimmed, never shown as fact.
     if (b.unproven) tip = _slowUncertainTip('') + ' · ' + tip;
     return '<div class="tbuff'+(b.unproven ? ' unc' : '')+'" title="'+tip+'">'
@@ -2009,6 +2011,26 @@
     _rsT = setTimeout(_fitHeight, 500);
   });
 
+  // Other party members' timers on the current target (the party relay, s.partyView.timers: what each caster cast themselves, with
+  // their own AAs and worn foci in the figure, so it is the better number). A timer replaces the observed row of the same spell
+  // and names its caster; our own character's timers are skipped, our agent already rows them. Read-only, nothing to click.
+  function _withPartyTimers(mi, s){
+    var pv = s && s.partyView, list = pv && Array.isArray(pv.timers) ? pv.timers : null;
+    if (!mi || !mi.target_name || !list || !list.length) return mi;
+    var norm = function(n){ return String(n || '').toLowerCase().replace(/[`_]/g, "'").replace(/\s+/g, ' ').trim(); };
+    var tgt = norm(mi.target_name), me = norm(pv.character), now = Date.now(), add = [];
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i];
+      if (!t || norm(t.target) !== tgt || norm(t.caster) === me || !(Number(t.endsAt) > now)) continue;
+      add.push({ name: t.spell, remaining_secs: Math.floor((Number(t.endsAt) - now) / 1000), total_secs: null,
+        good: t.kind === 'buff' ? 1 : 0, caster: t.caster, owner: t.kind === 'charm' ? t.caster : null, may_break: !!t.may_break });
+    }
+    if (!add.length) return mi;
+    var have = (Array.isArray(mi.target_buffs) ? mi.target_buffs : []).filter(function(b){
+      return !add.some(function(a){ return b && norm(b.name) === norm(a.name); });
+    });
+    return Object.assign({}, mi, { target_buffs: have.concat(add) });
+  }
   async function tick(){
     try {
       const r = await fetch('http://127.0.0.1:'+PORT+'/api/state',{cache:'no-store'});
@@ -2027,6 +2049,7 @@
       if (mi && enc) {
         mi = Object.assign({}, mi, { _enc: enc });
       }
+      mi = _withPartyTimers(mi, s);
       // Target history: the ring (and the pinned past target's card), then whichever of the two is painted.
       mi = _pgPick(mi, await _pgFetch());
       _lastMi = mi;
