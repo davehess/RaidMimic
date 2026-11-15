@@ -330,6 +330,10 @@ export function metaForPath(rawPath: string): PageMeta {
   if (/^\/bards\/sets\/[^/]+$/.test(path)) return entityMeta('bardset');
   m = path.match(/^\/raid\/review\/([^/]+)$/);
   if (m) return raidReviewMeta(m[1]);
+  // One of a Raid Mimic player's own characters: private to its owner, so the card says only that and never the name.
+  if (/^\/characters\/[^/]+$/.test(path)) {
+    return { title: 'Character · Raid Mimic', description: 'One of your characters on Raid Mimic: its Planes of Power flag progress and what it needs next, plus its gear and bags from an uploaded inventory or Quarmy file. Private to you.' };
+  }
   m = path.match(/^\/character\/([^/]+)(?:\/([^/]+))?/);
   if (m) return characterMeta(m[1], m[2]);
   // One splits page per scripted event: the card names the event (public catalog data) and nothing a run recorded.

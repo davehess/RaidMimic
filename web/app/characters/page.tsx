@@ -9,9 +9,12 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { supabaseServer } from '@/lib/supabase-server';
+import Link from 'next/link';
 import { discordIdOf } from '@/lib/lockout';
 import { isRaidmimicHost } from '@/lib/raidmimicHost';
 import { loadMine } from '@/lib/hubMine';
+import { supabaseAdmin } from '@/lib/supabase';
+import { sourcesByCharacter } from '@/lib/hubInventoryDb';
 import { MAX_CHARACTERS_PER_PLAYER } from '@/lib/hubImport';
 import SignInButton from '@/components/SignInButton';
 import HostFrame from '@/components/RaidmimicFrame';
@@ -21,6 +24,7 @@ import { GATES } from '@/lib/popGatePieces';
 import { gateKeyOr } from '@/lib/popGateStatus';
 import { matrixRows, overallRows, wantsOverall } from '@/lib/hubCharactersView';
 import RemoveButton from './RemoveButton';
+import FlagsBody from './FlagsBody';
 
 const GATE_CHOICES = GATES.map(g => ({ key: g.key, name: g.name, short: g.short }));
 const TITLE = 'My characters';
@@ -63,6 +67,13 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
   const mine = await loadMine(discordId);
   const gateKey = gateKeyOr(searchParams?.gate);
   const overall = wantsOverall(searchParams?.gate);
+  // Which characters have gear uploaded (for the card's one line). Keyed on the session player; "none yet" if unreadable.
+  let withGear = new Map<string, string[]>();
+  if (mine.length > 0) {
+    const admin = supabaseAdmin();
+    const { data: player } = await admin.from('hub_players').select('player_id').eq('discord_id', discordId).is('deleted_at', null).maybeSingle();
+    if (player) withGear = await sourcesByCharacter(admin, player.player_id as string);
+  }
   return (
     <HostFrame onHost={onHost}>
       <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
@@ -88,61 +99,22 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
           {mine.map(c => (
             <article key={c.name} className={CARD}>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 className="text-lg text-text">{c.name}</h2>
+                <h2 className="text-lg text-text"><Link href={`/characters/${encodeURIComponent(c.name)}`} className="text-text hover:text-gold">{c.name}</Link></h2>
                 <span className="text-xs text-dim">{c.flagCount} flag{c.flagCount === 1 ? '' : 's'}{c.lastExport ? ` · export of ${c.lastExport.slice(0, 10)}` : ''}</span>
                 {c.proof === 'contested' && <span className="rounded border border-orange/50 px-2 text-xs text-orange">name claimed by another player too</span>}
               </div>
 
-              {c.next.top.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-xs uppercase tracking-wider text-dim">Needs next</h3>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {c.next.top.map(t => (
-                      <li key={t.line + t.step.key}><span className="text-dim">{t.label}:</span> {t.step.title}</li>
-                    ))}
-                  </ul>
-                  {c.next.more > 0 && <p className="mt-1 text-xs text-dim">and {c.next.more} more line{c.next.more === 1 ? '' : 's'} with something to do.</p>}
-                </div>
-              )}
-              {c.next.blocked.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-xs uppercase tracking-wider text-dim">Waiting on a flag</h3>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {c.next.blocked.map(b => (
-                      <li key={b.line}><span className="text-dim">{b.label}:</span> needs {b.blockedOn.map(x => x.label).join(', ')}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {c.next.top.length === 0 && c.next.blocked.length === 0 && (
-                <p className="mt-3 text-sm text-dim">{c.flagCount === 0 ? 'No flags read from this export yet.' : 'Nothing left on the lines we track.'}</p>
-              )}
+              <FlagsBody c={c} />
 
-              <details className="mt-3" open>
-                <summary className="cursor-pointer text-sm text-blue">Can enter ({c.zones.filter(z => z.open).length} of {c.zones.length} zones)</summary>
-                <ul className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-                  {c.zones.map(z => (
-                    <li key={z.key}>
-                      <b className="font-medium text-text">{z.name}</b>{' '}
-                      {z.open ? <span className="text-green">yes</span> : <span className="text-dim">missing {z.missing.join(', ')}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </details>
+              <p className="mt-3 text-sm">
+                {withGear.has(c.name.toLowerCase())
+                  ? <span className="text-dim">Gear and bags loaded.</span>
+                  : <span className="text-dim">Only PoP flags so far: no inventory or Quarmy file yet.</span>}{' '}
+                <Link href={`/characters/${encodeURIComponent(c.name)}`} className="text-blue">
+                  {withGear.has(c.name.toLowerCase()) ? 'Open character page' : 'Open it to add inventory and Quarmy files'}
+                </Link>
+              </p>
 
-              {c.groups.length > 0 && (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-sm text-blue">Flags it has</summary>
-                  <dl className="mt-2 space-y-2 text-sm">
-                    {c.groups.map(g => (
-                      <div key={g.zone}>
-                        <dt className="text-xs uppercase tracking-wider text-dim">{g.zone}</dt>
-                        <dd>{g.labels.join(' · ')}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </details>
-              )}
               <RemoveButton name={c.name} />
             </article>
           ))}

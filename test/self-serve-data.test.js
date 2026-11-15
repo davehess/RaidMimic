@@ -33,7 +33,8 @@ const SQL_REL = 'supabase/migrations/20261101140000_member_self_delete.sql';
 const sql = () => stripSql(read(SQL_REL));
 // 2026-11-02: member_self_delete was redefined to also remove the synced flags and characters; THAT is the live one.
 // 2026-11-15: redefined again, to also remove the player's own guild list (hub_player_guilds / hub_player_targets).
-const SQL_HUB_REL = 'supabase/migrations/20261115140000_hub_player_guilds.sql';
+// 2026-11-15 (later): and again, to also remove the player's uploaded inventory (hub_inventory).
+const SQL_HUB_REL = 'supabase/migrations/20261115230100_self_delete_hub_inventory.sql';
 const sqlHub = () => stripSql(read(SQL_HUB_REL));
 const SQL_HUB_PREV_REL = 'supabase/migrations/20261102220000_self_delete_hub_sync.sql';
 const sqlHubPrev = () => stripSql(read(SQL_HUB_PREV_REL));
@@ -760,6 +761,7 @@ describe('the migration: one transaction for the person\'s own data, slices for 
     hub_player_activity: /delete from public\.hub_player_activity where player_id = v_player/,
     hub_flags: /delete from public\.hub_flags where player_id = v_player/,
     hub_characters: /delete from public\.hub_characters where player_id = v_player/,
+    hub_inventory: /delete from public\.hub_inventory where player_id = v_player/,
     hub_player_guilds: /delete from public\.hub_player_guilds where player_id = v_player/,
     hub_player_targets: /delete from public\.hub_player_targets where player_id = v_player/,
   };
@@ -873,6 +875,7 @@ describe('free flag syncing: Delete and Download cover hub_flags and hub_charact
   const HUB_LINES = [
     /^ *delete from public\.hub_player_targets where player_id = v_player;\n/m,
     /^ *delete from public\.hub_player_guilds where player_id = v_player;\n/m,
+    /^ *delete from public\.hub_inventory where player_id = v_player;\n/m,
   ];
 
   it('the new migration deletes both hub tables for the player BEFORE the hub_players row is anonymised', () => {
@@ -898,7 +901,7 @@ describe('free flag syncing: Delete and Download cover hub_flags and hub_charact
       expect(m, String(re)).toBeTruthy();
       // the delete line, then its `get diagnostics` and `v_counts :=` lines
       const rest = stripped.slice(m.index + m[0].length);
-      const tail = /^ *get diagnostics n = row_count;\n *v_counts := v_counts \|\| jsonb_build_object\('hub_player_(?:targets|guilds)', n\);\n/.exec(rest);
+      const tail = /^ *get diagnostics n = row_count;\n *v_counts := v_counts \|\| jsonb_build_object\('hub_(?:player_targets|player_guilds|inventory)', n\);\n/.exec(rest);
       expect(tail, 'counts after ' + String(re)).toBeTruthy();
       stripped = stripped.slice(0, m.index) + rest.slice(tail[0].length);
     }

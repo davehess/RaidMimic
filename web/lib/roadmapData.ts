@@ -37,6 +37,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-character-page-2026-11-15',
+    title: 'A page for each character',
+    version: 'Web 2.2.3',
+    date: '2026-11-15',
+    headline: 'Each of your characters on raidmimic.com gets its own page, with gear and bags once you add its inventory or Quarmy file.',
+    features: [
+      { name: 'Character page', blurb: 'Tap a name on My characters to see its PoP flags, what it needs next and what it is carrying. Only you can open it.' },
+      { name: 'Inventory and Quarmy files', blurb: 'A character with only PoP flags can add its Zeal inventory file or Quarmy export to show worn gear and bags, with item icons.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'raidmimic-characters-overall-2026-11-15',
     title: 'Every gate at a glance',
     version: 'Web 2.2.2',
