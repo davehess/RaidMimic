@@ -3457,6 +3457,11 @@ Personal data lives on each player's PC; the hub keeps the shared raid record. N
   `partyView` on `/api/state`), dashboard Logsync tab card `#wpParty` (`dashboard.html`, `wpPt*`), DPS HUD Party switch (`apps/mimic/overlay.html`,
   `tabParty` / `PARTY_ON` / `_ageDot`), tray item `_partyTrayItems` and Settings button `openPartyBtn` (`apps/mimic/main.js`, `settings.html`,
   IPC `open-party-card`). Free for everyone; the tier shows as a small tag. Test: `test/party-client.test.js`.
+  **Auto mode (agent 4.0.89, 2026-11-15; relay 1.2.0):** setting "Share with my in-game group and raid" (default off; `S.share` in `createPartyClient`,
+  `logsync.party.json`), `_partyMembers` (Zeal type 6 + 5 → `partyMembersList`, 72 max) → `members` on each frame, `hello {auto:true}`,
+  `autoTick` (connect when grouped, leave after 2 min alone / setting off), `not_your_character` stop; `partyShare` on `/api/state`,
+  `POST /api/party {action:'share'}`; dashboard card checkbox + "Or share by code", Settings `partyShareBox`, tray checkbox
+  (`_partySetShare`, IPC `party-share-get/set`).
 - **Raid codes (3.8.48).** A code (`BC-7KQ2`: two to four letters, a dash, four to six letters or numbers) is a six-hour label
   kept in `logsync.raidcode.json` (`GET/POST /api/raid-code`). While active, `enqueueUpload` HOLDS the raid-wide kinds
   (`RAID_HOLD_KINDS`) so a member standing in another guild's raid is in neither hub's raid tables; streams about the

@@ -718,3 +718,270 @@ describe('the surfaces carry it', () => {
     expect(fs.existsSync(path.join(ROOT, 'apps/mimic/party.html'))).toBe(false);
   });
 });
+
+// ── 8. auto mode: follow the real in-game group and raid (the guild lead, 2026-11-15) ───────────────────────────
+// "where we check session against zeal pipes party members": hello {auto:true} with no code, `members` on every frame,
+// leave after 2 minutes alone or when the setting is off, stop for good on `not_your_character`. Names are invented.
+describe('auto mode: the members list', () => {
+  it('puts self first, then the raid, then the group, each name once (any case), invalid names dropped', () => {
+    const out = agent.partyMembersList('Aldenmar', [{ name: 'Brackwyn' }, { name: 'aldenmar' }, 'Corvale'], ['corvale', 'Zarrin', 'a skeleton', 'Pet9', '', null, "O'Brien", 'x'.repeat(25)]);
+    expect(out).toEqual(['Aldenmar', 'Brackwyn', 'Corvale', 'Zarrin', "O'Brien"]);
+  });
+  it('caps the list at 72', () => {
+    const many = []; for (let i = 0; i < 120; i++) many.push('P' + String.fromCharCode(97 + (i % 26)) + String.fromCharCode(97 + Math.floor(i / 26)));
+    const out = agent.partyMembersList('Aldenmar', many);
+    expect(out).toHaveLength(72);
+    expect(out[0]).toBe('Aldenmar');
+    expect(agent.PARTY_MAX_MEMBERS).toBe(72);
+  });
+  it('a frame carries `members` (validated again) and a frame of only members is still sent', () => {
+    expect(agent.partyBuildPub({ members: ['Aldenmar', 'Brackwyn', 'a bear', 'Aldenmar'] }, 1_800_000_000_000)).toEqual({ type: 'pub', members: ['Aldenmar', 'Brackwyn'] });
+    expect(agent.partyBuildPub({ members: ['a bear'] }, 1_800_000_000_000)).toBeNull();
+    expect(agent.partyBuildPub({ perPlayer: { Aldenmar: row(5) } }, 1_800_000_000_000)).not.toHaveProperty('members');   // code mode sends none
+  });
+});
+
+describe('auto mode: the client state machine', () => {
+  let t, blocked, mem, store, saved, char, tok;
+  const mk = (over = {}) => agent.createPartyClient({
+    url: () => 'ws://fake/v1/party', WS: FakeWS, getToken: () => tok, getCharacter: () => char, blocked: () => blocked,
+    collect: () => null, members: () => mem, version: '4.0.89', now: () => t, pubMs: 2000, rand: () => 0,
+    store: { load: () => store, save: (o) => { saved.push(o); } }, ...over,
+  });
+  beforeEach(() => { vi.useFakeTimers(); t = 1_800_000_000_000; blocked = null; mem = ['Aldenmar']; store = null; saved = []; char = 'Aldenmar'; tok = TOKEN('a'); FakeWS.all = []; });
+  afterEach(() => { vi.useRealTimers(); });
+  const advance = (ms) => { t += ms; vi.advanceTimersByTime(ms); };
+  const last = () => FakeWS.all[FakeWS.all.length - 1];
+  const GROUPED = ['Aldenmar', 'Brackwyn', 'Corvale'];
+  const join = (c) => { mem = GROUPED; advance(2000); const w = last(); w.open(); w.say({ type: 'welcome', tier: 'free', member: 'Aldenmar' }); return w; };
+
+  it('is off by default: grouped and nothing connects', () => {
+    const c = mk(); c.resume();
+    mem = GROUPED; advance(10_000);
+    expect(FakeWS.all).toHaveLength(0);
+    expect(c.status()).toMatchObject({ share: false, status: 'off', mode: null });
+  });
+
+  it('with the setting on it connects once grouped: hello {auto:true}, no code, no create; members ride the frame', () => {
+    const c = mk(); c.setShare(true);
+    advance(2000);
+    expect(FakeWS.all).toHaveLength(0);                    // alone: nothing yet
+    const w = join(c);
+    expect(w.sent[0]).toEqual({ type: 'hello', token: TOKEN('a'), character: 'Aldenmar', agent_version: '4.0.89', auto: true });
+    expect(c.status()).toMatchObject({ status: 'joined', mode: 'auto', code: null, share: true });
+    advance(2000);
+    const pubs = w.sent.filter((m) => m.type === 'pub');
+    expect(pubs).toHaveLength(1);
+    expect(pubs[0].members).toEqual(GROUPED);
+    expect(saved[saved.length - 1]).toEqual({ share: true });   // no code remembered for an auto connection
+  });
+
+  it('a dropped socket reconnects in auto mode, not as a code party', () => {
+    const c = mk(); c.setShare(true); const w = join(c);
+    w.drop(); advance(1000);
+    expect(last().sent.length + 1).toBeGreaterThan(0);
+    last().open();
+    expect(last().sent[0]).toMatchObject({ type: 'hello', auto: true });
+    expect(last().sent[0]).not.toHaveProperty('party');
+  });
+
+  it('leaves after MORE than 2 minutes alone, not before, and a regroup resets the clock', () => {
+    const c = mk(); c.setShare(true); const w = join(c);
+    const alive = (ms) => { for (let n = 0; n < ms; n += 5000) { advance(5000); w.say({ type: 'view', members: 1, players: [], roster: [], fires: [] }); } };   // the relay's 2 s view keeps the socket alive
+    mem = ['Aldenmar']; advance(2000);                     // first alone tick starts the clock
+    alive(100_000);
+    expect(c.status().status).toBe('joined');
+    mem = GROUPED; advance(2000);                          // regrouped: the clock is cleared
+    mem = ['Aldenmar']; advance(2000); alive(110_000);
+    expect(c.status().status).toBe('joined');
+    alive(15_000);
+    expect(c.status()).toMatchObject({ status: 'off', mode: null });
+    expect(w.sent[w.sent.length - 1]).toEqual({ type: 'bye' });
+    expect(w.closed).not.toBeNull();
+    expect(c.status().share).toBe(true);                   // the setting stays on: it rejoins when grouped again
+    mem = GROUPED; advance(2000);
+    expect(FakeWS.all).toHaveLength(2);
+  });
+
+  it('turning the setting off leaves at once and forgets it', () => {
+    const c = mk(); c.setShare(true); const w = join(c);
+    c.setShare(false);
+    expect(w.sent[w.sent.length - 1]).toEqual({ type: 'bye' });
+    expect(c.status()).toMatchObject({ status: 'off', share: false });
+    expect(saved[saved.length - 1]).toBeNull();
+    advance(10_000);
+    expect(FakeWS.all).toHaveLength(1);
+  });
+
+  it('not_your_character stops for good with the linking message, and is not retried while grouped', () => {
+    const c = mk(); c.setShare(true);
+    mem = GROUPED; advance(2000);
+    last().open(); last().say({ type: 'error', code: 'not_your_character' }); last().drop();
+    advance(300_000);
+    expect(FakeWS.all).toHaveLength(1);
+    const s = c.status();
+    expect(s).toMatchObject({ status: 'ended', auto_stopped: true });
+    expect(s.error.code).toBe('not_your_character');
+    expect(s.error.message).toBe(agent.PARTY_FATAL.not_your_character);
+    expect(s.error.message).toMatch(/isn't linked to your account/);
+    expect(s.error.message).toMatch(/raidmimic\.com\/characters/);
+    expect(s.error.message).toMatch(/wolfpack\.quest/);
+    char = 'Brackwyn'; advance(2000);                      // another character is a fresh try
+    expect(FakeWS.all).toHaveLength(2);
+    expect(last().sent.length).toBe(0);
+  });
+
+  it('toggling the setting clears a refusal and tries again', () => {
+    const c = mk(); c.setShare(true); mem = GROUPED; advance(2000);
+    last().open(); last().say({ type: 'error', code: 'not_your_character' });
+    advance(10_000); expect(FakeWS.all).toHaveLength(1);
+    c.setShare(false); c.setShare(true); advance(2000);
+    expect(FakeWS.all).toHaveLength(2);
+  });
+
+  it('every stand-down holds: no sign-in, dry-run, kill switch, hidden character never connect', () => {
+    const c = mk(); c.setShare(true); mem = GROUPED;
+    for (const reason of ['signed_out', 'dry_run', 'control', 'hidden', 'no_character']) { blocked = reason; advance(4000); }
+    expect(FakeWS.all).toHaveLength(0);
+    blocked = null; advance(2000);
+    expect(FakeWS.all).toHaveLength(1);
+    blocked = 'control'; advance(2000);                    // a block while connected closes the socket and publishes nothing
+    expect(c.status()).toMatchObject({ status: 'paused', paused_for: 'control' });
+    expect(last().closed).not.toBeNull();
+  });
+
+  it('a code party is an explicit opt-in and wins; leaving it returns to auto', () => {
+    const c = mk(); c.setShare(true); mem = GROUPED; advance(2000);
+    last().open(); last().say({ type: 'welcome', tier: 'free' });
+    expect(c.join('K7M2QX').ok).toBe(true);
+    expect(c.status()).toMatchObject({ mode: 'code', code: 'K7M2QX' });
+    advance(10_000);
+    expect(FakeWS.all.filter((w) => w.sent[0] && w.sent[0].auto)).toHaveLength(1);   // the auto socket was replaced, not re-made
+    expect(saved[saved.length - 1]).toMatchObject({ code: 'K7M2QX', share: true });
+    c.leave();
+    expect(c.status().share).toBe(true);                   // leaving a CODE party keeps the setting
+    advance(2000);
+    expect(c.status().mode).toBe('auto');
+  });
+
+  it('leaving an auto connection turns the sharing off (it would reconnect at the next tick otherwise)', () => {
+    const c = mk(); c.setShare(true); join(c);
+    c.leave();
+    expect(c.status()).toMatchObject({ status: 'off', share: false });
+    advance(6000); expect(FakeWS.all).toHaveLength(1);
+  });
+
+  it('the setting survives a restart: resume() turns auto back on with no code', () => {
+    store = { v: 2, share: true };
+    const c = mk();
+    expect(c.resume()).toBe(true);
+    expect(c.status().share).toBe(true);
+    mem = GROUPED; advance(2000);
+    expect(last().url).toBe('ws://fake/v1/party');
+    last().open();
+    expect(last().sent[0]).toMatchObject({ auto: true });
+  });
+
+  it('setting it on while blocked is kept and connects by itself once the block lifts', () => {
+    blocked = 'signed_out';
+    const c = mk(); expect(c.setShare(true)).toEqual({ ok: true });
+    mem = GROUPED; advance(4000);
+    expect(FakeWS.all).toHaveLength(0);
+    blocked = null; advance(2000);
+    expect(FakeWS.all).toHaveLength(1);
+  });
+});
+
+describe('auto mode: the agent wiring', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wp-party-')); agent._partySetFileForTest(path.join(dir, 'party.json')); agent._partyResetForTest(); agent._setMimicSessionForTest(TOKEN('a')); agent._partyCharacterForTest('Aldenmar'); });
+  afterEach(() => { agent._partyResetForTest(); agent._partySetFileForTest(null); agent._partyCharacterForTest(null); agent._setMimicSessionForTest(''); agent._setRaidPipeForTest(null); agent._setZealStateForTest('Aldenmar', null); fs.rmSync(dir, { recursive: true, force: true }); });
+  const res = () => { const r = { status: 0, body: '' }; r.writeHead = (s) => { r.status = s; }; r.setHeader = () => {}; r.end = (b) => { r.body = b; }; r.json = () => JSON.parse(r.body); return r; };
+  const req = (method, url, body) => Object.assign(Readable.from(body ? [Buffer.from(body)] : []), { method, url, headers: {} });
+
+  it('members come from the Zeal group list and the raid pipe: self, raid, group, once each', () => {
+    const now = Date.now();
+    agent._setZealStateForTest('Aldenmar', { updatedAt: now, group_members: [{ name: 'Brackwyn' }, { name: 'Corvale' }], gauges: [{ slot: 11, text: 'Brackwyn', hp_pct: 70 }, { slot: 12, text: 'Zarrin', hp_pct: 40 }] });
+    expect(agent._partyMembers()).toEqual(['Aldenmar', 'Brackwyn', 'Corvale', 'Zarrin']);
+    agent._setRaidPipeForTest({ at: now, members: [{ name: 'Aldenmar' }, { name: 'Rethlan' }, { name: 'Corvale' }, { name: 'a bear' }] });
+    expect(agent._partyMembers()).toEqual(['Aldenmar', 'Rethlan', 'Corvale', 'Brackwyn', 'Zarrin']);
+  });
+  it('a stale raid list, a raid list that does not hold this character, and stale group state are ignored', () => {
+    const now = Date.now();
+    agent._setRaidPipeForTest({ at: now - 60_000, members: [{ name: 'Aldenmar' }, { name: 'Rethlan' }] });
+    expect(agent._partyMembers()).toEqual(['Aldenmar']);
+    agent._setRaidPipeForTest({ at: now, members: [{ name: 'Nyssara' }, { name: 'Rethlan' }] });   // another box's raid
+    expect(agent._partyMembers()).toEqual(['Aldenmar']);
+    agent._setZealStateForTest('Aldenmar', { updatedAt: now - 120_000, group_members: [{ name: 'Brackwyn' }] });
+    expect(agent._partyMembers()).toEqual(['Aldenmar']);
+  });
+  it('POST share turns it on and off, is remembered in the party file, and shows on /api/state; default is off', async () => {
+    expect(agent._partyShareState()).toEqual({ on: false, waiting: false });
+    let r = res(); await agent._partyRoute(req('POST', '/api/party', '{"action":"share","on":true}'), r);
+    expect(r.status).toBe(200); expect(r.json()).toMatchObject({ ok: true, share: true });
+    expect(agent._partyShareState()).toEqual({ on: true, waiting: true });
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'party.json'), 'utf8'))).toMatchObject({ share: true });
+    r = res(); await agent._partyRoute(req('GET', '/api/party'), r); expect(r.json().share).toBe(true);
+    r = res(); await agent._partyRoute(req('POST', '/api/party', '{"action":"share","on":"yes"}'), r); expect(r.status).toBe(400);
+    r = res(); await agent._partyRoute(req('POST', '/api/party', '{"action":"share","on":false}'), r);
+    expect(r.json().share).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'party.json'))).toBe(false);
+  });
+  it('a restart with the setting on brings the client back', () => {
+    fs.writeFileSync(path.join(dir, 'party.json'), JSON.stringify({ v: 2, share: true }));
+    agent._partyBoot();
+    expect(agent._partyShareState().on).toBe(true);
+  });
+});
+
+describe('auto mode: end to end over a real socket (the relay in this worktree has no auto mode yet: its side is a stub)', () => {
+  it('connects with hello {auto:true} and no code, then publishes `members`', async () => {
+    const got = [];
+    const { server, port } = await rawServer((sock) => {
+      sock.on('data', () => {
+        for (const f of clientFrames(sock.rx || Buffer.alloc(0))) if (f.op === 1) { const m = JSON.parse(f.body.toString()); if (!got.some((g) => JSON.stringify(g) === JSON.stringify(m))) got.push(m); if (m.type === 'hello') sock.write(frame(1, JSON.stringify({ type: 'welcome', tier: 'free', member: m.character }))); }
+      });
+    });
+    const grouped = ['Aldenmar', 'Brackwyn', 'Corvale'];
+    const c = agent.createPartyClient({ url: () => `ws://127.0.0.1:${port}/v1/party`, getToken: () => TOKEN('a'), getCharacter: () => 'Aldenmar', blocked: () => null, collect: () => null, members: () => grouped, version: '4.0.89', pubMs: 80, rand: () => 0 });
+    try {
+      c.setShare(true);
+      const until = async (fn, ms = 4000) => { const end = Date.now() + ms; for (;;) { const v = fn(); if (v) return v; if (Date.now() > end) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 15)); } };
+      await until(() => got.find((m) => m.type === 'pub'));
+      expect(got[0]).toEqual({ type: 'hello', token: TOKEN('a'), character: 'Aldenmar', agent_version: '4.0.89', auto: true });
+      expect(got.find((m) => m.type === 'pub').members).toEqual(grouped);
+      expect(c.status()).toMatchObject({ status: 'joined', mode: 'auto' });
+    } finally { c.destroy(); server.close(); }
+  });
+});
+
+describe('auto mode: the surfaces carry it', () => {
+  const agentSrc = stripJs(readSource(AGENT_INDEX));
+  const dash = read('packages/wolfpack-logsync/dashboard.html');
+  it('the dashboard card has the checkbox (default off), the privacy line, and an "Or share by code" section', () => {
+    expect(dash).toContain('Share with my in-game group and raid');
+    expect(dash).toMatch(/id="wpPtShare"/);
+    expect(dash).toMatch(/who also use Mimic/);
+    expect(dash).toMatch(/Or share by code/);
+    expect(dash).toMatch(/action: 'share'/);
+    expect(dash).toMatch(/s\.partyShare/);
+    expect(agentSrc).toMatch(/partyShare:\s+_partyShareState\(\)/);
+  });
+  it('the card\'s auto section prints nothing that ticks', () => {
+    const card = dash.slice(dash.indexOf('function wpPtAutoHtml'), dash.indexOf('function wpPtRepaint'));
+    expect(card).not.toMatch(/view_age_ms|retry_in_ms|fmtAgo|toLocaleTimeString|Date\.now/);
+  });
+  it('the tray and Settings drive the same setting through the agent (parity)', () => {
+    const main = stripJs(read('apps/mimic/main.js'));
+    expect(main).toMatch(/type: 'checkbox', checked: !!\(p && p\.share\)/);
+    expect(main).toMatch(/action: 'share', on: !!on/);
+    expect(main).toMatch(/ipcMain\.handle\('party-share-get'/);
+    expect(main).toMatch(/ipcMain\.handle\('party-share-set'/);
+    const pre = stripJs(read('apps/mimic/preload.js'));
+    expect(pre).toMatch(/getPartyShare:\s+\(\)\s+=> ipcRenderer\.invoke\('party-share-get'\)/);
+    expect(pre).toMatch(/setPartyShare:\s+\(on\)\s+=> ipcRenderer\.invoke\('party-share-set'/);
+    const set = read('apps/mimic/settings.html');
+    expect(set).toMatch(/id="partyShareBox"/);
+    expect(set).toMatch(/window\.mimic\.setPartyShare\(box\.checked\)/);
+  });
+});

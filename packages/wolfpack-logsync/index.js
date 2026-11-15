@@ -19889,6 +19889,7 @@ function _serializeForDashboard() {
     // The Raid Mimic party (null when none): status, code, tier tag and the merged per-player view. The dashboard card,
     // the tray and the DPS HUD's Party view read it.
     partyView:          _partyStateForDashboard(),
+    partyShare:         _partyShareState(),
     // #120 — token present (signed in) but identity may not be confirmed yet.
     // Lets the header show a soft "verifying" state instead of the hard "not
     // signed in" banner, and gate the scary banner on the no-token case only.
@@ -26046,10 +26047,29 @@ function wpPtTag(p) {
   }
   return '';
 }
+// The automatic way in: follows the real in-game group or raid (the Zeal pipe). Off by default; it prints nothing that ticks.
+function wpPtAutoHtml(s, p) {
+  var on = !!(s && s.partyShare && s.partyShare.on);
+  var auto = p && p.mode === 'auto';
+  var h = '<div id="wpPtAuto" style="margin:8px 0"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">'
+    + '<input type="checkbox" id="wpPtShare"' + (on ? ' checked' : '') + ' onchange="wpPtShare(this.checked)" style="margin-top:3px">'
+    + '<span><b>Share with my in-game group and raid</b><br><span class="dim" style="font-size:12px">'
+    + 'Shares only with people in your group or raid who also use Mimic. It follows your group by itself: it connects when you group up and leaves after two minutes on your own. Off by default.</span></span></label>';
+  if (on) {
+    var line;
+    if (p && p.auto_stopped && p.error && p.error.message) line = '<span style="color:var(--orange)">' + esc(p.error.message) + '</span>';
+    else if (auto && p.status === 'joined') line = '<b>' + (p.members || 1) + '</b> sharing from your group or raid' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live') + '. Open the DPS HUD and switch it to <b>Party</b>.';
+    else if (auto && p.status === 'paused') line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' It reconnects by itself.';
+    else if (auto) line = 'Connecting to the party relay…' + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    else line = '<span class="dim">Waiting until you are in a group or raid.' + (p && p.status === 'paused' && p.paused_text ? ' ' + esc(p.paused_text) : '') + '</span>';
+    h += '<div style="font-size:12px;margin:4px 0 0 24px">' + line + '</div>';
+  }
+  return h + '</div>';
+}
 function wpPtHtml(s) {
   var p = s && s.partyView;
-  var h = '';
-  var inParty = p && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
+  var h = wpPtAutoHtml(s, p) + '<div class="dim" style="font-size:12px;margin-top:10px">Or share by code</div>';
+  var inParty = p && p.mode !== 'auto' && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
   if (inParty) {
     h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">';
     if (p.code) {
@@ -26075,7 +26095,7 @@ function wpPtHtml(s) {
        + '<button type="button" class="wp-btn pri" onclick="wpPtJoin()">🐺 Join</button>'
        + '<span class="dim">or</span>'
        + '<button type="button" class="wp-btn" onclick="wpPtCreate()" title="Makes a new party and shows its code, to give to your group or raid">＋ Create a party</button></div>';
-    if (p && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
+    if (p && !p.auto_stopped && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
   }
   if (_wpPt.note) h += '<div id="wpPtNote" style="color:' + (_wpPt.tone === 'ok' ? 'var(--green)' : 'var(--orange)') + ';font-size:12px;margin-bottom:6px">' + esc(_wpPt.note) + '</div>';
   return h;
@@ -26085,7 +26105,7 @@ function wpPtRepaint(s) {
   if (!el) return;
   if (!document.getElementById('wpPtBody')) {
     el.innerHTML = '<h2>🐺 Raid Mimic party</h2>'
-      + '<div class="subtle">Share your numbers live with the people you play with. One of you creates a party and gives out the code; everyone else joins with it. '
+      + '<div class="subtle">Share your numbers live with the people you play with: automatically with your in-game group and raid, or by a party code that one of you creates and the rest join. '
       + 'Each Mimic sends its own damage, healing, damage taken, threat, target and group health, and gets back one merged list, the highest value anyone saw for each player, never added together. '
       + 'It sends only during a fight or while you are in a group or raid, and nothing else leaves your PC. Needs Mimic signed in with Discord.</div>'
       + '<div id="wpPtBody"></div>';
@@ -26107,6 +26127,7 @@ function wpPtAct(body, okNote) {
     wpPtRefresh();
   }, function () { _wpPt.note = 'The agent did not answer.'; _wpPt.tone = ''; wpPtRefresh(); });
 }
+function wpPtShare(on) { wpPtAct({ action: 'share', on: !!on }, on ? 'Sharing with your group and raid is on.' : 'Sharing with your group and raid is off.'); }
 function wpPtCreate() { wpPtAct({ action: 'create' }, ''); }
 function wpPtJoin() { var inp = document.getElementById('wpPtCode'); wpPtAct({ action: 'join', code: inp ? inp.value : '' }, ''); }
 function wpPtLeave() { wpPtAct({ action: 'leave' }, 'Left the party.'); }
@@ -70199,6 +70220,13 @@ function _localIconRoute(req, res, o) {
 //     plane (_controlStandDown) all close the socket and publish nothing; a party code stays wanted and resumes by itself.
 //   * Publishes only during a live (or just-ended) fight, or while the Zeal raid/group list is fresh.
 //   * Routes: GET/POST /api/party. State: `partyView` on /api/state (the DPS HUD reads it).
+//   * AUTO mode (the guild lead, 2026-11-15: "where we check session against zeal pipes party members"): with "Share with my
+//     in-game group and raid" on (default OFF), the client connects with hello {auto:true} and NO code whenever the Zeal pipe
+//     shows the character in a group or raid, publishes `members` (self + raid + group names, up to 72) on every frame, and
+//     leaves after more than 2 minutes alone or when the setting goes off. The relay shares a member's data only with
+//     members who list each other, and answers `not_your_character` when the hello character is not on the signed-in
+//     account. A code party is the explicit opt-in and wins while it lasts; the setting is kept in logsync.party.json.
+const PARTY_AUTO_SOLO_MS = 2 * 60_000, PARTY_MAX_MEMBERS = 72;
 const PARTY_RELAY_URL = 'wss://raidmimic-relay-production.up.railway.app/v1/party';   // WOLFPACK_PARTY_RELAY_URL overrides (dev, tests)
 const PARTY_FILE = path.join(__dirname, 'logsync.party.json');
 const PARTY_PUB_MS = 2000;
@@ -70221,6 +70249,7 @@ const PARTY_FATAL = {
   bad_character:   'This character name cannot be shared (letters only).',
   bad_party:       'That is not a party code.',
   no_party:        'That party is gone (it ended 15 minutes after its last member left, or the relay restarted). Create a new one or ask for a fresh code.',
+  not_your_character: "This character isn't linked to your account — link it on raidmimic.com/characters or wolfpack.quest.",
 };
 const PARTY_BLOCK_TEXT = {
   signed_out:   'Sign in with Discord in Mimic to use a party.',
@@ -70376,6 +70405,19 @@ class MiniWebSocket {
 }
 
 // ── pure parts: frames, backoff ──
+// The names an auto-mode frame lists: `self` first (when given and valid), then every list in order, names that fail the relay's
+// rule (a pet's "a skeleton", a digit, over 24 letters) dropped, repeats dropped case-insensitively, at most 72.
+function partyMembersList(self, ...lists) {
+  const out = [], seen = new Set();
+  const add = (n) => {
+    const s = n == null ? '' : String(n).trim();
+    if (!PARTY_NAME_RX.test(s) || seen.has(s.toLowerCase()) || out.length >= PARTY_MAX_MEMBERS) return;
+    seen.add(s.toLowerCase()); out.push(s);
+  };
+  add(self);
+  for (const l of lists) if (Array.isArray(l)) for (const n of l) add(n && typeof n === 'object' ? n.name : n);
+  return out;
+}
 const _partyClean = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, PARTY_MAX_TEXT);
 const _partyNum = (n) => { n = Math.round(Number(n)); return Number.isFinite(n) && n >= 0 ? Math.min(n, PARTY_MAX_NUM) : 0; };
 // The relay drops a WHOLE frame for one bad name, number or over-long string, so every value is made valid here instead:
@@ -70423,6 +70465,11 @@ function partyBuildPub(src, now = Date.now()) {
     tm.sort((a, b) => a.endsAt - b.endsAt || (a.spell < b.spell ? -1 : 1));
     out.timers = tm.slice(0, PARTY_MAX_TIMERS);
   }
+  // Auto mode: who this character is grouped or raided with (the relay shares only between members who list each other).
+  if (src && Array.isArray(src.members)) {
+    const mem = partyMembersList(null, src.members);
+    if (mem.length) out.members = mem;
+  }
   if (Object.keys(out).length === 1) return null;
   // 80 rows of four numbers are about 7 KB, far under the cap; this only guards a pathological name-and-text mix.
   while (JSON.stringify(out).length > PARTY_MAX_FRAME - 512 && out.perPlayer && Object.keys(out.perPlayer).length > 1) {
@@ -70441,13 +70488,17 @@ function partyBackoffMs(attempt, rand = Math.random, minMs = 0) {
 
 // ── the client (a factory so a test can run two in one process) ──
 // d: { url(), WS, getToken(), getCharacter(), blocked() -> reason|null, collect() -> src|null, version, now, pubMs,
-//      store: { load() -> {code, at}|null, save(obj|null) }, log(msg), rand }
+//      members() -> [names] (self + raid + group, from the Zeal pipe; auto mode), store: { load() -> {code, at, share}|null,
+//      save({code, at, share}|null) }, log(msg), rand }
 function createPartyClient(d) {
   const now = d.now || Date.now;
   const WS = d.WS || MiniWebSocket;
   const pubMs = d.pubMs || PARTY_PUB_MS;
   const S = {
-    want: null,            // null | { create: true } | { code }
+    share: false,          // the setting "Share with my in-game group and raid" (default off), kept in the store
+    soloSince: 0,          // auto mode: when the character was first seen alone (0 = not alone)
+    autoBlock: null,       // auto mode: "character|token" whose connection the relay refused for good; not retried until that changes
+    want: null,            // null | { create: true } | { code } | { auto: true }
     status: 'off',         // off | connecting | joined | reconnecting | paused | ended
     code: null, tier: null, trialEndsAt: null, members: 0, character: null,
     view: null, viewAt: 0, error: null, pausedFor: null, retryAt: 0, attempts: 0, lastRx: 0,
@@ -70462,7 +70513,16 @@ function createPartyClient(d) {
     if (w) { w.onopen = w.onmessage = w.onclose = w.onerror = null; try { close ? w.close(1000) : w.terminate(); } catch (e) { void e; } }
     clearTimeout(retry); retry = null;
   }
-  function persist() { try { d.store && d.store.save(S.want && S.want.code ? { code: S.want.code, at: now() } : null); } catch (e) { void e; } }
+  function persist() {
+    try {
+      if (!d.store) return;
+      const o = {};
+      if (S.want && S.want.code) { o.code = S.want.code; o.at = now(); }
+      if (S.share) o.share = true;
+      d.store.save(Object.keys(o).length ? o : null);
+    } catch (e) { void e; }
+  }
+  const autoKey = () => String(d.getCharacter() || '') + '|' + String(d.getToken() || '');
   function scheduleRetry(minMs) {
     drop(false);
     const wait = partyBackoffMs(S.attempts++, d.rand || Math.random, minMs || 0);
@@ -70474,6 +70534,7 @@ function createPartyClient(d) {
     drop(false);
     S.status = 'ended'; S.retryAt = 0;
     setError(code, PARTY_FATAL[code] || 'The party relay closed the connection.');
+    if (S.want && S.want.auto) S.autoBlock = autoKey();   // the relay said no for good: do not knock again until the character, the sign-in or the setting changes
     S.want = null; persist();
     log('[party] ended: ' + code);
   }
@@ -70496,7 +70557,7 @@ function createPartyClient(d) {
       if (!live()) return;
       S.lastRx = now();
       const hello = { type: 'hello', token, character, agent_version: String(d.version || '').slice(0, 24) };
-      if (S.want.code) hello.party = S.want.code; else hello.create = true;
+      if (S.want.auto) hello.auto = true; else if (S.want.code) hello.party = S.want.code; else hello.create = true;
       sock.sendText(JSON.stringify(hello));
     };
     sock.onmessage = (text) => {
@@ -70505,7 +70566,9 @@ function createPartyClient(d) {
       let m; try { m = JSON.parse(text); } catch { return; }
       if (!m || typeof m !== 'object') return;
       if (m.type === 'welcome') {
-        S.code = String(m.party || ''); S.tier = m.tier || null; S.status = 'joined'; S.attempts = 0; S.retryAt = 0; setError(null);
+        S.tier = m.tier || null; S.status = 'joined'; S.attempts = 0; S.retryAt = 0; setError(null);
+        if (S.want.auto) { S.code = null; return; }   // auto mode has no code: a reconnect says hello {auto} again
+        S.code = String(m.party || '');
         S.want = { code: S.code };            // from here on a reconnect JOINS this party, never mints another
         persist();
       } else if (m.type === 'view') {
@@ -70523,10 +70586,38 @@ function createPartyClient(d) {
     if (!ws || S.status !== 'joined' || ws.readyState !== 1) return;
     let src = null;
     try { src = d.collect(); } catch { src = null; }
+    if (S.want && S.want.auto) {            // who we are grouped with rides every frame: the relay pairs members who list each other
+      let mem = null; try { mem = d.members ? d.members() : null; } catch { mem = null; }
+      if (Array.isArray(mem) && mem.length > 1) src = Object.assign({}, src, { members: mem });
+    }
     const frame = src ? partyBuildPub(src, now()) : null;
     if (frame) ws.sendText(JSON.stringify(frame));
   }
+  // Auto mode: connect while the Zeal pipe puts the character in a group or raid, leave after more than 2 minutes alone or
+  // when the setting goes off. A code party (explicit opt-in) is never touched.
+  function stopAuto() {
+    if (ws && ws.readyState === 1) { try { ws.sendText(JSON.stringify({ type: 'bye' })); } catch (e) { void e; } }
+    drop(true);
+    Object.assign(S, { want: null, status: 'off', code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, pausedFor: null, retryAt: 0, attempts: 0, soloSince: 0 });
+  }
+  function autoTick() {
+    if (S.want && !S.want.auto) { S.soloSince = 0; return; }
+    const auto = !!(S.want && S.want.auto);
+    if (!S.share) { if (auto) stopAuto(); return; }
+    let mem = null; try { mem = d.members ? d.members() : null; } catch { mem = null; }
+    if (Array.isArray(mem) && mem.length > 1) {
+      S.soloSince = 0;
+      if (!auto && !d.blocked() && S.autoBlock !== autoKey()) {
+        Object.assign(S, { want: { auto: true }, code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, attempts: 0, retryAt: 0, pausedFor: null });
+        connect();
+      }
+    } else if (auto) {
+      if (!S.soloSince) S.soloSince = now();
+      else if (now() - S.soloSince > PARTY_AUTO_SOLO_MS) stopAuto();
+    }
+  }
   function tick() {
+    autoTick();
     if (!S.want) return;
     const reason = d.blocked();
     if (reason) {                          // stand down: close the socket, keep the code wanted
@@ -70556,7 +70647,17 @@ function createPartyClient(d) {
       if (!PARTY_CODE_RX.test(code)) return { ok: false, error: 'A party code is 6 letters or numbers, like K7M2QX.' };
       return request({ code });
     },
+    // The setting. Kept even while blocked (signed out, dry-run): it connects by itself once the block lifts and the character is grouped.
+    setShare(on) {
+      S.share = on === true;
+      S.autoBlock = null; S.soloSince = 0;
+      if (S.share) start(); else if (S.want && S.want.auto) stopAuto();
+      persist();
+      if (S.share) tick();
+      return { ok: true };
+    },
     leave() {
+      if (S.want && S.want.auto) { S.share = false; S.autoBlock = null; }   // leaving an auto connection turns the sharing off, or it would reconnect at the next tick
       if (ws && ws.readyState === 1) { try { ws.sendText(JSON.stringify({ type: 'bye' })); } catch (e) { void e; } }
       drop(true);
       Object.assign(S, { want: null, status: 'off', code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, pausedFor: null, retryAt: 0, attempts: 0 });
@@ -70566,7 +70667,8 @@ function createPartyClient(d) {
     // Resume a party remembered across an agent restart.
     resume() {
       let saved = null; try { saved = d.store && d.store.load(); } catch { saved = null; }
-      if (!saved || !PARTY_CODE_RX.test(String(saved.code)) || !(now() - Number(saved.at) < PARTY_REJOIN_MAX_AGE_MS)) return false;
+      if (saved && saved.share === true) { S.share = true; start(); }
+      if (!saved || !PARTY_CODE_RX.test(String(saved.code)) || !(now() - Number(saved.at) < PARTY_REJOIN_MAX_AGE_MS)) return S.share;
       Object.assign(S, { want: { code: saved.code }, code: saved.code, status: 'connecting' });
       start(); connect();
       return true;
@@ -70575,6 +70677,8 @@ function createPartyClient(d) {
     status() {
       const t = now();
       return {
+        share: S.share, mode: S.want ? (S.want.auto ? 'auto' : 'code') : null,
+        auto_stopped: !!(S.share && !S.want && S.autoBlock && S.autoBlock === autoKey()),
         status: S.status, code: S.code, tier: S.tier, trial_ends_at: S.trialEndsAt, members: S.members, character: S.character,
         stale: !!(S.view && (S.view.stale || t - S.viewAt > 10_000)), view_age_ms: S.viewAt ? t - S.viewAt : null,
         error: S.error, paused_for: S.pausedFor, paused_text: S.pausedFor ? (PARTY_BLOCK_TEXT[S.pausedFor] || null) : null,
@@ -70676,13 +70780,29 @@ function _partyCollect() {
   src.fires = _fireLog.filter((f) => f.guild && now - f.at < 60_000).slice(-PARTY_MAX_FIRES);
   return src;
 }
+// Who this character is grouped or raided with, off the Zeal pipe (types 6 and 5): self first, then the raid, then the group,
+// each name checked against the relay's rule, repeats dropped, at most 72. Fresh data only (raid list 30 s, group state 60 s);
+// the raid list counts only when it contains this character (a multiboxer's other PC may have sent it). null = no character.
+function _partyMembers() {
+  const ch = _partyCharacter();
+  if (!ch) return null;
+  const cl = ch.toLowerCase(), now = Date.now();
+  let raid = [];
+  if (_lastRaidPipe && now - _lastRaidPipe.at < 30_000 && Array.isArray(_lastRaidPipe.members)) {
+    const names = _lastRaidPipe.members.map((m) => m && m.name).filter(Boolean);
+    if (names.some((n) => String(n).toLowerCase() === cl)) raid = names;
+  }
+  const key = Object.keys(_zealState || {}).find((k) => k.toLowerCase() === cl);
+  const group = _zealGroupNames(key ? _zealState[key] : null, now) || [];
+  return partyMembersList(ch, raid, group);
+}
 function _partyStoreFile(file) {
   return {
     load() { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } },
     save(o) {
       try {
         if (!o) { try { fs.unlinkSync(file); } catch (e) { if (!e || e.code !== 'ENOENT') throw e; } return; }
-        fs.writeFileSync(file + '.tmp', JSON.stringify({ v: 1, code: o.code, at: o.at })); fs.renameSync(file + '.tmp', file);
+        fs.writeFileSync(file + '.tmp', JSON.stringify({ v: 2, code: o.code, at: o.at, share: o.share === true })); fs.renameSync(file + '.tmp', file);
       } catch (e) { void e; }
     },
   };
@@ -70691,7 +70811,7 @@ function _partyClient() {
   if (!_partyClientInst) {
     _partyClientInst = createPartyClient({
       url: () => process.env.WOLFPACK_PARTY_RELAY_URL || PARTY_RELAY_URL,
-      getToken: () => _mimicSessionToken || '', getCharacter: _partyCharacter, blocked: _partyBlocked, collect: _partyCollect,
+      getToken: () => _mimicSessionToken || '', getCharacter: _partyCharacter, blocked: _partyBlocked, collect: _partyCollect, members: _partyMembers,
       version: AGENT_VERSION, store: _partyStoreFile(_partyFile), log: (m) => console.log(m),
     });
   }
@@ -70706,6 +70826,11 @@ function _partyStateForDashboard() {
   if (st.status === 'off' && !st.error) return null;
   return { ...st, ..._partyClientInst.view() };
 }
+// The setting alone, for the dashboard card (partyView is null while idle). `waiting`: on, and no group or raid to share with yet.
+function _partyShareState() {
+  const on = !!(_partyClientInst && _partyClientInst.status().share);
+  return { on, waiting: on && _partyClientInst.status().status === 'off' };
+}
 // Returns true when it answered. Called from the dashboard router, after the local guard.
 async function _partyRoute(req, res) {
   const url = req && req.url;
@@ -70716,9 +70841,10 @@ async function _partyRoute(req, res) {
   let body = {};
   try { const raw = await _readBody(req, 2 * 1024); if (raw && raw.trim()) body = JSON.parse(raw); } catch { return send(400, { error: 'invalid json' }); }
   const act = body && body.action;
-  if (act !== 'create' && act !== 'join' && act !== 'leave') return send(400, { error: 'action must be create, join or leave' });
+  if (act !== 'create' && act !== 'join' && act !== 'leave' && act !== 'share') return send(400, { error: 'action must be create, join, leave or share' });
+  if (act === 'share' && typeof body.on !== 'boolean') return send(400, { error: 'share needs on: true or false' });
   const c = _partyClient();
-  const r = act === 'leave' ? c.leave() : act === 'create' ? c.create() : c.join(body.code);
+  const r = act === 'share' ? c.setShare(body.on) : act === 'leave' ? c.leave() : act === 'create' ? c.create() : c.join(body.code);
   if (!r.ok) return send(400, { ok: false, error: r.error, reason: r.reason || null });
   _stateJsonCache = { at: 0, body: null };      // the dashboard's next poll sees the new state, not the 400 ms copy
   return send(200, { ok: true, ...c.status(), ...c.view() });
@@ -70727,7 +70853,7 @@ async function _partyRoute(req, res) {
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
   // Raid Mimic party (2026-11-15): see the block above module.exports.
-  MiniWebSocket, createPartyClient, partyBuildPub, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
+  MiniWebSocket, createPartyClient, partyBuildPub, partyMembersList, _partyMembers, _partyShareState, _setRaidPipeForTest: (v) => { _lastRaidPipe = v; }, PARTY_AUTO_SOLO_MS, PARTY_MAX_MEMBERS, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
   _partyResetForTest: () => { if (_partyClientInst) _partyClientInst.destroy(); _partyClientInst = null; },
   _partySetFileForTest: (f) => { _partyFile = f || PARTY_FILE; },
   _partyCharacterForTest: (c) => { _partyCharacterOverride = c || null; },

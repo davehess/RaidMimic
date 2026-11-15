@@ -11280,18 +11280,29 @@ function _partyTrayRefresh() {
   if (!agentPort || now - _partyTrayAt < 20000) return;
   _partyTrayAt = now;
   _agentCall('GET', '/api/party').then((r) => {
-    const next = r && r.ok && r.code && r.status && r.status !== 'off' && r.status !== 'ended' ? { code: r.code, members: r.members || 0 } : null;
-    const was = _partyTray && _partyTray.code;
+    const live = r && r.ok && r.code && r.status && r.status !== 'off' && r.status !== 'ended';
+    const next = r && r.ok ? { code: live ? r.code : null, members: live ? (r.members || 0) : 0, share: !!r.share } : null;
+    const was = _partyTray ? `${_partyTray.code}|${_partyTray.share}` : '';
     _partyTray = next;
-    if ((next && next.code) !== was) { try { buildTrayMenu(); } catch (e) { void e; } }
+    if ((next ? `${next.code}|${next.share}` : '') !== was) { try { buildTrayMenu(); } catch (e) { void e; } }
+  });
+}
+// "Share with my in-game group and raid" (default off): the same setting as the dashboard card and Settings, through the agent.
+function _partySetShare(on) {
+  return _agentCall('POST', '/api/party', { action: 'share', on: !!on }).then((r) => {
+    _partyTray = null; _partyTrayAt = 0;
+    try { buildTrayMenu(); } catch (e) { void e; }
+    return { ok: !!(r && r.ok), on: !!(r && r.share) };
   });
 }
 function _partyTrayItems() {
   _partyTrayRefresh();
   const p = _partyTray;
-  if (!p) return [{ label: '🐺 Raid Mimic party…', click: () => showDashboardTab('party') }];
+  const share = { label: '🐺 Share with my in-game group and raid', type: 'checkbox', checked: !!(p && p.share), click: (mi) => { _partySetShare(!!mi.checked); } };
+  if (!p || !p.code) return [{ label: '🐺 Raid Mimic party…', click: () => showDashboardTab('party') }, share];
   return [
     { label: `🐺 Raid Mimic party ${p.code}${p.members ? ` · ${p.members} in it` : ''}`, click: () => showDashboardTab('party') },
+    share,
     { label: '✕ Leave party', click: () => { _agentCall('POST', '/api/party', { action: 'leave' }).then(() => { _partyTray = null; _partyTrayAt = 0; try { buildTrayMenu(); } catch (e) { void e; } }); } },
   ];
 }
@@ -15557,6 +15568,9 @@ ipcMain.handle('open-settings', (_e, section) => { openSettings(section); return
 ipcMain.handle('quit-app', () => { setImmediate(_quitMimic); return true; });
 ipcMain.handle('open-resources', () => { openResources(); return true; });
 ipcMain.handle('open-party-card', () => { showDashboardTab('party'); return true; });   // 🐺 Raid Mimic party (Settings' button)
+// 🐺 "Share with my in-game group and raid" in Settings: read and set through the agent, the same setting as the tray and the card.
+ipcMain.handle('party-share-get', async () => { const r = await _agentCall('GET', '/api/party'); return { ok: !!(r && r.ok), on: !!(r && r.share) }; });
+ipcMain.handle('party-share-set', (_e, on) => _partySetShare(!!on));
 // 💬 Feedback in its own window (the dashboard button and the tray item). False = no agent port yet.
 ipcMain.handle('open-feedback', () => openFeedback());
 // 🎒 "On this PC" pages (the dashboard rail group and the tray item). False = no agent port yet.

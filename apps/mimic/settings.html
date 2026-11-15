@@ -386,10 +386,15 @@
 
   <h2>Raid Mimic party</h2>
   <div class="hint" style="margin-bottom:8px">
-    Share your numbers live with the people you play with: one of you creates a party and gives out the code, the rest join
-    with it, and the DPS HUD's <b>Party</b> switch shows everyone's numbers merged. Free for everyone. Create, join and leave
-    are on the dashboard's Logsync tab (the same card the tray opens).
+    Share your numbers live with the people you play with, and the DPS HUD's <b>Party</b> switch shows everyone's numbers
+    merged. Free for everyone. Turn on the box below to follow your in-game group and raid by itself, or use a party code:
+    one of you creates it and the rest join. Create, join and leave by code are on the dashboard's Logsync tab (the same card the tray opens).
   </div>
+  <label id="partyShareRow" style="display:none;gap:8px;align-items:flex-start;margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="partyShareBox" style="margin-top:3px">
+    <span>Share with my in-game group and raid<br>
+      <span class="hint">Shares only with people in your group or raid who also use Mimic. It connects when you group up and leaves after two minutes on your own. Off by default. Needs Mimic signed in with Discord.</span></span>
+  </label>
   <button id="openPartyBtn" type="button"
     style="margin-top:4px;background:#21262d;color:var(--wp-text);border:1px solid var(--wp-border);border-radius:6px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:12px">
     🐺 Open the party card…
@@ -2076,6 +2081,18 @@
     if (!(window.mimic && window.mimic.openPartyCard)) { btn.style.display = 'none'; return; }
     btn.addEventListener('click', function () {
       try { window.mimic.openPartyCard(); } catch (e) { void e; }
+    });
+  })();
+  // The setting lives in the agent (not in this form's Save): the box reads it on open and writes it at once.
+  (function () {
+    var row = document.getElementById('partyShareRow'), box = document.getElementById('partyShareBox');
+    if (!row || !box || !(window.mimic && window.mimic.getPartyShare && window.mimic.setPartyShare)) return;
+    window.mimic.getPartyShare().then(function (r) {
+      if (!r || !r.ok) return;
+      box.checked = !!r.on; row.style.display = 'flex';
+    }, function () { });
+    box.addEventListener('change', function () {
+      window.mimic.setPartyShare(box.checked).then(function (r) { if (r && r.ok) box.checked = !!r.on; else box.checked = !box.checked; }, function () { box.checked = !box.checked; });
     });
   })();
 

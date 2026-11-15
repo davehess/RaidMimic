@@ -32,7 +32,9 @@ const CONTAINERS = ['Settings', 'Updates', 'Open', 'Help', '🗂 Overlay sets'];
 const NEW_ITEMS = [/^ {2}↳ Span all screens/, /^✨ Setup walkthrough$/, /^🧭 Take the tour again$/, /^Fix EQ file dates \(time-zone crash\)…$/,
   /^🎒 Inventory \(on this PC\)$/, /^📊 My fights \(on this PC\)$/, /^🎬 My replay \(on this PC\)$/, /^🎟 Join a raid with a code…$/,
   // ... and the Raid Mimic party's door to the dashboard card (the party relay client, 2026-11-15).
-  /^🐺 Raid Mimic party…$/];
+  /^🐺 Raid Mimic party…$/,
+  // ... and its checkbox, "Share with my in-game group and raid" (party auto mode, 2026-11-15; default off).
+  /^🐺 Share with my in-game group and raid$/];
 // Items still in the menu, same label, whose handler or state was changed on purpose after the snapshot was taken (the
 // snapshot is left as it was). They are compared by label only, so each must still exist; every other item is compared whole.
 //   Arrange the canvas: enabled follows hideOverlays, and it asks first when the Canvas is off;
@@ -199,6 +201,7 @@ describe('the groups behind the submenus', () => {
       '🎬 My replay (on this PC)',
       '🎟 Join a raid with a code…',
       '🐺 Raid Mimic party…',
+      '🐺 Share with my in-game group and raid',
       'Open wolfpack.quest ↗',
       'Open dashboard in browser',
       'Open my sounds folder (add your own trigger sounds)',
