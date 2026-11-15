@@ -28,7 +28,7 @@ export default function DemoHomePage() {
     { href: `${BASE}/capture`, title: 'Record for others', body: 'A leader records flags for a raider; the owner confirms.' },
     { href: `${BASE}/events`, title: 'Events · option A', body: 'Post an event, see who needs it.' },
     { href: `${BASE}/events/needs`, title: 'Needs board · option B', body: 'The board ranks what is missing and drives the schedule.' },
-    { href: `${BASE}/raid`, title: 'Tonight', body: 'Signed raiders against the flags the pull needs.' },
+    { href: `${BASE}/raid`, title: 'Next raid', body: 'Signed raiders against the flags the pull needs.' },
   ];
 
   return (
