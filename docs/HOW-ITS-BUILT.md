@@ -4395,6 +4395,14 @@ list. An update keeps the ticked options on. IPC: `ui-packs-list`,
 install), `ui-pack-set-options`. Tests: `test/ui-pack-options.test.js` (beta).
 `DECISIONS-2026-09-21.md` §68.
 
+### Item-icon sheets in a custom UI (Settings → Custom UI packs) — 2026-11-15
+`apps/mimic/uiDragItems.js` (pure: `check`, `fix`) compares the active custom UI's `EQUI_Animations.xml` with
+`uifiles/default/`'s and finds `dragitemNN.tga` sheets missing from the `TextureInfo` section, the `A_DragItem`
+animation, or both (missing ones draw as a pearl necklace). The active UI is `eqclient.ini` `UISkin=`
+(`_activeUiSkin` in `main.js`). Settings shows a notice with a Fix button; Fix keeps a dated copy
+(`backupAndWriteBinary`, tag `sheets`) and writes the repaired file. IPC `ui-icon-sheets-check` /
+`ui-icon-sheets-fix`. Tests: `test/ui-dragitems.test.js`.
+
 ### Zeal update notice on the dashboard — 2026-08-04
 Mimic owns Zeal detection (`zealUpdater`, 12h check); the agent owns the
 dashboard. Mimic POSTs to the agent's `/api/zeal-update` and the agent folds it
