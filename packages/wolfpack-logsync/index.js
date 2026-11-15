@@ -60041,7 +60041,22 @@ function buildMobInfo() {
     target_invis:   seeInvisObsFor(st.target_name, _curIdForRelay),
     // Which Target Info history entry this target is, so the pager steps past it (null when none).
     target_hist_key: _tgtLiveKey(st),
+    // Where you and the target stand (Zeal loc / target_loc), for Target Info's live distance. Local only.
+    target_pos: _mobInfoPos(st),
   };
+}
+// { self: {x,y,z}, target: {x,y,z} } in the server's axes, or null unless BOTH positions arrived with a real z (the
+// server measures aggro and rampage in 3D, so a missing z is "unknown", never a flat 0) and neither is the
+// all-zero "no position" an older Zeal sends. Past entries and non-Zeal targets have none.
+function _mobInfoPos(st) {
+  if (!st || !st.target_name) return null;
+  const pick = (loc) => {
+    if (!loc || !Number.isFinite(Number(loc.z)) || loc.z === null) return null;
+    const p = _mapServerXY(loc);
+    return p && !(p.x === 0 && p.y === 0 && p.z === 0) ? p : null;
+  };
+  const self = pick(st.loc), target = pick(st.target_loc);
+  return self && target ? { self, target } : null;
 }
 
 // ── Live character state → bot → Supabase (wolfpack.quest/me) ───────────────

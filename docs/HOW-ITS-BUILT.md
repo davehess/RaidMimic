@@ -2183,6 +2183,18 @@ Tests: `test/target-info-spawn-id-scope.test.js`.
 `nonMelee` and are skipped. `buildMobInfo` serves it as `target_hits`; `mobinfo.html`'s `hitsChip` draws it on the Stats
 tab. Test `test/mob-hit-types.test.js`.
 
+### Mob Info: distance, aggro + assist radius, Area Rampage reach and its red (agent 4.0.89 on `beta`; bot hunk waits for `main`)
+The guild lead 2026-11-15: *"add target distance and aggro and social radius to target info, and area ramp distance next to
+the area ramp bullet. make area ramp red highlighted when in area ramp range."* Stats tab of `mobinfo.html`, one row under the
+resists (`rangeRow`): **Distance** (live), **Aggro** and **Assist** radius. The Area Rampage chip reads `Area Rampage · 75`
+(`aeChip`) and gets a `.hot` class, solid `--wp-red`, while the target is inside it. Data path: the agent adds
+`mobInfo.target_pos` (`_mobInfoPos`: Zeal `loc` + `target_loc`, only when both have a real z); the same Zeal positions the Map
+draws from. The reach is the bot's existing `ae_rampage.radius_still` (`utils/aeRampage.js`, the Map's red ring); the radii are
+the new `aggroradius` / `assistradius` keys on the mob-info row (pack shape 12). Distance is 3D (server `DistanceSquared` on
+a vec4 cast to vec3, `zone/aggro.cpp:453`); a blank aggro radius is 70 and a blank assist radius is the aggro radius
+(`zone/zonedb.cpp:2025-2034`). Volatile text lives in placeholders (`#wpDist`, the chip's class) filled by `paintRange` every
+poll, so the body string stays byte-stable. Anything unknown draws nothing and never goes red. Test `test/mobinfo-range.test.js`.
+
 ### Mob Info: "will invis hide me from this?" (bot 3.1.115 · agent 3.6.28 · Mimic 2.6.5)
 The guild lead 2026-09-02: *"mob info needs to also denote if a mob can see invis."* The
 four sight flags were already selected AND already returned by `mob-info` — the
