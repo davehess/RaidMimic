@@ -25,10 +25,10 @@ export default function DemoNeedsPage() {
 
   return (
     <DemoShell active="needs" title="What the guild needs, most first"
-      lead="Option B · Needs board drives the schedule. Demand first: the board ranks what raiders are missing, and the leader schedules from the top.">
+      lead="Option B · The board ranks what is missing; schedule from the top.">
       <div className="flex flex-col gap-4">
         <p className="m-0 text-xs text-dim">
-          {total} raiders · {rows.length} targets · {scheduled} scheduled · the posted events below came from this board
+          {total} raiders · {rows.length} targets · {scheduled} scheduled
         </p>
 
         <ol aria-label="Flag targets by need" className="m-0 flex list-none flex-col gap-2 p-0">
@@ -52,8 +52,8 @@ export default function DemoNeedsPage() {
                 </p>
                 <p className="m-0 text-[11px] leading-5 text-dim">
                   {idle.length > 0
-                    ? <><b className="text-text">{idle.length}</b> of them {idle.length === 1 ? 'is' : 'are'} free this week and not signed for it yet: {idle.map(c => c.name).join(', ')}.</>
-                    : 'Everyone who needs it and is free this week is already signed for it.'}
+                    ? <><b className="text-text">{idle.length}</b> free and not signed: {idle.map(c => c.name).join(', ')}.</>
+                    : 'Everyone free who needs it has signed.'}
                 </p>
               </div>
 

@@ -28,10 +28,11 @@ describe('the page: signed out gets the stage, signed in gets the panel', () => 
     expect(page).toMatch(/let top = <StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>;/);
     expect(page).toMatch(/if \(signedIn\) \{[^]*<HomePanelGate[^]*panel=\{<HomeDashboard [^]*mine=\{mine\} guilds=\{guilds\}/);
   });
-  it('signed in, the bar is drawn once, ABOVE the Dashboard; signed out, once under the stage', () => {
-    expect(page).toMatch(/\{signedIn && onHost && <div className="mx-auto max-w-5xl"><HostBar \/><\/div>\}\s*\{top\}/);
-    expect(page).toMatch(/\{!signedIn && onHost && <HostBar \/>\}/);
-    expect(panel).not.toMatch(/HostBar/);
+  it('signed in or out the page sits in the shell once, and the Dashboard panel draws no bar of its own', () => {
+    expect(page.match(/<HostFrame onHost=\{onHost\}>/g)).toHaveLength(1);
+    expect(page).toMatch(/<HostFrame onHost=\{onHost\}>\s*<div id="raidmimic-home">\s*\{top\}/);
+    expect(page).not.toMatch(/HostBar/);
+    expect(panel).not.toMatch(/HostBar|HostFrame/);
   });
   it('reads no query at all, and no variant or redirect survives', () => {
     expect(page).not.toMatch(/searchParams|\bv === |\?v=|redirect\(|bigSkip/);

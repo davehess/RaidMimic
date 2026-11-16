@@ -159,6 +159,12 @@ writes.
   Set up, For guild leaders; the landing page's `Footer` with privacy, terms, refunds, contact) and `/setup` takes the bar
   (it has its own footer); on a Wolf Pack host the frame renders nothing. The bar is sticky and one line (web 2.1.98), and
   the landing page carries it under its stage on a raidmimic host. `test/raidmimic-frame.test.js`.
+  **Since web 2.2.4 the frame is Wolf Pack's layout** (DECISIONS §592, Desk rm-shell B): `HostFrame` renders
+  `RaidmimicShell.tsx` on every raidmimic page, the landing and `/setup` included: a full-width sticky header
+  (`RaidmimicHeader.tsx`: logo, Download / Beta / Linux chips from `web/lib/raidmimicShell.ts`, the `raidmimicNav.ts`
+  sections as dropdowns, sign-in), a side nav of the section's pages (`RaidmimicSideShell.tsx`, PopShell's pattern; pages in
+  no section get About: costs, privacy, security, terms, refunds) and `RaidmimicShellFooter.tsx`. `LegalShell` wraps itself
+  in it. `test/raidmimic-shell.test.js`.
   `/guilds` (`web/app/guilds/`): the Wolf Pack card for members, one card per `hub_*` membership, join by invite code
   (rate-limited; uses, expiry and suspension honoured; `JoinForm.tsx`, `actions.ts`), "Find my guilds" (a second consent,
   `identify guilds`: matches the Discord server list against `hub_guilds.discord_guild_id`, joins `open_join` guilds, lists closed

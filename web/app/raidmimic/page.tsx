@@ -30,7 +30,7 @@ import { DOWNLOAD_URL } from '@/lib/raidmimicPlayer';
 import { CtaBand, Footer, type Ctx } from './_landing/Parts';
 import StoryStage from './_landing/StoryStage';
 import { FeatureBlocks, Pricing, RaidManagement } from './_landing/StoryParts';
-import { HostBar } from '@/components/RaidmimicFrame';
+import HostFrame from '@/components/RaidmimicFrame';
 
 const TITLE = 'Raid Mimic · free EverQuest raid overlays';
 const DESCRIPTION =
@@ -70,15 +70,13 @@ export default async function RaidmimicPage() {
   }
   // The stage is outside the width cap so it can span the viewport; the page under it is a reading column. No query is read:
   // a raidmimic host drops every one in the middleware, and the Wolf Pack hosts show the same page.
+  // On a raidmimic host the page sits in the shell (Wolf Pack's header and footer around it, the guild lead, 2026-11-15), so
+  // the bar the page used to draw and its own Footer are the shell's now.
   return (
+    <HostFrame onHost={onHost}>
     <div id="raidmimic-home">
-      {/* Signed in, the bar comes FIRST (the guild lead, 2026-11-09: the bar sat under the panel). */}
-      {signedIn && onHost && <div className="mx-auto max-w-5xl"><HostBar /></div>}
       {top}
       <div className="mx-auto max-w-5xl pb-12">
-        {/* The bar the other raidmimic.com pages carry: it slides in under the stage and stays pinned (the guild lead,
-            2026-11-02: "top bar on the raidmimic.com site doesn't lock"). The stage keeps its own header. */}
-        {!signedIn && onHost && <HostBar />}
         <FeatureBlocks />
         {!signedIn && (
           <section aria-label="Track your PoP flags" className="mt-6 rounded-md border border-gold/70 bg-panel p-5 sm:p-6">
@@ -93,8 +91,9 @@ export default async function RaidmimicPage() {
         <RaidManagement />
         <Pricing setup={ctx.setup} onHost={onHost} />
         <div className="mt-12"><CtaBand ctx={ctx} /></div>
-        <Footer onHost={onHost} />
+        {!onHost && <Footer onHost={false} />}
       </div>
     </div>
+    </HostFrame>
   );
 }

@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-wolfpack-layout-2026-11-16',
+    title: 'Raid Mimic in Wolf Pack\'s layout',
+    version: 'Web 2.2.4',
+    date: '2026-11-16',
+    headline: 'raidmimic.com now looks and works like wolfpack.quest, with shorter pages and a privacy page that says plainly what Raid Mimic keeps.',
+    features: [
+      { name: 'The same layout', blurb: 'Downloads sit in the top corner, each section has its own menu, and the pages of the section you are in are listed down the side. The home page and the set-up guide wear it too.' },
+      { name: 'Shorter pages', blurb: 'Each page opens with a title and one line, then gets to the point.' },
+      { name: 'A plain privacy page', blurb: 'It says what Raid Mimic keeps about you, for how long, what your guild keeps, and how to download or delete your data.' },
+      { name: 'Next raid', blurb: 'The demo says "Next raid" instead of "Tonight", because some guilds raid at midday.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'raidmimic-character-page-2026-11-15',
     title: 'A page for each character',
     version: 'Web 2.2.3',

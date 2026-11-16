@@ -77,7 +77,7 @@ function RaidRow({ raid, nowMs }: { raid: MyRaid; nowMs: number }) {
           ))}
         </ul>
       )}
-      {!raid.targetKey && <p className="m-0 mt-3 text-xs text-dim">Pick a target to see who is ready.</p>}
+      {!raid.targetKey && <p className="m-0 mt-3 text-xs text-dim">Pick a target.</p>}
     </li>
   );
 }
@@ -107,7 +107,7 @@ function Calendar({ raids, y, m }: { raids: MyRaid[]; y: number; m: number }) {
           </div>
         ))}
       </div>
-      <p className="mb-0 mt-2 text-xs text-dim">Raid days are marked with a gold edge. Calendar days are in each guild’s own time zone.</p>
+      <p className="mb-0 mt-2 text-xs text-dim">Gold edge: a raid day. Each guild’s own time zone.</p>
     </div>
   );
 }
@@ -177,7 +177,7 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
         <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
           {note}
           <h1 className="text-2xl text-gold">{TITLE}</h1>
-          <p className="mt-2 text-sm text-dim">Sign in with Discord to see your upcoming raids, set the days each of your guilds raids, and see which of your characters is ready. Discord only tells us who you are.</p>
+          <p className="mt-2 text-sm text-dim">Sign in with Discord to see your upcoming raids.</p>
           <div className="mt-4"><SignInButton next="/raids" /></div>
         </div>
       </HostFrame>
@@ -199,7 +199,7 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
       <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
         {note}
         <h1 className="text-2xl text-gold">{TITLE}</h1>
-        <p className="mt-1 text-sm text-dim">Signed in with Discord. Only you can see this page.</p>
+        <p className="mt-1 text-sm text-dim">Only you can see this page.</p>
         {err && <p role="alert" className="mt-3 text-sm text-red">{err}</p>}
 
         <section aria-label="Upcoming raids" className="mt-5">
@@ -210,8 +210,8 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
               <a href="/raids?view=calendar" aria-current={calendar ? 'page' : undefined} className={`inline-flex min-h-11 items-center rounded px-3 ${calendar ? 'bg-panel text-gold' : 'text-dim'} hover:no-underline`}>Calendar</a>
             </nav>
           </div>
-          {data.entries.length === 0 && <p className="mt-3 text-sm text-dim">Add a guild below, with the days it raids, and your next raids show up here.</p>}
-          {data.entries.length > 0 && raids.length === 0 && <p className="mt-3 text-sm text-dim">No raids in the next {horizon} days. Check each guild’s days and start time below.</p>}
+          {data.entries.length === 0 && <p className="mt-3 text-sm text-dim">Add a guild below.</p>}
+          {data.entries.length > 0 && raids.length === 0 && <p className="mt-3 text-sm text-dim">No raids in the next {horizon} days.</p>}
           {calendar
             ? <div className="mt-3"><Calendar raids={raids} y={month.y} m={month.m} /></div>
             : <ul className="m-0 mt-3 list-none space-y-3 p-0">{raids.map(r => <RaidRow key={`${r.entryId}-${r.dateKey}`} raid={r} nowMs={nowMs} />)}</ul>}
@@ -219,7 +219,7 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
 
         <section aria-label="My guilds" className="mt-8">
           <h2 className="m-0 text-lg text-text">My guilds</h2>
-          <p className="mt-1 text-sm text-dim">The guilds you raid with and the days each one raids. Up to {MAX_GUILD_ENTRIES}.</p>
+          <p className="mt-1 text-sm text-dim">Up to {MAX_GUILD_ENTRIES}.</p>
           <div className="mt-3 space-y-3">
             {data.entries.map(e => (
               <details key={e.id} className={CARD}>
@@ -241,8 +241,8 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
 
         <section aria-label="My characters' guilds" className="mt-8">
           <h2 className="m-0 text-lg text-text">My characters’ guilds</h2>
-          {data.characters.length === 0 && <p className="mt-2 text-sm text-dim">No characters loaded yet. <a href="/characters">Load them from your PoPFlags file</a>.</p>}
-          {data.characters.length > 0 && data.entries.length === 0 && <p className="mt-2 text-sm text-dim">Add a guild above, then pick which of your characters raids with it.</p>}
+          {data.characters.length === 0 && <p className="mt-2 text-sm text-dim"><a href="/characters">Load a character</a> first.</p>}
+          {data.characters.length > 0 && data.entries.length === 0 && <p className="mt-2 text-sm text-dim">Add a guild above first.</p>}
           {data.characters.length > 0 && data.entries.length > 0 && (
             <ul className="m-0 mt-3 list-none space-y-2 p-0">
               {data.characters.map(c => (

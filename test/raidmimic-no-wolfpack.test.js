@@ -84,9 +84,9 @@ describe('no raidmimic page, component or lib spells the Wolf Pack address', () 
     expect(src).not.toMatch(/https?:\/\//);
     expect(src).not.toMatch(/Wolf Pack (?:privacy )?page/i);
     expect([...src.matchAll(/href=\{([^}]+)\}/g)].map(m => m[1].trim()).sort()).toEqual(
-      ['CONTACT_HREF', 'CONTACT_HREF', 'CONTACT_HREF', 'REPO_URL', 'REPO_URL', 'YOUR_DATA_PATH', 'p.refunds', 'p.terms'].sort());
+      ['CONTACT_HREF', 'CONTACT_HREF', 'REPO_URL', 'REPO_URL', 'YOUR_DATA_PATH', 'YOUR_DATA_PATH', 'YOUR_DATA_PATH', 'p.refunds', 'p.terms'].sort());
     // what the four links to the Wolf Pack page used to carry is now written out on this page
-    for (const heading of ['What other raiders’ Mimic records about you', 'What your switches actually do', 'How long we keep it', 'Who else handles it']) {
+    for (const heading of ['What we keep about you, and for how long', 'If your guild runs on Raid Mimic', 'Who else handles it']) {
       expect(src, heading).toContain(heading);
     }
     for (const who of ['OpenDKP', 'Raid-Helper', 'Microsoft']) expect(src, who).toContain(who);
@@ -264,7 +264,7 @@ describe('the wiring, as source', () => {
     for (const rel of SURFACES.filter(f => f.endsWith('.tsx'))) {
       expect(code(rel), `${rel} links /guilds without stay=1`).not.toMatch(/href="\/guilds"|href=\{'\/guilds'\}|href: '\/guilds'/);
     }
-    expect(code('web/components/RaidmimicFrame.tsx')).toMatch(/\{ label: 'Your guilds', href: GUILDS_STAY_PATH \}/);
+    expect(code('web/lib/raidmimicNav.ts')).toMatch(/\{ label: 'Your guilds', href: GUILDS_STAY_PATH \}/);
     for (const rel of ['web/app/guilds/[slug]/page.tsx', 'web/app/guilds/new/page.tsx']) expect(code(rel), rel).toMatch(/href=\{GUILDS_STAY_PATH\}[^>]*>&larr; Your guilds/);
     expect(code('web/app/guilds/JoinForm.tsx')).toMatch(/router\.replace\(GUILDS_STAY_PATH\)/);
     expect(code('web/app/auth/mimic-link/page.tsx')).toMatch(/<Link href=\{GUILDS_STAY_PATH\}/);

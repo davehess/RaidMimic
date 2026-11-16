@@ -106,17 +106,20 @@ describe('what the pages must say', () => {
     expect(src).toMatch(/CONTACT_EMAIL/);
     expect(src).toMatch(/Raid Mimic team/);
     for (const who of ['Supabase', 'Railway', 'Vercel', 'GitHub', 'Anthropic', 'Discord']) expect(src, who).toContain(who);
-    expect(src).toMatch(/A guild owns its members’ raid records/);
+    expect(src).toMatch(/A guild owns its raid records/);
     expect(src).toMatch(/never used to train AI models/i);
     expect(src).toMatch(/not for children under \{MIN_AGE\}/i);
     expect(src).toMatch(/No ads, no selling, no tracking scripts/);
     expect(src).toMatch(/sign-in cookie/);
-    expect(src).toMatch(/How long we keep it/);
+    expect(src).toMatch(/What we keep about you, and for how long/);
     expect(src).toMatch(/Never used to train AI models/);
+    expect(src).toMatch(/updated=\{PRIVACY_UPDATED\}/);
+    expect(L.PRIVACY_UPDATED).toBe('November 15, 2026');
   });
   it('privacy: download and delete yourself under Your data (shipped 2026-11-01), with email for the rest', () => {
     const src = code(PAGES.privacy);
-    expect(src).toMatch(/Download and delete it yourself:<\/B> sign in and open/);
+    expect(src).toMatch(/Download and delete it yourself:<\/B> <a href=\{YOUR_DATA_PATH\}/);
+    expect(src).toMatch(/<B>Delete everything:<\/B>/);
     expect(src).not.toMatch(/being built now/);
     expect(src).toMatch(/href=\{YOUR_DATA_PATH\}/);
     expect(src).toMatch(/Anything else/);
@@ -448,7 +451,9 @@ describe('the landing page additions', () => {
     expect(f).toMatch(/<LegalLinks onHost=\{onHost\} \/>/);
     expect(f).toMatch(/export function Footer\(\{ onHost = false \}/);
     const page = code('web/app/raidmimic/page.tsx');
-    expect(page).toMatch(/<Footer onHost=\{onHost\} \/>/);
+    // a Wolf Pack host keeps the page's own footer; a raidmimic host gets the shell's, which carries the same shared links
+    expect(page).toMatch(/\{!onHost && <Footer onHost=\{false\} \/>\}/);
+    expect(code('web/components/RaidmimicShellFooter.tsx')).toMatch(/<LegalLinks onHost \/>/);
     expect(page).toMatch(/<Pricing setup=\{ctx\.setup\} onHost=\{onHost\} \/>/);
     const links = code('web/components/LegalLinks.tsx');
     expect(links).toMatch(/\['Privacy', p\.privacy\], \['Security', p\.security\], \['Terms', p\.terms\], \['Refunds', p\.refunds\], \['Contact', CONTACT_HREF\]/);

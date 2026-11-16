@@ -61,11 +61,10 @@ export default function LoadBlock({ max, held }: { max: number; held: number }) 
         </form>
       </div>
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-blue">How to get the files or lines ({held} of {max} characters loaded)</summary>
+        <summary className="cursor-pointer text-xs text-blue">How this works ({held} of {max} characters loaded)</summary>
         <p className="mt-1 text-xs text-dim">
-          Files: camp with Zeal&apos;s &ldquo;Export data on /camp&rdquo; on. Each character leaves <code>Name-PoPFlags.txt</code> in the EverQuest
-          folder; choose one or several. Paste: type <code>#popflags</code> (or talk to the Seer), copy the lines from the chat window and paste
-          them with the character&rsquo;s name. Only flag lines are kept; anything else is dropped.
+          Files: camp with Zeal&apos;s &ldquo;Export data on /camp&rdquo; on; <code>Name-PoPFlags.txt</code> lands in the EverQuest folder.
+          Paste: type <code>#popflags</code>, copy the chat lines, add the name. Only flag lines are kept.
         </p>
       </details>
 

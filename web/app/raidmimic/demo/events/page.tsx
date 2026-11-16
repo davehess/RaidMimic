@@ -30,7 +30,7 @@ export default function DemoEventsPage() {
   const sorted = [...EVENTS].sort((a, b) => byDay.indexOf(a.day) - byDay.indexOf(b.day));
   return (
     <DemoShell active="events" title="Flag events this week"
-      lead="Option A · Post an event, see who needs it. Calendar first: the leader picks a target and a night, and each event lists the raiders it still helps.">
+      lead="Option A · Post an event, see who needs it.">
       <div className="flex flex-col gap-4">
         <section aria-labelledby="post-title" className={`${PANEL} flex flex-col gap-2`}>
           <h2 id="post-title" className="text-sm text-gold font-semibold">Post an event</h2>
@@ -48,7 +48,7 @@ export default function DemoEventsPage() {
             <DemoButton>Post event</DemoButton>
             <span className="pb-2 text-[11px] text-dim">demo: nothing is saved</span>
           </div>
-          <p className="m-0 text-[11px] text-dim">The target comes from a list, so everyone says &quot;Tallon &amp; Vallon&quot; the same way and the page can tell who needs it.</p>
+          
         </section>
 
         <section aria-label="Upcoming events" className="flex flex-col gap-2">
@@ -76,7 +76,7 @@ export default function DemoEventsPage() {
                       <>
                         <h3 className="m-0 mt-1 text-[11px] uppercase tracking-wide text-dim">Not recorded · {n.unsure.length}</h3>
                         <Names chars={n.unsure} tone="border-border text-dim" />
-                        <p className="m-0 text-[11px] text-dim">No full read yet, so we do not guess. Ask them to paste the Seer&apos;s recital, or record it for them.</p>
+                        <p className="m-0 text-[11px] text-dim">No full read yet. Ask for the Seer&apos;s recital.</p>
                       </>
                     )}
                   </div>
@@ -101,8 +101,8 @@ export default function DemoEventsPage() {
         </section>
 
         <p className="text-xs text-dim">
-          Prefer to start from what the guild is missing? That is <a href={`${BASE}/events/needs`}className="text-blue hover:underline">option B, the needs board</a>.
-          Counts here include flags recorded for someone else, shown as reported on <a href={`${BASE}/flags#reported`}className="text-blue hover:underline">the flags page</a>.
+          Start from what is missing: <a href={`${BASE}/events/needs`}className="text-blue hover:underline">option B, the needs board</a>.
+          Reported flags: <a href={`${BASE}/flags#reported`}className="text-blue hover:underline">the flags page</a>.
         </p>
       </div>
     </DemoShell>

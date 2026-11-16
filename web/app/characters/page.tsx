@@ -57,7 +57,7 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
         <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
           {note}
           <h1 className="text-2xl text-gold">My characters</h1>
-          <p className="mt-2 text-sm text-dim">Sign in with Discord to load your characters and see what each one needs next for the Planes of Power. Discord only tells us who you are.</p>
+          <p className="mt-2 text-sm text-dim">Sign in with Discord to load your characters.</p>
           <div className="mt-4"><SignInButton next="/characters" /></div>
         </div>
       </HostFrame>
@@ -79,7 +79,7 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
       <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
         {note}
         <h1 className="text-2xl text-gold">My characters</h1>
-        <p className="mt-1 text-sm text-dim">Signed in with Discord. Only you can see this page.</p>
+        <p className="mt-1 text-sm text-dim">Only you can see this page.</p>
 
         <section aria-label="Load characters" className="mt-4">
           <LoadBlock max={MAX_CHARACTERS_PER_PLAYER} held={mine.length} />
@@ -90,12 +90,11 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
             <GateTable gates={GATE_CHOICES} selected={gateKey} rows={matrixRows(mine, gateKey)}
               hrefFor={k => `/characters?gate=${k}`} singleHref="#your-characters"
               overall={{ href: '/characters?gate=overall', active: overall, rows: overallRows(mine) }} />
-            <p className="mt-1 text-xs text-dim">Most flags first. Each card below says what that character needs next.</p>
           </section>
         )}
 
         <section id="your-characters" aria-label="Your characters" className="mt-6 space-y-3">
-          {mine.length === 0 && <p className="text-sm text-dim">No characters loaded yet. Choose your PoPFlags files above.</p>}
+          {mine.length === 0 && <p className="text-sm text-dim">No characters yet.</p>}
           {mine.map(c => (
             <article key={c.name} className={CARD}>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -108,10 +107,10 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
 
               <p className="mt-3 text-sm">
                 {withGear.has(c.name.toLowerCase())
-                  ? <span className="text-dim">Gear and bags loaded.</span>
-                  : <span className="text-dim">Only PoP flags so far: no inventory or Quarmy file yet.</span>}{' '}
+                  ? <span className="text-dim">Gear loaded.</span>
+                  : <span className="text-dim">No gear yet.</span>}{' '}
                 <Link href={`/characters/${encodeURIComponent(c.name)}`} className="text-blue">
-                  {withGear.has(c.name.toLowerCase()) ? 'Open character page' : 'Open it to add inventory and Quarmy files'}
+                  {withGear.has(c.name.toLowerCase()) ? 'Open' : 'Add gear'}
                 </Link>
               </p>
 

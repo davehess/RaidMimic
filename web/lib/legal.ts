@@ -19,6 +19,9 @@ export const LEGAL_UPDATED = 'November 1, 2026';
 /** The security page's own date (it is not part of the terms version, so it moves without asking anyone to agree again). */
 export const SECURITY_UPDATED = 'November 15, 2026';
 
+/** The privacy page's own date (rewritten 2026-11-15; not part of the terms version, so it moves without asking anyone to agree again). */
+export const PRIVACY_UPDATED = 'November 15, 2026';
+
 /** The youngest person these services are for (the same floor Discord, which every sign-in goes through, sets). */
 export const MIN_AGE = 13;
 

@@ -16,7 +16,7 @@ export default function FlagsView({ gateKey }: { gateKey: string }) {
   const gate = GATE_CHOICES.find(g => g.key === gateKey) ?? GATE_CHOICES[0];
   return (
     <DemoShell active="flags" title="Planes of Power progress, the whole guild"
-      lead="Every raider against one gate, piece by piece. Pick a gate to see who is missing what, so a leader schedules the right night.">
+      lead="Every raider against one gate. Pick a gate.">
       <div className="flex flex-col gap-4">
         <GateTable gates={GATE_CHOICES} selected={gateKey} rows={rows} hrefFor={flagsHref} singleHref={`${BASE}/capture`} />
 
@@ -26,10 +26,8 @@ export default function FlagsView({ gateKey }: { gateKey: string }) {
             <a href={`${BASE}/capture`} className="ml-auto text-xs text-blue hover:underline">how a leader records these →</a>
           </div>
           <p className="text-xs leading-5 text-dim">
-            A raid leader can record flags for a character that is not theirs. Those show here as <span className="text-green">✅</span>{' '}
-            <span className="text-gold">reported</span>, and they count when a leader plans a night. They never show a{' '}
-            <span className="text-red">❌</span>: only the owner&apos;s own read can say a flag is missing. The owner signs in with
-            Discord, then confirms the report or corrects it.
+            Recorded by a leader: <span className="text-green">✅</span> <span className="text-gold">reported</span>, never
+            <span className="text-red"> ❌</span>. The owner confirms or corrects.
           </p>
           {reported.length === 0 ? (
             <p className="text-sm text-dim">Nothing is waiting for an owner.</p>

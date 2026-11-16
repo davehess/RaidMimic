@@ -58,7 +58,7 @@ export default async function CharacterPage({ params }: { params: { name: string
       <HostFrame onHost={onHost}>
         <div className="mx-auto max-w-3xl px-1 py-2 pb-12">
           <h1 className="text-2xl text-gold">Character</h1>
-          <p className="mt-2 text-sm text-dim">Sign in with Discord to see your character. Only its owner can open this page.</p>
+          <p className="mt-2 text-sm text-dim">Sign in with Discord. Only its owner can open this page.</p>
           <div className="mt-4"><SignInButton next={`/characters/${encodeURIComponent(name)}`} /></div>
         </div>
       </HostFrame>
@@ -105,7 +105,7 @@ export default async function CharacterPage({ params }: { params: { name: string
           <h2 className="text-lg text-text">Gear and bags</h2>
           {flagsOnly ? (
             <p className="mt-1 text-sm text-dim">
-              Only PoP flags are loaded for {view.name}. Add its inventory file, its Quarmy file, or both, and its gear and bags show here.
+              No gear loaded yet.
             </p>
           ) : (
             <div className="mt-2"><InventoryView sets={sets} icons={icons} /></div>

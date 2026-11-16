@@ -23,7 +23,7 @@ export default function DemoCapturePage() {
   const subject = charByName(CAPTURE.subject);
   return (
     <DemoShell active="capture" title="Record flags for someone else"
-      lead="A leader who has watched a raider's flags can record them in a minute, instead of waiting for that raider to paste their own. The raider confirms later.">
+      lead="A leader records a raider's flags; the raider confirms later.">
       <div className="flex flex-col gap-4">
         <section aria-labelledby="leader-title" className={`${PANEL} flex flex-col gap-3`}>
           <h2 id="leader-title" className="text-sm text-gold font-semibold">1 · The raid leader ({CAPTURE.leader}) records flags for {CAPTURE.subject}</h2>
@@ -55,9 +55,7 @@ export default function DemoCapturePage() {
             <span className="text-[11px] text-dim">demo: nothing is saved</span>
           </div>
           <p className="border-l-2 border-orange/60 pl-3 text-xs leading-5 text-dim">
-            A report can add a flag. It never removes one and never marks anything missing: only {CAPTURE.subject}&apos;s own read
-            can say that. Until then the flags show as <span className="text-green">✅</span> <span className="text-gold">reported</span> and
-            count when you plan a night.
+            A report only adds flags; only {CAPTURE.subject}&apos;s own read can mark one missing. Until then they show <span className="text-green">✅</span> <span className="text-gold">reported</span>.
           </p>
         </section>
 
@@ -79,9 +77,9 @@ export default function DemoCapturePage() {
             </div>
           </div>
           <ul className="m-0 list-disc space-y-1 pl-5 text-xs leading-5 text-dim marker:text-dim">
-            <li><b className="text-text">Confirm</b> turns every reported flag into the owner&apos;s own, and the tag goes away.</li>
-            <li><b className="text-text">Correct</b> lets the owner paste their own recital; what it says wins, and the report is dropped.</li>
-            <li>Only the owner can change their own flags. A leader cannot overwrite what a character confirmed.</li>
+            <li><b className="text-text">Confirm</b> makes every reported flag the owner&apos;s own.</li>
+            <li><b className="text-text">Correct</b> replaces the report with the owner&apos;s own recital.</li>
+            <li>Only the owner can change their flags.</li>
           </ul>
         </section>
 
