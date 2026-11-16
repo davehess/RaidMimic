@@ -1,3 +1,7 @@
+/* The website's colour tokens (--wp-*). Every Tailwind colour (text-green, bg-panel, border-border...) reads one of these
+   variables, so without this import every themed colour on the local pages had no value and drew grey (the guild lead,
+   2026-11-16: "Where is the color on these local pages?"). */
+@import '../../app/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

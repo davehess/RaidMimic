@@ -21079,6 +21079,11 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
    panes). Items are not data-tab buttons, so the tab switcher ignores them. */
 .wp-rail-grp { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
 .wp-rail-grp .wp-lbl { padding:0 2px 2px; }
+/* A page plus its ↗ "own window" button on one row (2026-11-16). */
+.wp-rail-row { display:flex; gap:4px; }
+.wp-rail-row > button:first-child { flex:1 1 auto; min-width:0; }
+.wp-rail-row > .wp-pop { flex:0 0 auto; padding-left:7px; padding-right:7px; color:var(--dim); }
+.wp-rail-row > .wp-pop:hover { color:var(--text); }
 .nav button:disabled { opacity:.45; cursor:default; }
 .nav button:disabled:hover { background:#21262d; }
 .wp-rail-grp .wp-soon { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin-left:4px; }
@@ -21391,7 +21396,7 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <div class="nav">
   <!-- The rail is grouped by WHEN you reach for a tab (Layout A, the guild lead, 2026-10-21). The headings are
        plain divs: no data-tab, not buttons, so nothing that binds '.nav button[data-tab]' ever sees them. -->
-  <div class="wp-rail-h">Live &mdash; raid night</div>
+  <div class="wp-rail-h">Live</div>
   <button class="active" data-tab="dash">Dashboard</button>
   <button data-tab="raid">⚔ Raid</button>
   <button data-tab="fights">⚔️ Fights</button>
@@ -21434,10 +21439,12 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
        📈 My parses tab above it. No data-tab, so the tab switcher ignores them. -->
   <div class="wp-rail-grp" id="wpLocalGrp">
     <div class="wp-lbl">On this PC</div>
-    <button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory')" title="Every item across your characters, from the inventory files on this PC (opens in its own window). Nothing leaves the PC.">🎒 Inventory</button>
-    <button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags')" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC (opens in its own window). Nothing leaves the PC.">🗺️ PoP flags</button>
-    <button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses')" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member (opens in its own window). Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button>
-    <button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay')" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC (opens in its own window). Nothing leaves the PC.">🎬 My replay</button>
+    <!-- Each page opens in THIS window; ↗ (or Ctrl / Shift / middle click) opens it in its own window (the guild lead,
+         2026-11-16: "should be able to load in the same window, not external unless people want to launch in a new window"). -->
+    <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
+    <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
+    <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
+    <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
     <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
     <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
   </div>
@@ -21766,11 +21773,21 @@ function wpFeedbackClick() {
   }
   wpOpenFeedback();
 }
-// The rail's "On this PC" items: a page of the local site (/local/<page>/, served by this agent). Mimic opens
-// it in its own window (the same one the tray item opens); with no Mimic bridge, or while the agent has no
-// port yet, a new browser tab does the job.
-function wpOpenLocalSite(page) {
+// The rail's "On this PC" items: a page of the local site (/local/<page>/, served by this agent). A plain click opens it
+// in THIS window (the guild lead, 2026-11-16: "should be able to load in the same window, not external unless people want
+// to launch in a new window"); the page then shows "← Dashboard" (LocalNav reads the session flag set here). The ↗
+// button ('window'), Ctrl / Shift / Cmd click and a middle click open it in its own window, the one the tray item opens;
+// with no Mimic bridge, or while the agent has no port yet, a new browser tab does that job.
+function wpOpenLocalSite(page, how) {
   var url = '/local/' + page + '/';
+  var own = how === 'window' || (how && typeof how === 'object' && (how.ctrlKey || how.metaKey || how.shiftKey || how.button === 1));
+  if (how && typeof how === 'object' && how.type === 'auxclick' && how.button !== 1) return;   // right click: the menu, not a page
+  if (!own) {
+    try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; }
+    location.href = url;
+    return;
+  }
+  if (how && typeof how === 'object' && how.preventDefault) how.preventDefault();
   var fallback = function () { try { window.open(url, '_blank'); } catch (e) { void e; } };
   if (window.mimic && window.mimic.openLocalSite) {
     try {

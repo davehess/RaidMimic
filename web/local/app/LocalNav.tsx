@@ -34,13 +34,28 @@ function useHistoryState() {
   return s;
 }
 
+// Opened from the dashboard rail in the dashboard's own window (the guild lead, 2026-11-16: "should be able to load in the
+// same window"): the rail sets this session flag, so the page offers the way back. A page in its own window never sees it.
+function useFromDashboard() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try { setOn(sessionStorage.getItem('wpLocalFromDash') === '1'); } catch { setOn(false); }
+  }, []);
+  return on;
+}
+
 export default function LocalNav() {
   const hist = useHistoryState();
+  const fromDash = useFromDashboard();
   const path = (usePathname() || '/').replace(/^\/local/, '') || '/';
   // /local/ is the inventory (app/page.tsx), so the bare root lights Inventory too.
   const isOn = (href: string) => (href === '/inventory/' ? /^\/(inventory\/?)?$/.test(path) : path.replace(/\/?$/, '/') === href);
   return (
     <nav className="flex flex-wrap items-center gap-2" aria-label="On this PC">
+      {fromDash && (
+        // A plain <a>, not next/link: the dashboard lives at the agent's root, outside this site's /local base path.
+        <a href="/" className="px-3 py-1 rounded border border-gold/60 text-xs text-gold no-underline hover:border-gold">← Dashboard</a>
+      )}
       {[
         { key: 'back', label: '←', title: 'Back', ok: hist.back, run: () => window.history.back() },
         { key: 'fwd', label: '→', title: 'Forward', ok: hist.fwd, run: () => window.history.forward() },

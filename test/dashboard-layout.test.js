@@ -34,7 +34,7 @@ describe('the rail is grouped by when you reach for a tab', () => {
 
   it('has the four groups, in order, with the tabs the guild lead named', () => {
     expect(groups).toEqual([
-      { title: 'Live — raid night', tabs: ['dash', 'raid', 'fights'] },
+      { title: 'Live', tabs: ['dash', 'raid', 'fights'] },   // was "Live — raid night" (the guild lead, 2026-11-16)
       { title: 'After the raid', tabs: ['myparses', 'stats', 'loot', 'replay'] },
       { title: 'Set up', tabs: ['overlays', 'triggers', 'voice', 'buffs'] },
       { title: 'Machine', tabs: ['diag', 'info', 'optin', 'admin'] },
