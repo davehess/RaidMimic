@@ -13,10 +13,10 @@ const HEROES = { a: 'HeroA', b: 'HeroB', c: 'HeroC' };
 describe('?hero= leaves the default page alone', () => {
   const page = code('app/raidmimic/page.tsx');
   const sw = code('components/lab/rm-first-screen/HeroSwitch.tsx');   // a lab file: the landing folder holds only the live page's own
-  it('the page still renders the story stage and reads no query itself', () => {
-    expect(page).toMatch(/<StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>/);
+  // The first screen was picked and graduated (web 2.2.8, 2026-11-16), so the live page no longer carries the switch;
+  // the lab component keeps its own rules below.
+  it('the live page reads no query itself', () => {
     expect(page).not.toMatch(/searchParams/);
-    expect(page).toMatch(/<HeroSwitch [^>]*>\{top\}<\/HeroSwitch>/);
   });
   it('only a, b or c swap the first screen; anything else renders the children', () => {
     expect(sw).toMatch(/get\('hero'\)/);
@@ -25,7 +25,6 @@ describe('?hero= leaves the default page alone', () => {
   it('is off on the product\'s own address: enabled prop, passed as !onHost', () => {
     expect(sw).toMatch(/enabled: boolean/);
     expect(sw).toMatch(/if \(!enabled\) return <>\{children\}<\/>;/);
-    expect(page).toMatch(/<HeroSwitch enabled=\{!onHost\} /);
   });
   it('does not touch the existing v parameter', () => {
     expect(sw).not.toMatch(/get\('v'\)/);
