@@ -247,7 +247,7 @@ export function TourLauncher() {
       aria-label="Take the guided tour"
     >
       {/* The word only when the bar can afford it — see SiteHeader's fit note. */}
-      <span aria-hidden>✨</span><span className="hidden min-[1800px]:inline"> Tour</span>
+      <span aria-hidden>✨</span><span className="hidden min-[1280px]:inline"> Tour</span>
     </button>
   );
 }
