@@ -27,6 +27,8 @@ import { loadSavedRoute } from './savedRoute';
 import { chooseRoute, markerLetter } from '@/lib/popRaidMap';
 import { mapBlockers } from '@/lib/popTonightBlockersView';
 import BlockersStrip, { FlagFold } from '@/components/lab/pop-tonight-blockers/BlockersStrip';
+import EntryLines from './EntryLines';
+import { entryViews, ENTRY_ZONES } from '@/lib/popRaidEntry';
 
 export const metadata: Metadata = {
   title: '[beta] Raid night plan',
@@ -121,6 +123,11 @@ export default async function RaidPlanPage({ searchParams }: { searchParams?: Pr
   const { raiders, held, note, unlinked, error } = data;
   const has = (name: string, key: string) => held.get(name.toLowerCase())?.has(key) ?? false;
   const strip = alt === 'a' && !error && raiders.length ? mapBlockers(PLAN, PREFLAGS, raiders, has) : null;
+  // "Can this raid zone in?": only for plan sections in the planes with the 85% door (none until the plan has one).
+  // Every 85/15 zone, whether or not tonight's plan has a section for it (the raid may head to Air with no plan
+  // section written): a plan section's anchor when there is one, else the line's own.
+  const entrySections = Object.keys(ENTRY_ZONES).map(z => ({ id: PLAN.find(s => s.zone === z)?.id ?? `entry-${z}`, zone: z }));
+  const entry = !error && raiders.length ? entryViews(entrySections, raiders, has) : [];
   const missing = (key: string) => raiders.filter(r => !has(r.name, key)).map(r => r.name);
 
   return (
@@ -228,6 +235,8 @@ export default async function RaidPlanPage({ searchParams }: { searchParams?: Pr
         )}
       </section>
       </FlagFold>
+
+      <EntryLines views={entry} source={`from ${note.replace(/\.$/, '').toLowerCase().startsWith('sign-ups') ? 'the sign-ups' : 'the raid roster'} (${raiders.length} raiders)`} />
 
       {PLAN.map((s, i) => (
         <section key={s.id} id={s.id} className="mt-6 scroll-mt-4">
