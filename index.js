@@ -3627,6 +3627,19 @@ function scheduleMidnightSummary(readyClient) {
         console.warn('[midnight] hub_import_attempts retention skipped:', err?.message);
       }
 
+      // Forget list (self_delete_forget, DECISIONS §593): the archive merge needs a deleted person's ids only until it
+      // has run; 30 days matches the nightly backups' life, so a missed night still catches up.
+      try {
+        const supabase = require('./utils/supabase');
+        if (supabase.isEnabled()) {
+          const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          await supabase.del('self_delete_forget', `forgotten_at=lt.${encodeURIComponent(cutoff)}`);
+          console.log('[midnight] swept self_delete_forget older than 30 days');
+        }
+      } catch (err) {
+        console.log('[midnight] self_delete_forget retention skipped:', err?.message);
+      }
+
       // ── Retention sweep: raid history (utils/raidHistory.js) ──────────────
       // The six saved streams (mob sightings, mob HP, casts, zone changes, pet owners, trigger fires) keep 60 days in
       // Supabase (the guild lead, 2026-10-29); the Tower archive keeps them longer. Each table's time column leads its

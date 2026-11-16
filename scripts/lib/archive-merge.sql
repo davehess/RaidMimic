@@ -412,3 +412,37 @@ begin
   end loop;
 end
 $merge$;
+
+-- Forget people who used "Delete everything" (the guild lead, 2026-11-15; DECISIONS §593).
+-- member_self_delete removes a person's own rows on production and writes their two ids to self_delete_forget
+-- (migration 20261116000000). Four of those tables are ARCHIVE tables above, which never delete a row the snapshot
+-- lacks, so without this step the archive would keep them forever. The ids stay in production's list for 30 days,
+-- so a missed night still catches up. Guarded: a snapshot from before the table existed skips the step.
+-- A table or column the archive does not have is skipped, so an old or partial archive never aborts the night.
+do $forget$
+declare
+  r record;
+  n bigint;
+begin
+  if to_regclass('snap.self_delete_forget') is null then
+    return;
+  end if;
+  for r in select * from (values
+    ('page_views',              'user_id',                'user_id'),
+    ('tells',                   'owner_discord_id',       'discord_id'),
+    ('trigger_timing_feedback', 'voter_discord_id',       'discord_id'),
+    ('raid_roster',             'uploaded_by_discord_id', 'discord_id')
+  ) as t(tbl, col, key) loop
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = r.tbl and column_name = r.col) then
+      execute format('delete from public.%1$I d using snap.self_delete_forget f where d.%2$I = f.%3$I',
+                     r.tbl, r.col, r.key);
+      get diagnostics n = row_count;
+      if n > 0 then
+        insert into archive_meta.merge_log (table_name, mode, rows_before, rows_after, rows_kept)
+        values (r.tbl, 'forget', n, 0, 0);
+      end if;
+    end if;
+  end loop;
+end
+$forget$;
