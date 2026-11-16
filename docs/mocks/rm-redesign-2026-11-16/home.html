@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your week</title><link rel="stylesheet" href="common.css"><link rel="stylesheet" href="nav.css">
+<style>
+.page{max-width:1180px;margin:0 auto;padding:24px 28px 40px}
+.greet{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.greet h1{font-size:26px;color:var(--gold-2)}.greet p{color:var(--dim)}
+.grid{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between}
+.card h2 a{text-transform:none;letter-spacing:0;font-size:13px}
+.next{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:
+  linear-gradient(110deg,rgba(217,169,74,.14),transparent 55%),var(--raised);border:1px solid rgba(217,169,74,.35);border-radius:12px;padding:14px}
+.count{text-align:center;min-width:86px}.count b{display:block;font-size:26px;color:var(--gold-2)}.count span{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.next .z{font-size:20px}.next .g{color:var(--dim);font-size:13px}
+.ready{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.li{display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:center;padding:10px 2px;border-top:1px solid var(--line)}
+.li:first-of-type{border-top:0}.li b{color:var(--gold-2);font-size:13px}.li span{color:var(--dim);font-size:12px}
+.li .z{font-size:15px}
+.path{display:flex;align-items:flex-start;gap:0;margin:6px 0 12px}
+.node{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;font-size:11px;color:var(--dim);text-align:center}
+.dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);background:var(--night)}
+.dot.done{background:var(--gold);border-color:var(--gold-2);box-shadow:0 0 10px rgba(217,169,74,.5)}
+.dot.next{border-color:var(--gold-2);box-shadow:0 0 0 4px rgba(217,169,74,.15)}
+.link{flex:1;height:2px;background:var(--line);margin-top:10px}.link.done{background:var(--gold)}
+.step{background:var(--raised);border-radius:10px;padding:12px}
+.step b{display:block}.step p{color:var(--dim);font-size:13px;margin-top:3px}
+.rec{display:flex;gap:18px;margin-top:4px}.rec div{flex:1}.rec b{font-size:22px;display:block}.rec span{font-size:12px;color:var(--dim)}
+@media(max-width:700px){.page{padding:16px 14px 30px}.grid{grid-template-columns:1fr}.greet{flex-direction:column;align-items:flex-start}
+ .next{grid-template-columns:1fr}.count{text-align:left}.li{grid-template-columns:80px 1fr}.li .chip{grid-column:2}}
+</style></head><body>
+<header class="top"><div class="brand"><span class="chest"></span>Raid Mimic</div>
+<nav class="tabs"><a class="cur">Home</a><a>Raids</a><a>Progress</a><a>Guilds</a><a class="console">Guild console<span class="badge">4</span></a></nav>
+<div class="search">Search a raid, plane, guild or character</div><div class="spacer"></div>
+<div class="char"><span class="av"></span>Your cleric <small>65</small></div></header>
+
+<div class="page">
+ <div class="greet"><div><h1 class="display">Your week</h1><p>What you are signed up for, what you can join, and your next step through the planes.</p></div>
+ <span class="chip">Times in Eastern</span></div>
+ <div class="grid">
+  <section class="card">
+   <h2>Your next raid <a>All your raids</a></h2>
+   <div class="next">
+    <div class="count"><b class="num">1d 3h</b><span>until pull</span></div>
+    <div><div class="z display">Plane of Valor</div><div class="g">Aerin`Dar · Brass Lantern · Tue Nov 17, 9:00 PM</div>
+     <div class="ready"><span class="chip ok">✓ Flag to enter</span><span class="chip ok">✓ No lockout</span><span class="chip warn">Bind in Plane of Knowledge</span></div></div>
+    <button class="btn">Details</button>
+   </div>
+   <h2 style="margin-top:18px">You can also join <a>Raid board</a></h2>
+   <div class="li"><b>Sat 3:00 PM</b><div><div class="z display">Plane of Storms</div><span>Shrine run · Brass Lantern · 12 seats open</span></div><span class="chip goldc">Opens Thunder for you</span></div>
+   <div class="li"><b>Sun 7:00 PM</b><div><div class="z display">Plane of Valor</div><span>Aerin`Dar · Ember Oath · needs an enchanter</span></div><span class="chip ok">You can enter</span></div>
+   <div class="li"><b>Thu 9:00 PM</b><div><div class="z display">Plane of Tactics</div><span>Rallos Zek · Ember Oath</span></div><span class="chip bad">Locked out until Fri</span></div>
+  </section>
+  <section class="card">
+   <h2>Your path <a>Full flag map</a></h2>
+   <div class="path">
+    <div class="node"><span class="dot done"></span>Justice</div><div class="link done"></div>
+    <div class="node"><span class="dot next"></span>Storms shrine</div><div class="link"></div>
+    <div class="node"><span class="dot"></span>Thunder</div><div class="link"></div>
+    <div class="node"><span class="dot"></span>Maelin</div><div class="link"></div>
+    <div class="node"><span class="dot"></span>Elementals</div>
+   </div>
+   <div class="step"><b>Next: Askr’s talisman in Plane of Storms</b><p>Collect the giant pieces, then touch the shrine. One raid this week does it: Saturday with Brass Lantern.</p></div>
+   <h2 style="margin-top:16px">Your record <a>Share it</a></h2>
+   <div class="rec"><div><b class="num">92%</b><span>raids attended (30 days)</span></div><div><b class="num">14</b><span>of 24 PoP flags</span></div><div><b class="num">412</b><span>healing per second, best</span></div></div>
+  </section>
+ </div>
+</div>
+<nav class="bottomnav"><a class="cur"><i>⌂</i>Home</a><a><i>⚔</i>Raids</a><a><i>✧</i>Progress</a><a><i>⛨</i>Guilds</a></nav>
+<div class="sample">Sample: one cleric’s view. Flag rules are the server’s; guilds other than Wolf Pack are invented.</div>
+</body></html>

@@ -1,0 +1,142 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Raid Board</title><link rel="stylesheet" href="common.css"><link rel="stylesheet" href="nav.css">
+<style>
+.hero{padding:26px 28px 18px;border-bottom:1px solid var(--line);background:
+  radial-gradient(900px 220px at 15% -40%,rgba(217,169,74,.16),transparent 70%),
+  radial-gradient(700px 200px at 90% -60%,rgba(124,178,255,.12),transparent 70%)}
+.hero h1{font-size:30px;color:var(--gold-2);font-weight:700}
+.hero p{color:var(--dim);margin-top:4px;max-width:70ch}
+.viewas{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.viewas .who{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.who b{font-weight:600}.who small{color:var(--dim)}
+.bar{width:120px;height:6px;border-radius:9px;background:var(--raised);overflow:hidden}.bar i{display:block;height:100%;width:58%;background:linear-gradient(90deg,var(--gold),var(--gold-2))}
+.wrap{display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;padding:20px 28px 40px}
+.rail h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:16px 0 8px}
+.rail h3:first-child{margin-top:0}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:7px;color:var(--dim);font-size:13px}
+.opt.on{background:var(--raised);color:var(--text)}.opt .n{color:var(--faint);font-size:12px;margin-left:8px}
+.box{width:14px;height:14px;border:1px solid var(--line);border-radius:4px;display:inline-block;margin-right:8px;vertical-align:-2px}
+.on .box{background:var(--gold);border-color:var(--gold)}
+.sortrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--dim);font-size:13px}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:86px 54px minmax(0,1fr) 210px 118px;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.row.can{border-left:3px solid var(--green)}.row.no{opacity:.82}
+.when b{display:block;font-size:13px;color:var(--gold-2);font-weight:600}.when span{font-size:12px;color:var(--dim)}
+.when .t{display:block;font-size:18px;color:var(--text);font-weight:600;white-space:nowrap}
+.row{grid-template-columns:100px 54px minmax(0,1fr) 210px 118px}
+.seal{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font:700 17px Cinzel,serif;color:#fff2d8;
+  background:radial-gradient(circle at 35% 30%,var(--c1),var(--c2));box-shadow:inset 0 0 0 3px rgba(255,255,255,.08),0 2px 6px rgba(0,0,0,.5)}
+.what .z{font-size:17px;color:var(--text)}.what .g{font-size:12px;color:var(--dim);margin-top:1px}
+.what .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.seats .lbl{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.sig{display:flex;flex-wrap:wrap;gap:4px}
+.s{min-width:34px;height:22px;padding:0 5px;border-radius:5px 5px 9px 9px;font:600 11px Inter,sans-serif;display:grid;place-items:center;border:1px solid var(--line);color:var(--faint)}
+.s.need{border-color:var(--gold);color:var(--gold-2);background:rgba(217,169,74,.08)}
+.s.you{border-color:var(--green);color:var(--green);background:rgba(95,211,141,.1)}
+.fill{font-size:12px;color:var(--dim);margin-top:5px}
+.act{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.act .btn{text-align:center}.act small{color:var(--faint);font-size:11px;text-align:center}
+@media(max-width:700px){
+ .top{padding:10px 14px}.nav{display:none}
+ .hero{padding:18px 14px 14px}.hero h1{font-size:23px}
+ .wrap{grid-template-columns:1fr;padding:12px 14px 30px}
+ .rail{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}.rail h3,.rail .opt:not(.on){display:none}
+ .rail .opt.on{white-space:nowrap;border:1px solid var(--line)}
+ .row{grid-template-columns:54px minmax(0,1fr);gap:10px 12px}
+ .row .when{grid-column:1/3;display:flex;gap:10px;align-items:baseline}.when .t{font-size:15px}
+ .row .seats,.row .act{grid-column:1/3}.act{flex-direction:row}.act .btn{flex:1}
+}
+</style></head><body>
+<header class="top"><div class="brand"><span class="chest"></span>Raid Mimic</div>
+<nav class="tabs"><a>Home</a><a class="cur">Raids</a><a>Progress</a><a>Guilds</a><a class="console">Guild console<span class="badge">4</span></a></nav>
+<div class="search">Search a raid, plane, guild or character</div><div class="spacer"></div>
+<div class="char"><span class="av"></span>Your cleric <small>65</small></div></header>
+
+<section class="hero">
+ <h1 class="display">Open raids this week</h1>
+ <p>Guilds that take guests, the planes they raid, and whether you can walk through the portal. Mimic reads your flags and lockouts, so the green ones are the raids you can actually join.</p>
+ <div class="viewas">
+  <div class="who"><span class="av"></span><div><b>Your cleric</b> · 65 <small>· viewing as</small><div class="bar" style="margin-top:4px"><i></i></div></div><small class="num">14 of 24 PoP flags</small></div>
+  <span class="chip ok">3 raids you can join</span><span class="chip goldc">2 move you forward</span>
+ </div>
+</section>
+
+<div class="wrap">
+<aside class="rail">
+ <h3>Show</h3>
+ <div class="opt on"><span><i class="box"></i>I can enter</span><span class="n">3</span></div>
+ <div class="opt on"><span><i class="box"></i>Moves me forward</span><span class="n">2</span></div>
+ <div class="opt"><span><i class="box"></i>Guests can loot</span><span class="n">3</span></div>
+ <div class="opt"><span><i class="box"></i>Needs my class</span><span class="n">4</span></div>
+ <h3>When</h3>
+ <div class="opt on"><span>This week</span><span class="n">6</span></div>
+ <div class="opt"><span>Weeknights after 8 PM</span><span class="n">4</span></div>
+ <div class="opt"><span>Weekends</span><span class="n">2</span></div>
+ <h3>Where</h3>
+ <div class="opt"><span>Tier 2 · Valor, Storms, Torment</span><span class="n">3</span></div>
+ <div class="opt"><span>Tier 3 · Tactics, Sol Ro</span><span class="n">2</span></div>
+ <div class="opt"><span>Elemental planes</span><span class="n">1</span></div>
+</aside>
+
+<main>
+ <div class="sortrow"><span>6 open raids · sorted by soonest</span><span>Sort: <b style="color:var(--text)">Soonest</b> · Seats open · Fits me</span></div>
+ <div class="list">
+
+  <article class="row can">
+   <div class="when"><b>Tue Nov 17</b><span class="t num">9:00 PM</span><span>Eastern</span></div>
+   <div class="seal" style="--c1:#6b8f3c;--c2:#2f4518">B</div>
+   <div class="what"><div class="z display">Plane of Valor</div><div class="g">Aerin`Dar · Brass Lantern</div>
+    <div class="chips"><span class="chip ok">✓ You can enter</span><span class="chip goldc">Grants Halls of Honor</span><span class="chip">Guests roll on drops</span></div></div>
+   <div class="seats"><div class="lbl">Still needed</div><div class="sig"><span class="s you">CLR</span><span class="s need">CLR</span><span class="s need">ENC</span><span class="s need">+5</span></div><div class="fill num">34 of 42 seats filled</div></div>
+   <div class="act"><button class="btn primary">Join</button><small>Guest pass, 6 hours</small></div>
+  </article>
+
+  <article class="row">
+   <div class="when"><b>Wed Nov 18</b><span class="t num">8:30 PM</span><span>Eastern</span></div>
+   <div class="seal" style="--c1:#6a7894;--c2:#28324a">W</div>
+   <div class="what"><div class="z display">Eryslai, the Kingdom of Wind</div><div class="g">Air rings and Xegony · Wolf Pack</div>
+    <div class="chips"><span class="chip warn">Needs Maelin’s power source</span><span class="chip">Loot: guild DKP</span></div></div>
+   <div class="seats"><div class="lbl">Still needed</div><div class="sig"><span class="s need">CLR</span><span class="s need">SHM</span><span class="s need">+2</span></div><div class="fill num">48 of 52 seats filled</div></div>
+   <div class="act"><button class="btn">How to get the flag</button><small>Thunder, then Maelin</small></div>
+  </article>
+
+  <article class="row no">
+   <div class="when"><b>Thu Nov 19</b><span class="t num">9:00 PM</span><span>Eastern</span></div>
+   <div class="seal" style="--c1:#9a3b2e;--c2:#4a140f">E</div>
+   <div class="what"><div class="z display">Plane of Tactics</div><div class="g">Rallos Zek · Ember Oath</div>
+    <div class="chips"><span class="chip bad">Your cleric is locked out until Fri 1:10 AM</span><span class="chip">Guests roll after the guild</span></div></div>
+   <div class="seats"><div class="lbl">Still needed</div><div class="sig"><span class="s need">WAR</span><span class="s need">BRD</span><span class="s need">+9</span></div><div class="fill num">31 of 42 seats filled</div></div>
+   <div class="act"><button class="btn">Bring an alt</button><small>The server sends a locked character out</small></div>
+  </article>
+
+  <article class="row can">
+   <div class="when"><b>Sat Nov 21</b><span class="t num">3:00 PM</span><span>Eastern</span></div>
+   <div class="seal" style="--c1:#6b8f3c;--c2:#2f4518">B</div>
+   <div class="what"><div class="z display">Plane of Storms</div><div class="g">Shrine run for Askr’s talisman · Brass Lantern</div>
+    <div class="chips"><span class="chip ok">✓ You can enter</span><span class="chip goldc">Grants Storms shrine → opens Thunder</span></div></div>
+   <div class="seats"><div class="lbl">Still needed</div><div class="sig"><span class="s you">ANY</span><span class="s need">+11</span></div><div class="fill num">12 of 24 seats filled</div></div>
+   <div class="act"><button class="btn primary">Join</button><small>Flag run, no loot</small></div>
+  </article>
+
+  <article class="row can">
+   <div class="when"><b>Sun Nov 22</b><span class="t num">7:00 PM</span><span>Eastern</span></div>
+   <div class="seal" style="--c1:#9a3b2e;--c2:#4a140f">E</div>
+   <div class="what"><div class="z display">Plane of Valor</div><div class="g">Aerin`Dar · Ember Oath</div>
+    <div class="chips"><span class="chip ok">✓ You can enter</span><span class="chip goldc">Grants Halls of Honor</span><span class="chip">Loot: guild only</span></div></div>
+   <div class="seats"><div class="lbl">Still needed</div><div class="sig"><span class="s need">ENC</span><span class="s need">+3</span></div><div class="fill num">38 of 42 seats filled</div></div>
+   <div class="act"><button class="btn primary">Join</button><small>Guest pass, 6 hours</small></div>
+  </article>
+
+  <article class="row no">
+   <div class="when"><b>Sun Nov 22</b><span class="t num">8:30 PM</span><span>Eastern</span></div>
+   <div class="seal" style="--c1:#6a7894;--c2:#28324a">W</div>
+   <div class="what"><div class="z display">Plane of Torment</div><div class="g">Saryrn · Wolf Pack</div>
+    <div class="chips"><span class="chip warn">Needs the Bertoxxulous thank-you</span><span class="chip">Loot: guild DKP</span></div></div>
+   <div class="seats"><div class="lbl">Still needed</div><div class="sig"><span class="s need">CLR</span><span class="s need">+4</span></div><div class="fill num">47 of 52 seats filled</div></div>
+   <div class="act"><button class="btn">How to get the flag</button><small>Crypt of Decay, Bertoxxulous</small></div>
+  </article>
+ </div>
+</main></div>
+<nav class="bottomnav"><a><i>⌂</i>Home</a><a class="cur"><i>⚔</i>Raids</a><a><i>✧</i>Progress</a><a><i>⛨</i>Guilds</a></nav>
+<div class="sample">Sample: Wolf Pack’s nights and guest pass are real; the other guilds are invented. Flag rules are the server’s.</div>
+</body></html>
