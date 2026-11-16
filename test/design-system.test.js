@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { ROOT, readSource, stripJs, stripCss } from './_source-slice.js';
-import { dsChoice, DS_COOKIE } from '../web/lib/designPreview.ts';
+import { dsChoice, DS_COOKIE, DS_BOOT_SCRIPT } from '../web/lib/designPreview.ts';
 import { metaForPath } from '../web/lib/pageMeta.ts';
 import { pickSamples, span, timerSample } from '../web/lib/designSamples.ts';
 
@@ -39,11 +39,23 @@ describe('the switch is beta-only', () => {
   it('dsChoice answers "off" on production whatever the URL or cookie says', () => {
     expect(dsChoice('a', 'b', false)).toEqual({ on: null, action: 'keep' });
   });
-  it('on beta: ?ds= sets, ?ds=off clears, otherwise the cookie decides, junk is ignored', () => {
+  it('on beta: ?ds= sets, ?ds=off stores off, the cookie decides, and no cookie (or junk) is the picked default B', () => {
     expect(dsChoice('b', undefined, true)).toEqual({ on: 'b', action: 'set' });
-    expect(dsChoice('off', 'c', true)).toEqual({ on: null, action: 'clear' });
+    expect(dsChoice('off', 'c', true)).toEqual({ on: null, action: 'off' });
+    expect(dsChoice(null, 'off', true)).toEqual({ on: null, action: 'keep' });
     expect(dsChoice(null, 'c', true)).toEqual({ on: 'c', action: 'keep' });
-    expect(dsChoice('zzz', 'x', true)).toEqual({ on: null, action: 'keep' });
+    expect(dsChoice(null, undefined, true)).toEqual({ on: 'b', action: 'keep' });
+    expect(dsChoice('zzz', 'x', true)).toEqual({ on: 'b', action: 'keep' });
+  });
+  it('the static-page boot script applies the default and honours off', () => {
+    const run = (cookie) => {
+      const attrs = {};
+      new Function('document', DS_BOOT_SCRIPT)({ cookie, documentElement: { setAttribute: (k, v) => { attrs[k] = v; } } });
+      return attrs['data-ds'] ?? null;
+    };
+    expect(run('')).toBe('b');
+    expect(run('wp_ds=c')).toBe('c');
+    expect(run('x=1; wp_ds=off')).toBe(null);
   });
   it('layout and middleware both pass the beta flag; the chip renders only when it is set', () => {
     const layout = stripJs(readSource(web('app', 'layout.tsx')));
@@ -55,7 +67,7 @@ describe('the switch is beta-only', () => {
     const mw = stripJs(readSource(web('middleware.ts')));
     // A client cannot inject the header: the middleware drops any incoming one before setting its own.
     expect(mw.indexOf('request.headers.delete(DS_HEADER)')).toBeGreaterThan(-1);
-    expect(mw.indexOf('request.headers.delete(DS_HEADER)')).toBeLessThan(mw.indexOf('request.headers.set(DS_HEADER, ds.on)'));
+    expect(mw.indexOf('request.headers.delete(DS_HEADER)')).toBeLessThan(mw.indexOf("request.headers.set(DS_HEADER, ds.on ?? 'off')"));
     expect(mw).toMatch(/dsChoice\([\s\S]*?process\.env\.NEXT_PUBLIC_IS_BETA === '1'\)/);
     expect(DS_COOKIE).toBe('wp_ds');
   });

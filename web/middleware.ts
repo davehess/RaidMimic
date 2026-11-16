@@ -168,17 +168,18 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (shell?.action === 'set') request.cookies.set(ADMIN_SHELL_COOKIE, 'b');
   if (shell?.action === 'clear') request.cookies.delete(ADMIN_SHELL_COOKIE);
 
-  // The design-system preview (2026-11-16, lib/designPreview.ts): `?ds=a|b|c` sets the wp_ds cookie, `?ds=off` clears
-  // it. Beta build only (dsChoice answers "off" on production), and written onto the REQUEST too so the layout sees it
-  // on the same load that carries `?ds=`.
+  // The design-system preview (2026-11-16, lib/designPreview.ts): `?ds=a|b|c` sets the wp_ds cookie, `?ds=off` stores
+  // "off" (today's look); no cookie means the picked default. Beta build only (dsChoice answers "off" on production),
+  // and written onto the REQUEST too so the layout sees it on the same load that carries `?ds=`.
   const ds = request.method === 'GET'
     ? dsChoice(request.nextUrl.searchParams.get('ds'), request.cookies.get(DS_COOKIE)?.value, process.env.NEXT_PUBLIC_IS_BETA === '1')
     : null;
   if (ds?.action === 'set' && ds.on) request.cookies.set(DS_COOKIE, ds.on);
-  if (ds?.action === 'clear') request.cookies.delete(DS_COOKIE);
-  // The layout reads the decision from this header (it must not call cookies()); never trust one a client sent.
+  if (ds?.action === 'off') request.cookies.set(DS_COOKIE, 'off');
+  // The layout reads the decision from this header (it must not call cookies()); never trust one a client sent. "off"
+  // is sent explicitly, because a missing header means the default.
   request.headers.delete(DS_HEADER);
-  if (ds?.on) request.headers.set(DS_HEADER, ds.on);
+  if (ds) request.headers.set(DS_HEADER, ds.on ?? 'off');
 
   let response = NextResponse.next({ request });
 
@@ -279,8 +280,8 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
 
   if (ds?.action === 'set' && ds.on) {
     response.cookies.set({ name: DS_COOKIE, value: ds.on, path: '/', maxAge: DS_MAX_AGE, sameSite: 'lax' });
-  } else if (ds?.action === 'clear') {
-    response.cookies.set({ name: DS_COOKIE, value: '', path: '/', maxAge: 0 });
+  } else if (ds?.action === 'off') {
+    response.cookies.set({ name: DS_COOKIE, value: 'off', path: '/', maxAge: DS_MAX_AGE, sameSite: 'lax' });
   }
 
   return response;

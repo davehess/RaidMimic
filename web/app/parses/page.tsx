@@ -592,8 +592,7 @@ export default async function ParsesPage(
               const line = (o: OffcardRow) => {
                 const label = (o.zone_short && zones.get(o.zone_short)?.long_name) || o.zone_short || 'Unknown zone';
                 return (
-                  <p key={(o.is_raid ? 'r:' : 's:') + (o.zone_short ?? '__unknown__')} className="flex items-center gap-2">
-                    <span aria-hidden>🗡</span>
+                  <p key={(o.is_raid ? 'r:' : 's:') + (o.zone_short ?? '__unknown__')}>
                     <span>{label} — {o.kills} kill{o.kills === 1 ? '' : 's'} · {fmtDmg(o.total_damage)}</span>
                   </p>
                 );
