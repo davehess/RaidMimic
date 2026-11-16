@@ -23,9 +23,17 @@ const config: Config = {
         orange: 'rgb(var(--wp-orange) / <alpha-value>)',
         purple: 'rgb(var(--wp-purple) / <alpha-value>)',
         accent: 'rgb(var(--wp-accent) / <alpha-value>)',
+        // Tokens v2 (app/tokens.css): today's look unless an html[data-ds] preview is on.
+        raised: 'rgb(var(--wp-raised) / <alpha-value>)',
+        bone:   'rgb(var(--wp-bone) / <alpha-value>)',
+        text2:  'rgb(var(--wp-text-2) / <alpha-value>)',
+        text3:  'rgb(var(--wp-text-3) / <alpha-value>)',
+        title:  'rgb(var(--wp-title) / <alpha-value>)',
       },
       fontFamily: {
         mono: ['var(--wp-font-mono)'],
+        body:  ['var(--wp-font-body)'],
+        title: ['var(--wp-font-title)'],
       },
     },
   },

@@ -41,6 +41,7 @@ const STATIC_META: Record<string, PageMeta> = {
   '/pop/events/splits': { title: '[beta] Gold splits', description: 'Every scripted Planes of Power event with a recorded attempt: its best full time, how many runs, and the last one, each linked to its splits.' },
   '/pop/flag-events': { title: '[beta] Flag events', description: 'Planes of Power flag events the officers have posted, and for each one which raiders still need it and who signed up.' },
   '/pop/raid':     { title: '[beta] Raid night plan', description: 'Tonight’s Planes of Power targets in order — who still needs a preflag, how to get there, what to expect, and a map with the route.' },
+  '/design':       { title: '[beta] Design system', description: 'The Wolf Pack site’s shared look: colours with contrast ratios, type scale, page header, buttons, status chips, cards, tables and the list-and-detail layout.' },
   '/pop/raid/me':  { title: '[beta] Your flags for tonight', description: 'Your characters and the Planes of Power flag steps each one still needs for the next raid night, with where to stand and what to say.' },
   '/roster':       { title: 'Raid Roster', description: 'Typical raiders by role and class — 60-day raid attendance from DKP ticks, tanks/healers/DPS grouped, notable alts called out.' },
   '/parses':       { title: 'Boss Kills & Parses', description: 'Per-night kill cards with merged damage parses, loot, and attendance for every raid.' },

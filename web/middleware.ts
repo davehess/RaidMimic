@@ -22,6 +22,7 @@ import { isEqmimicHost, eqmimicLandingTarget } from './lib/eqmimicHost';
 import { isRaidmimicAsset, isRaidmimicHost, isRaidmimicOpenPath, raidmimicLandingTarget } from './lib/raidmimicHost';
 import { otherGuildHostSlug, otherGuildHostRedirect } from './lib/guildHost';
 import { isLockedOut } from './lib/lockout';
+import { DS_COOKIE, DS_MAX_AGE, dsChoice } from './lib/designPreview';
 import { ADMIN_SHELL_COOKIE, ADMIN_SHELL_MAX_AGE, adminShellChoice, isAdminPath } from './lib/adminShell';
 
 // Routes we never log: API/RSC payloads, auth callbacks, admin pages
@@ -167,6 +168,15 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (shell?.action === 'set') request.cookies.set(ADMIN_SHELL_COOKIE, 'b');
   if (shell?.action === 'clear') request.cookies.delete(ADMIN_SHELL_COOKIE);
 
+  // The design-system preview (2026-11-16, lib/designPreview.ts): `?ds=a|b|c` sets the wp_ds cookie, `?ds=off` clears
+  // it. Beta build only (dsChoice answers "off" on production), and written onto the REQUEST too so the layout sees it
+  // on the same load that carries `?ds=`.
+  const ds = request.method === 'GET'
+    ? dsChoice(request.nextUrl.searchParams.get('ds'), request.cookies.get(DS_COOKIE)?.value, process.env.NEXT_PUBLIC_IS_BETA === '1')
+    : null;
+  if (ds?.action === 'set' && ds.on) request.cookies.set(DS_COOKIE, ds.on);
+  if (ds?.action === 'clear') request.cookies.delete(DS_COOKIE);
+
   let response = NextResponse.next({ request });
 
   // Server key, as in lib/supabase-server.ts (2026-10-29): the public key is the browser's alone.
@@ -262,6 +272,12 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     response.cookies.set({ name: ADMIN_SHELL_COOKIE, value: 'b', path: '/admin', maxAge: ADMIN_SHELL_MAX_AGE, sameSite: 'lax' });
   } else if (shell?.action === 'clear') {
     response.cookies.set({ name: ADMIN_SHELL_COOKIE, value: '', path: '/admin', maxAge: 0 });
+  }
+
+  if (ds?.action === 'set' && ds.on) {
+    response.cookies.set({ name: DS_COOKIE, value: ds.on, path: '/', maxAge: DS_MAX_AGE, sameSite: 'lax' });
+  } else if (ds?.action === 'clear') {
+    response.cookies.set({ name: DS_COOKIE, value: '', path: '/', maxAge: 0 });
   }
 
   return response;

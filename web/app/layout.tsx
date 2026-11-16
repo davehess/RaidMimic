@@ -4,7 +4,6 @@ import { Prata, Faustina } from 'next/font/google';
 import Link from 'next/link';
 import SiteHeader from '@/components/SiteHeader';
 import AuthBadge from '@/components/AuthBadge';
-import LocalDashboardLink from '@/components/LocalDashboardLink';
 import GlobalSearch from '@/components/GlobalSearch';
 import GuidedTour, { TourLauncher } from '@/components/GuidedTour';
 import BareShell from '@/components/BareShell';
@@ -16,7 +15,9 @@ import { isEqmimicHost } from '@/lib/eqmimicHost';
 import { isRaidmimicHost } from '@/lib/raidmimicHost';
 import { GUILD_TAG } from '@/lib/guild';
 import { loadGuildTheme, themeToCssVarMap } from '@/lib/guildTheme';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
+import DesignSwitch from '@/components/DesignSwitch';
+import { DS_COOKIE, dsChoice } from '@/lib/designPreview';
 
 // b.wolfpack.quest. Set at BUILD time from the branch (see next.config.js), so
 // this is a constant in the bundle rather than a per-request check.
@@ -73,9 +74,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // per-request (it reads the session cookie below), so reading a header costs nothing extra. The
   // shell sets NO max width: each page sets its own (the form is narrow, the landing page is wide).
   // raidmimic.com and its sister hosts (2026-10-18) get the same bare shell: one public page, no sign-in.
+  // The design-system preview (2026-11-16, lib/designPreview.ts): the wp_ds cookie, honoured on the beta build only.
+  // This layout is already per-request (headers() above and the session below), so reading a cookie adds no cost.
+  const ds = dsChoice(null, cookies().get(DS_COOKIE)?.value, IS_BETA).on;
+
   if (isEqmimicHost(headers().get('host')) || isRaidmimicHost(headers().get('host'))) {
     return (
-      <html lang="en">
+      <html lang="en" data-ds={ds ?? undefined}>
         <body className="font-mono">
           <div className="mx-auto p-3 sm:p-4">
             <main>{children}</main>
@@ -87,7 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // A public share page (/share/*, 2026-10-15): the middleware sets the header and skips the session for it.
   if (headers().get('x-wp-bare') === '1') {
-    return <BareShell fontClass={`${display.variable} ${proseFace.variable}`}>{children}</BareShell>;
+    return <BareShell fontClass={`${display.variable} ${proseFace.variable}`} ds={ds}>{children}</BareShell>;
   }
 
   // Officer check runs server-side per request so the Admin nav link only
@@ -112,6 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       lang="en"
       className={`${display.variable} ${proseFace.variable}`}
       data-theme={themed ? 'guild' : undefined}
+      data-ds={ds ?? undefined}
       style={themed ? (themeVars as React.CSSProperties) : undefined}
     >
       <body className="font-mono">
@@ -168,13 +174,10 @@ provenance
         </div>
         <div className="max-w-7xl mx-auto p-3 sm:p-4">
           <main>{children}</main>
+          {/* The "Mimic Parser dashboard lives at localhost:7779" line is gone from every page (design review 2026-11-16 §3:
+              a dead link for visitors without Mimic, and the site cannot detect Mimic without Chrome's Local Network Access
+              prompt). /me keeps the "Your local dashboard" link for the members who run it. */}
           <footer className="mt-12 text-xs text-dim space-y-1">
-            <div>
-              Data shared with the Discord bot · the Mimic Parser dashboard
-              lives at{' '}
-              <LocalDashboardLink />{' '}
-              for live in-raid stats.
-            </div>
             <div>
               <a href="/about" className="text-blue hover:underline">About</a>{' '}
               <span aria-hidden>·</span>{' '}
@@ -202,6 +205,7 @@ provenance
           </footer>
         </div>
         <GuidedTour signedIn={showMe} />
+        {IS_BETA && <DesignSwitch current={ds} />}
       </body>
     </html>
   );

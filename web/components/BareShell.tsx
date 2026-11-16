@@ -4,9 +4,9 @@ import PublicTopBar from './PublicTopBar';
 // tour, and no link into a member page — only PublicTopBar's public sections and miMIC downloads. The reader may be from another guild and signed in nowhere.
 // app/layout.tsx returns this when the middleware has marked the request (the `x-wp-bare` header). The game-art
 // notice is the one footer line that stays: the replay draws EverQuest zone geometry.
-export default function BareShell({ fontClass, children }: { fontClass: string; children: React.ReactNode }) {
+export default function BareShell({ fontClass, ds, children }: { fontClass: string; ds?: string | null; children: React.ReactNode }) {
   return (
-    <html lang="en" className={fontClass}>
+    <html lang="en" className={fontClass} data-ds={ds ?? undefined}>
       <body className="font-mono">
         <div className="max-w-7xl mx-auto p-3 sm:p-4">
           <PublicTopBar />
