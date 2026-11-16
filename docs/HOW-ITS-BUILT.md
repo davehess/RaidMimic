@@ -97,6 +97,9 @@ writes.
 
 ## Identity & auth
 
+- **Upload sign-ins at rest (bot 4.1.5, 2026-11-16, §573/§597).** `utils/mimicLink.js` `hashToken` / `_lookupSessionToken`:
+  a Mimic session token is looked up by `mimic_sessions.token_hash` (sha256), plaintext fallback while
+  `SESSION_PLAINTEXT_FALLBACK` is on; `isIdleExpired` refuses a member session unused for `SESSION_IDLE_DAYS` (90).
 - **Free flag syncing for players outside Wolf Pack (bot 4.0.50, 2026-11-02, §526/§527; slice 1).** `utils/mimicLink.js`:
   `FREE_ROUTES` / `PAID_HUB_ROUTES` (`hubFreeRouteAllowed`, `hubPlanPaid`: paid = `hub_guilds.plan = 'managed'`), 403
   `plan_required` before a body is read; a player link (`{player:true}`, hub `'~player'`, `_hubPlayerOf`) mints `scope:

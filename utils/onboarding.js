@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.5': [
+    'Mimic sign-ins are stored scrambled on our side, and a guild member\'s sign-in that has not been used for 90 days stops working: sign in again in Mimic.',
+  ],
   '4.1.4': [
     'Fixed: the nightly parse tidy-up after midnight runs again, and the raid review keeps its trash tally without errors.',
   ],
