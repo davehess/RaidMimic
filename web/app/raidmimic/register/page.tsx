@@ -11,6 +11,8 @@ import { EQMIMIC_ORIGIN } from '@/lib/raidmimicLanding';
 import { LANDING_PATH_ON_HOST, LANDING_PATH_ON_WOLFPACK, RELEASES_URL } from '@/lib/raidmimicSetup';
 import RegisterForm from './RegisterForm';
 import HostFrame from '@/components/RaidmimicFrame';
+import HomePanelGate from '../_landing/HomePanelGate';
+import { DOWNLOAD_URL, STORY_BUTTON } from '@/lib/raidmimicPlayer';
 
 const TITLE = '[beta] Register your guild';
 const DESCRIPTION =
@@ -35,6 +37,8 @@ export default function RaidmimicRegisterPage() {
 
   return (
     <HostFrame onHost={onHost}>
+    {/* The 80 second story plays here and nowhere else (the guild lead, 2026-11-16, card rm-home). It sits outside the narrow column so the stage can span the page. */}
+    <div className="mx-auto mb-4 max-w-5xl"><HomePanelGate label={STORY_BUTTON} downloadUrl={DOWNLOAD_URL} onHost={onHost} /></div>
     <div className="mx-auto max-w-xl pb-12">
       {/* On a raidmimic host /feedback is not a page, so the tag's link goes to the feedback form on eqmimic.quest. */}
       <NewPageTag note="New page: tell us about your guild." href={onHost ? `${EQMIMIC_ORIGIN}/feedback` : '/feedback'} />

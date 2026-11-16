@@ -37,6 +37,22 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-player-first-landing-2026-11-16',
+    title: 'Raid Mimic\'s front page, players first',
+    version: 'Web 2.2.8',
+    date: '2026-11-16',
+    headline: 'The raidmimic.com front page now opens with what you get as a player, and the guild-leader parts come after.',
+    features: [
+      { name: 'A first screen that says what it is', blurb: 'A headline, one line, Download Mimic and "See the guild demo", with a short loop of Mimic playing beside them.' },
+      { name: 'Pick your path', blurb: 'Three short cards: play on your own, raid with a guild, or run your own copy. Each says what you get and what to click next.' },
+      { name: 'See it run', blurb: 'Three recordings of the real overlays, one for each moment of a raid night: the debuffs, the split and the kill. Each says whether it is for raiders or for the people running the night.' },
+      { name: 'How it works', blurb: 'The four-step drawing, from one raider\'s screen to the raid, the raid leader and the hub, sits under the page as one section.' },
+      { name: 'Running a guild?', blurb: 'Raid management, pricing and the sign-up now sit under that heading. The 80 second story video moved to the For guild leaders page.' },
+      { name: 'CH chain', blurb: 'The Complete Heal rotation overlay is listed with what a player gets.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'parse-page-and-clean-ups-2026-11-16',
     title: 'A parse page that leads with the result, and fifteen clean-ups',
     version: 'Web 2.2.7',

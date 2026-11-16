@@ -230,11 +230,12 @@ describe('the page', () => {
     expect(page).toMatch(/export function generateMetadata\(\): Metadata/);
     expect(page).not.toMatch(/getSessionUser/i);   // 2026-11-09: public, but a signed-in visitor gets the Home panel via supabaseServer (raidmimic-skip-video.test.js)
   });
-  it('renders ONE page, the story stage (the guild lead’s pick C, 2026-11-01), and reads no query: no `?v=` branches, no beta tag, no old layouts', () => {
-    expect(page).toMatch(/<StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>/);
+  it('renders ONE page (the guild lead’s five picks of 2026-11-15/16: player first, three doors, scene-first clips, How it works), and reads no query: no `?v=` branches, no beta tag, no old layouts', () => {
+    expect(page).toMatch(/let top = <FirstScreen ctx=\{ctx\} \/>;/);
+    expect(page).not.toMatch(/StoryStage/);   // the 81 second video plays only on /register now
     expect(page).not.toMatch(/searchParams|\bv === |\?v=[a-z]/);
     expect(page).not.toMatch(/PathsLayout|ChaptersStage|BetaTag|MotionStage|SignInTop|variantOf|PreviewBar/);
-    for (const gone of ['PathsLayout', 'ChaptersStage', 'MotionStage', 'SignInTop', 'ClipTabs', 'SceneClip', 'MascotHero', 'MascotVideo', 'HowItWorks',
+    for (const gone of ['PathsLayout', 'ChaptersStage', 'MotionStage', 'SignInTop', 'MascotHero', 'MascotVideo',
       'LadderLayout', 'SceneLayout', 'VariantParts', 'Figures']) {
       expect(fs.existsSync(path.join(ROOT, `${L}${gone}.tsx`)), gone).toBe(false);
     }
@@ -243,10 +244,19 @@ describe('the page', () => {
     for (const gone of ['STORY', 'SCREEN_NOTES', 'SETUP_LINK', 'ILLUSTRATIVE_NOTE', 'HERO', 'MOMENTS']) expect(C, gone).not.toHaveProperty(gone);
     for (const gone of ['VARIANTS', 'VARIANT_LABEL', 'variantOf', 'PREVIEW_NOTE', 'PLAYER', 'JUMP', 'GUILD', 'RUN', 'LINUX_URL']) expect(PL, gone).not.toHaveProperty(gone);
   });
-  it('the stage is outside the width cap, and the reading column under it carries the features, raid management, pricing, the ask and the footer in that order', () => {
-    const at = [...page.matchAll(/<(StoryStage|FeatureBlocks|RaidManagement|Pricing|CtaBand|Footer)\b/g)].map(m => m[1]);
-    expect(at).toEqual(['StoryStage', 'FeatureBlocks', 'RaidManagement', 'Pricing', 'CtaBand', 'Footer']);
-    expect(page.indexOf('<StoryStage')).toBeLessThan(page.indexOf('max-w-5xl'));
+  it('the player part comes first (doors, See it run, what you get, How it works), then the "Running a guild?" divider, then raid management, pricing, the ask and the footer', () => {
+    const at = [...page.matchAll(/<(Doors|SeeItRun|FeatureBlocks|HowSection|GuildDivider|RaidManagement|Pricing|CtaBand|Footer)\b/g)].map(m => m[1]);
+    expect(at).toEqual(['Doors', 'SeeItRun', 'FeatureBlocks', 'HowSection', 'GuildDivider', 'RaidManagement', 'Pricing', 'CtaBand', 'Footer']);
+    expect(PL.GUILD_PART.title).toBe('Running a guild?');
+  });
+  it('the first screen: the picked headline, a muted loop beside it, Download and "See the guild demo"; the how-it-works drawing carries no credit link and no sign-up of its own', () => {
+    expect(PL.FIRST.headline).toBe('Damage, boss debuffs and timers, on your screen while you raid');
+    expect(PL.FIRST.demo).toBe('See the guild demo');
+    const sec = code(L + 'Sections.tsx');
+    expect(sec).toMatch(/<SceneClip src=\{v\.src\}/);
+    expect(sec).toMatch(/\{ctx\.demo\}/);
+    expect(read('web/public/raidmimic/how/scene.html')).not.toMatch(/iso-glow\.vercel|Made with/i);
+    expect(sec.slice(sec.indexOf('export function HowSection'), sec.indexOf('export function GuildDivider'))).not.toMatch(/SignUp|SignIn|<h1/);
   });
   it('the Register-interest address is the anonymous form: absolute on a raidmimic host, its real path on Wolf Pack hosts', () => {
     expect(page).toMatch(/interest: interestUrl\(`\$\{EQMIMIC_ORIGIN\}\/feedback`\)/);
@@ -287,13 +297,14 @@ describe('the shared pieces (Parts.tsx)', () => {
     expect(footer).toMatch(/\{FAN_PROJECT_LINE\}/);
     expect(footer).not.toMatch(/text-\[(?:9|10|11)px\]/);
   });
-  it('server components except the two that play: only the stage, its video and the panel gate are client files, and the directory holds exactly the graduated page’s files', () => {
-    for (const f of ['Parts.tsx', 'StoryParts.tsx', 'StoryBits.tsx', 'FeatureIcons.tsx']) expect(read(L + f), f).not.toMatch(/['"]use client['"]/);
+  it('server components except the ones that play: the stage, its video, the video gate, the clip player, the muted loop and the drawing’s frame are the client files, and the directory holds exactly the landing’s files', () => {
+    for (const f of ['Parts.tsx', 'StoryParts.tsx', 'StoryBits.tsx', 'FeatureIcons.tsx', 'Sections.tsx']) expect(read(L + f), f).not.toMatch(/['"]use client['"]/);
     expect(read('web/app/raidmimic/page.tsx')).not.toMatch(/['"]use client['"]/);
     for (const f of ['HomeDashboard.tsx', 'HomeParts.tsx']) expect(read(L + f), f).not.toMatch(/['"]use client['"]/);
-    for (const f of ['StoryStage.tsx', 'StoryVideo.tsx', 'HomePanelGate.tsx']) expect(read(L + f), f).toMatch(/^(?:\/\/[^\n]*\n)*'use client';|^'use client';/);
+    for (const f of ['StoryStage.tsx', 'StoryVideo.tsx', 'HomePanelGate.tsx', 'ClipTabs.tsx', 'SceneClip.tsx', 'HowItWorks.tsx']) expect(read(L + f), f).toMatch(/^(?:\/\/[^\n]*\n)*'use client';|^'use client';/);
     expect(fs.readdirSync(path.join(ROOT, L)).sort()).toEqual([
-      'FeatureIcons.tsx', 'HomeDashboard.tsx', 'HomePanelGate.tsx', 'HomeParts.tsx', 'Parts.tsx', 'StoryBits.tsx', 'StoryParts.tsx', 'StoryStage.tsx', 'StoryVideo.tsx',
+      'ClipTabs.tsx', 'FeatureIcons.tsx', 'HomeDashboard.tsx', 'HomePanelGate.tsx', 'HomeParts.tsx', 'HowItWorks.tsx', 'Parts.tsx', 'SceneClip.tsx', 'Sections.tsx',
+      'StoryBits.tsx', 'StoryParts.tsx', 'StoryStage.tsx', 'StoryVideo.tsx',
     ]);   // HomeDashboard + HomeParts (server) and HomePanelGate (client): the signed-in top (Dashboard, picked 2026-11-09)
   });
   it('fetches and embeds nothing external; every outbound link is one we name', () => {

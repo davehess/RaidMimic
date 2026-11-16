@@ -46,7 +46,7 @@ export const sameReveal = (a: Reveal, b: Reveal) =>
 // ─── Features (one picture and one sentence each) ──────────────────────────────────────────────
 // The pictures are plain strings, not imports: a file that is not on disk yet is a 404 in a preview, never a failed build.
 // `chip` marks a promise: anything not built yet says "coming" (CLAUDE.md, honesty rule; web/lib/raidmimicLanding.ts COMING).
-export type FeatureId = 'canvas' | 'studio' | 'sync' | 'replay' | 'zeal';
+export type FeatureId = 'canvas' | 'chchain' | 'studio' | 'sync' | 'replay' | 'zeal';
 // `top`: crop a tall picture from its top edge instead of its middle (the Zeal settings capture is nearly square).
 export interface Feature { id: FeatureId; name: string; line: string; img: string; alt: string; chip?: string; top?: boolean }
 const SHOTS = '/raidmimic/shots';
@@ -54,6 +54,10 @@ export const FEATURES: readonly Feature[] = [
   { id: 'canvas', name: 'Canvas & builder', line: 'Standard overlays on one canvas, or build your own.',
     img: `${SHOTS}/canvas-overlays.webp`,
     alt: 'The Mimic canvas: the standard overlays (damage, target debuffs, timers) laid out on one screen over the game.' },
+  // The guild lead, 2026-11-16 (card rm-home-story, extra "chchain-side"): the CH chain belongs on the player side.
+  { id: 'chchain', name: 'CH chain', line: 'The Complete Heal rotation on the tank, with a late-heal warning.',
+    img: `${SHOTS}/ch-chain.webp`, top: true,
+    alt: 'The CH Chain overlay for a tank: a gap warning, four numbered cleric slots each with mana and a cast bar, and a countdown to the next slot.' },
   { id: 'studio', name: 'UI Studio', line: 'Design your EverQuest UI once, keep every version.',
     img: `${SHOTS}/ui-studio.webp`,
     alt: 'UI Studio: a layout of the game window being arranged, with the list of saved versions beside it.' },

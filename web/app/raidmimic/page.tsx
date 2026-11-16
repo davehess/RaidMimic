@@ -1,14 +1,17 @@
-// raidmimic.com: the player-first front door (the guild lead, 2026-10-18 option C "two doors", reshaped 2026-10-23: "less
-// about me setting it up as a service ... more about here's what you get as a player, here's what you could have as a
-// guild"). Served at the root of raidmimic.com / .net / .quest (middleware.ts rewrites there) and also at
-// wolfpack.quest/raidmimic and b.wolfpack.quest/raidmimic. Public; signing in only swaps the video for the player's panel.
+// raidmimic.com: the player-first front door. Served at the root of raidmimic.com / .net / .quest (middleware.ts rewrites there) and
+// also at wolfpack.quest/raidmimic and b.wolfpack.quest/raidmimic. Public; signing in only swaps the first screen for the player's
+// own Dashboard.
 //
-// One page: the "Story stage" (StoryStage.tsx; the guild lead picked C on 2026-11-01 from three previews, then refined it: "start
-// truly as the only thing on the page, fit is the video, fade it into the background color. Slowly add the logos as we go into
-// the video. Skip/hide at the bottom"). The video fills the first screen alone; under it come what you get, raid management,
-// pricing, the Register-interest band and the footer. The earlier "Pick your path" page, the sign-in-first and Chapters previews
-// and the `?v=` switch were deleted. Words are in web/lib/raidmimicStory.ts and web/lib/raidmimicLanding.ts; "coming" means
-// coming, and the page never says otherwise.
+// ONE page, assembled from the guild lead's picks of 2026-11-15/16 (Decision Desk cards rm-home, rm-home-story, lab-rm-first-screen,
+// about-page-placement and raidmimic-layout-clips), player first and short ("a title, one line, then the content"):
+//   signed out  first screen (headline, one line, Download + "See the guild demo", the mascot loop muted beside them)
+//               -> Pick your path (Player, Guild, Self-host)
+//   signed in   the Dashboard: your raids, your characters, Mimic
+//   both        See it run (the clips, one beat of a raid night each) -> what you get (the CH chain is on this side) -> [signed out:
+//               PoP flags] -> How it works (the drawing) -> "Running a guild?" divider -> raid management, pricing, the ask.
+// The 81 second intro video is no longer here: it plays only on the For guild leaders page (/register). Words are in
+// web/lib/raidmimicPlayer.ts, web/lib/raidmimicLanding.ts and web/lib/raidmimicStory.ts; "coming" means coming, and the page
+// never says otherwise. The earlier story stage, "Pick your path", sign-in-first, Chapters and `?v=` previews are gone.
 //
 // Search engines (2026-10-23): INDEXED on the raidmimic hosts only, with https://raidmimic.com/ as the canonical address;
 // the same page on wolfpack.quest and b.wolfpack.quest is noindex. web/lib/raidmimicHost.ts raidmimicSeo() decides, per
@@ -19,16 +22,15 @@ import { headers } from 'next/headers';
 import { supabaseServer } from '@/lib/supabase-server';
 import { discordIdOf } from '@/lib/lockout';
 import { loadMine } from '@/lib/hubMine';
-import HomePanelGate from './_landing/HomePanelGate';
 import HomeDashboard from './_landing/HomeDashboard';
 import { loadHomeGuilds } from '@/lib/hubGuildsLoad';
 import { profileOf } from '@/lib/hubRegistry';
 import type { Metadata } from 'next';
-import { isRaidmimicHost, raidmimicSeo, RAIDMIMIC_CHARACTERS_PATH, RAIDMIMIC_SETUP_PATH } from '@/lib/raidmimicHost';
+import { isRaidmimicHost, raidmimicSeo, RAIDMIMIC_CHARACTERS_PATH, RAIDMIMIC_DEMO_PATH, RAIDMIMIC_SETUP_PATH } from '@/lib/raidmimicHost';
 import { EQMIMIC_FEEDBACK_PATH, EQMIMIC_ORIGIN, interestUrl } from '@/lib/raidmimicLanding';
 import { DOWNLOAD_URL } from '@/lib/raidmimicPlayer';
 import { CtaBand, Footer, type Ctx } from './_landing/Parts';
-import StoryStage from './_landing/StoryStage';
+import { Doors, FirstScreen, GuildDivider, HowSection, SeeItRun } from './_landing/Sections';
 import { FeatureBlocks, Pricing, RaidManagement } from './_landing/StoryParts';
 import HostFrame from '@/components/RaidmimicFrame';
 
@@ -46,53 +48,48 @@ export function generateMetadata(): Metadata {
   };
 }
 
-// The top of the page (the guild lead picked "Home panel" on the Decision Desk, 2026-11-09): a signed-out visitor gets the story
-// stage with a big Skip (remembered per viewer; "Rewatch the video" on the collapsed bar, via #video); a signed-in one (a
-// Discord id on the session) gets the "Your Raid Mimic" panel instead of the video, with "Rewatch the video" revealing the
-// stage in place. Neither reads a query.
 export default async function RaidmimicPage() {
   // On a raidmimic host the form lives on eqmimic.quest and the page is `/`. On the Wolf Pack hosts the form is
   // reached by its real path, so the site header stays above the page.
   const onHost = isRaidmimicHost(headers().get('host'));
   const ctx: Ctx = onHost
-    ? { onHost, interest: interestUrl(`${EQMIMIC_ORIGIN}/feedback`), setup: '/setup' }
-    : { onHost, interest: interestUrl(EQMIMIC_FEEDBACK_PATH), setup: RAIDMIMIC_SETUP_PATH };
+    ? { onHost, interest: interestUrl(`${EQMIMIC_ORIGIN}/feedback`), setup: '/setup', demo: '/demo/raid' }
+    : { onHost, interest: interestUrl(EQMIMIC_FEEDBACK_PATH), setup: RAIDMIMIC_SETUP_PATH, demo: `${RAIDMIMIC_DEMO_PATH}/raid` };
   const { data: { user } } = await supabaseServer().auth.getUser();
   const discordId = discordIdOf(user);
   const signedIn = !!(user && discordId);
-  let top = <StoryStage downloadUrl={DOWNLOAD_URL} onHost={onHost} />;
+  let top = <FirstScreen ctx={ctx} />;
   if (signedIn) {
     // The Dashboard (the guild lead picked option B, 2026-11-09): who you are, your characters, your guilds, Mimic.
     const [mine, guilds] = await Promise.all([loadMine(discordId!), loadHomeGuilds(discordId!)]);
     const { displayName, avatarUrl } = profileOf(user!);
-    top = <HomePanelGate downloadUrl={DOWNLOAD_URL} onHost={onHost}
-      panel={<HomeDashboard name={displayName} avatarUrl={avatarUrl} mine={mine} guilds={guilds} downloadUrl={DOWNLOAD_URL} />} />;
+    top = <HomeDashboard name={displayName} avatarUrl={avatarUrl} mine={mine} guilds={guilds} downloadUrl={DOWNLOAD_URL} />;
   }
-  // The stage is outside the width cap so it can span the viewport; the page under it is a reading column. No query is read:
-  // a raidmimic host drops every one in the middleware, and the Wolf Pack hosts show the same page.
   // On a raidmimic host the page sits in the shell (Wolf Pack's header and footer around it, the guild lead, 2026-11-15), so
-  // the bar the page used to draw and its own Footer are the shell's now.
+  // the bar the page used to draw and its own Footer are the shell's now. No query is read: a raidmimic host drops every one in
+  // the middleware, and the Wolf Pack hosts show the same page.
   return (
     <HostFrame onHost={onHost}>
-    <div id="raidmimic-home">
+    <div id="raidmimic-home" className="mx-auto max-w-5xl pb-12">
       {top}
-      <div className="mx-auto max-w-5xl pb-12">
-        <FeatureBlocks />
-        {!signedIn && (
-          <section aria-label="Track your PoP flags" className="mt-6 rounded-md border border-gold/70 bg-panel p-5 sm:p-6">
-            <h2 className="text-xl text-text">Track your PoP flags</h2>
-            <p className="mt-2 max-w-[62ch] text-sm leading-6 text-text">
-              Sign in with Discord, then paste your #popflags lines or drop the PoPFlags file Zeal saves when you camp. You see which
-              Planes of Power zones you can enter and what each character needs next. No guild needed, and only you can see it.
-            </p>
-            <p className="mt-4"><a href={RAIDMIMIC_CHARACTERS_PATH} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-bg px-4 text-sm text-gold hover:no-underline">Track your PoP flags</a></p>
-          </section>
-        )}
-        <RaidManagement />
-        <Pricing setup={ctx.setup} onHost={onHost} />
-        <div className="mt-12"><CtaBand ctx={ctx} /></div>
-        {!onHost && <Footer onHost={false} />}
-      </div>
+      {!signedIn && <Doors ctx={ctx} />}
+      <SeeItRun />
+      <FeatureBlocks />
+      {!signedIn && (
+        <section aria-label="Track your PoP flags" className="mt-12 rounded-md border border-gold/70 bg-panel p-5 sm:p-6">
+          <h2 className="text-xl text-text">Track your PoP flags</h2>
+          <p className="mb-0 mt-2 max-w-[62ch] text-sm leading-6 text-text">
+            Sign in with Discord, then paste your #popflags lines or drop the PoPFlags file. Only you see it.
+          </p>
+          <p className="mb-0 mt-4"><a href={RAIDMIMIC_CHARACTERS_PATH} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-bg px-4 text-sm text-gold hover:no-underline">Track your PoP flags</a></p>
+        </section>
+      )}
+      <HowSection />
+      <GuildDivider />
+      <RaidManagement />
+      <Pricing setup={ctx.setup} onHost={onHost} />
+      <div className="mt-12"><CtaBand ctx={ctx} /></div>
+      {!onHost && <Footer onHost={false} />}
     </div>
     </HostFrame>
   );

@@ -20,17 +20,18 @@ const gate = code('web/app/raidmimic/_landing/HomePanelGate.tsx');
 const chars = code('web/app/characters/page.tsx');
 const mine = code('web/lib/hubMine.ts');
 
-describe('the page: signed out gets the stage, signed in gets the panel', () => {
-  it('reads the session, and only a Discord id swaps the video for the panel', () => {
+describe('the page: signed out gets the first screen, signed in gets the Dashboard', () => {
+  it('reads the session, and only a Discord id swaps the first screen for the Dashboard', () => {
     expect(page).toMatch(/const \{ data: \{ user \} \} = await supabaseServer\(\)\.auth\.getUser\(\);/);
     expect(page).toMatch(/const discordId = discordIdOf\(user\);/);
     expect(page).toMatch(/const signedIn = !!\(user && discordId\);/);
-    expect(page).toMatch(/let top = <StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>;/);
-    expect(page).toMatch(/if \(signedIn\) \{[^]*<HomePanelGate[^]*panel=\{<HomeDashboard [^]*mine=\{mine\} guilds=\{guilds\}/);
+    expect(page).toMatch(/let top = <FirstScreen ctx=\{ctx\} \/>;/);
+    expect(page).toMatch(/if \(signedIn\) \{[^]*top = <HomeDashboard [^]*mine=\{mine\} guilds=\{guilds\}/);
+    expect(page).toMatch(/\{!signedIn && <Doors ctx=\{ctx\} \/>\}/);
   });
   it('signed in or out the page sits in the shell once, and the Dashboard panel draws no bar of its own', () => {
     expect(page.match(/<HostFrame onHost=\{onHost\}>/g)).toHaveLength(1);
-    expect(page).toMatch(/<HostFrame onHost=\{onHost\}>\s*<div id="raidmimic-home">\s*\{top\}/);
+    expect(page).toMatch(/<HostFrame onHost=\{onHost\}>\s*<div id="raidmimic-home" className="mx-auto max-w-5xl pb-12">\s*\{top\}/);
     expect(page).not.toMatch(/HostBar/);
     expect(panel).not.toMatch(/HostBar|HostFrame/);
   });

@@ -160,7 +160,7 @@ describe('raid management (the guild side)', () => {
 
 describe('the words stay short', () => {
   it('each feature is one picture and one sentence, with a picture path in the shared folder', () => {
-    expect(S.FEATURES.map(f => f.id)).toEqual(['canvas', 'studio', 'sync', 'replay', 'zeal']);
+    expect(S.FEATURES.map(f => f.id)).toEqual(['canvas', 'chchain', 'studio', 'sync', 'replay', 'zeal']);   // chchain: the player side (2026-11-16)
     for (const f of S.FEATURES) {
       expect(f.line.split(/[.!?]\s/).length).toBe(1);
       expect(f.line.length).toBeLessThan(70);
@@ -177,16 +177,18 @@ describe('the words stay short', () => {
   });
 });
 
-describe('the wiring: the default page IS the story stage', () => {
+describe('the wiring: the story stage plays on the For guild leaders page only (2026-11-16, card rm-home)', () => {
   const page = code('web/app/raidmimic/page.tsx');
   const stage = code(L + 'StoryStage.tsx');
   const video = code(L + 'StoryVideo.tsx');
   const css = stripCss(read('web/app/globals.css'));
 
-  it('page.tsx renders the stage with no query: no variants, no beta tag, no other layout', () => {
-    expect(page).toMatch(/<StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>/);
+  it('page.tsx draws no stage and no query: the landing is the first screen, the doors and the sections; the video is behind a button on /register', () => {
+    expect(page).not.toMatch(/StoryStage|HomePanelGate/);
     expect(page).not.toMatch(/searchParams|\?v=|pick ===|PathsLayout|ChaptersStage|BetaTag/);
-    expect(page.match(/<StoryStage\b/g)).toHaveLength(1);
+    const reg = code('web/app/raidmimic/register/page.tsx');
+    expect(reg.match(/<HomePanelGate\b/g)).toHaveLength(1);
+    expect(code(L + 'HomePanelGate.tsx')).toMatch(/<StoryStage downloadUrl=\{downloadUrl\} onHost=\{onHost\} \/>/);
   });
   it('the metadata is the page’s own and unchanged', () => {
     expect(page).toMatch(/const TITLE = 'Raid Mimic · free EverQuest raid overlays';/);
