@@ -1551,7 +1551,8 @@ contextBridge.exposeInMainWorld('mimic', {
   zealStatus:        ()   => ipcRenderer.invoke('zeal-status'),
   zealCheckUpdate:   ()   => ipcRenderer.invoke('zeal-check-update'),
   zealInstallUpdate: ()   => ipcRenderer.invoke('zeal-install-update'),
-  zealSetSource:     (s)  => ipcRenderer.invoke('zeal-set-source', s),   // 'official' | 'test'
+  zealSetSource:     (s)  => ipcRenderer.invoke('zeal-set-source', s),   // 'official' | 'test' | 'w:<watch id>'
+  zealWatchSave:     (l)  => ipcRenderer.invoke('zeal-watch-save', l),   // the whole saved watch list
   // Custom UI packs (Nillipuss etc.): list is local; check hits GitHub;
   // install downloads the pack into uifiles/<name>/; setOptions makes the
   // ticked Options/ layouts the ones on (prepare fetches the pack's default

@@ -422,6 +422,8 @@ function defaultConfig() {
     // Where Zeal installs come from: 'official' (CoastalRedwood) or 'test' (the
     // guild's fork, test-all build). zealUpdater.ZEAL_SOURCES; set from Settings.
     zealSource: 'official',
+    // The Zeal watch list: saved extra sources, each newest / pinned / pre-releases ('w:<id>' in zealSource).
+    zealWatch: [],
     // Custom UI packs (Nillipuss etc.) installed via the uiPacks updater —
     // map of pack id → last-installed release tag. Same idea as zealInstalledTag
     // but per-pack, since a user can install more than one.
@@ -16373,8 +16375,20 @@ setInterval(() => { try { _weaveHub.tick(); } catch { /* never throw from a time
 ipcMain.handle('zeal-status', () => {
   try {
     const cfg = loadConfig();
-    return { ...zealUpdater.localStatus(_zealEqDir(), cfg.zealInstalledTag), source: zealUpdater._zealSource(cfg.zealSource) };
-  } catch (e) { return { eqDir: null, hasZealAsi: false, installedTag: null, source: 'official' }; }
+    return { ...zealUpdater.localStatus(_zealEqDir(), cfg.zealInstalledTag), source: zealUpdater._zealSource(cfg.zealSource, cfg.zealWatch), watch: zealUpdater.cleanWatch(cfg.zealWatch) };
+  } catch (e) { return { eqDir: null, hasZealAsi: false, installedTag: null, source: 'official', watch: [] }; }
+});
+// The watch list: saved extra sources (zealUpdater.cleanWatch says what a valid entry is). The Settings card
+// sends the whole list back on every change; a removed entry that was the active source falls back to official.
+ipcMain.handle('zeal-watch-save', (_e, list) => {
+  try {
+    const cfg = loadConfig();
+    cfg.zealWatch = zealUpdater.cleanWatch(list);
+    cfg.zealSource = zealUpdater._zealSource(cfg.zealSource, cfg.zealWatch);
+    saveConfig(cfg);
+    _zealNotifiedTag = null;
+    return { ok: true, watch: cfg.zealWatch, source: cfg.zealSource };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
 });
 // Switch where Zeal installs come from. Saved at once, not with the Settings
 // form, because the Check / Install buttons beside it act straight away. Nothing
@@ -16382,7 +16396,7 @@ ipcMain.handle('zeal-status', () => {
 ipcMain.handle('zeal-set-source', (_e, source) => {
   try {
     const cfg = loadConfig();
-    cfg.zealSource = zealUpdater._zealSource(source);
+    cfg.zealSource = zealUpdater._zealSource(source, cfg.zealWatch);
     saveConfig(cfg);
     _zealNotifiedTag = null;     // the other source's newest build is news again
     appendAgentLog(`[zeal-update] Zeal source set to ${cfg.zealSource}\n`);
@@ -16396,7 +16410,7 @@ ipcMain.handle('zeal-check-update', async () => {
     const cfg = loadConfig();
     const eqDir = _zealEqDir();
     const local = zealUpdater.localStatus(eqDir, cfg.zealInstalledTag);
-    const latest = await zealUpdater.checkLatest(cfg.zealSource);
+    const latest = await zealUpdater.checkLatest(cfg.zealSource, cfg.zealWatch);
     return {
       ok: true,
       source: latest.source,
@@ -16442,7 +16456,7 @@ ipcMain.handle('zeal-install-update', async () => {
       return { ok: false, error: 'EverQuest (eqgame.exe) is running on this PC — Zeal.asi is loaded by the game and can\'t be replaced while it\'s open. Close it and try again. Don\'t see a game window? A stuck one may still be running: Task Manager → Details → eqgame.exe → End task.' };
     }
     const cfg = loadConfig();
-    const res = await zealUpdater.install(eqDir, { source: cfg.zealSource });
+    const res = await zealUpdater.install(eqDir, { source: cfg.zealSource, watch: cfg.zealWatch });
     cfg.zealInstalledTag = res.tag || cfg.zealInstalledTag;
     saveConfig(cfg);
     appendAgentLog(`[zeal-update] installed ${res.tag} into ${eqDir} — ${res.written.length} file(s), ${res.backedUp.length} backed up\n`);
@@ -16483,7 +16497,7 @@ async function checkZealUpdate({ manual = false } = {}) {
     if (!manual && cfg.zealAutoCheck === false) return;
     const eqDir = _zealEqDir();
     if (!eqDir) return;                              // no EQ folder yet — nothing to update
-    const latest = await zealUpdater.checkLatest(cfg.zealSource);
+    const latest = await zealUpdater.checkLatest(cfg.zealSource, cfg.zealWatch);
     if (!latest.tag) return;
     const current = latest.tag === cfg.zealInstalledTag;
     // Tell the agent on EVERY check, before the once-per-tag latch below.
