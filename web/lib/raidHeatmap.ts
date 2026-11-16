@@ -202,6 +202,21 @@ export function nightNames(n: Night): string[] {
   return out;
 }
 
+// The night's raid names for DISPLAY, without the date officers type into them ("2026-08-05 - VT" → "VT"): the chip,
+// its tooltip and the table row already show the date, so it read three times (design review, 2026-11-16). The same
+// patterns as dateFromName; a name that was only a date drops out. nightNames stays raw: grouping reads it.
+const NAME_DATE_RX = [/\b\d{4}-\d{1,2}-\d{1,2}\b/, /\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/, /\b\d{1,2}[-/]\d{1,2}\b/];
+export function nightTitles(n: Night): string[] {
+  const out: string[] = [];
+  for (const raw of nightNames(n)) {
+    let s = raw;
+    for (const rx of NAME_DATE_RX) s = s.replace(rx, ' ');
+    s = s.replace(/^[\s\-–—·:|,]+|[\s\-–—·:|,]+$/g, '').replace(/\s{2,}/g, ' ');
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
 // ── Colour ───────────────────────────────────────────────────────────────────
 // The platform's own tokens (web/tailwind.config.ts), not a new palette.
 

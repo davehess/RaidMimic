@@ -174,7 +174,7 @@ export default async function HomePage() {
                       {dayLabel(dayKey(r.started_at, tz), tz)} · {fmtTime(r.started_at, tz)}
                     </span>
                   </span>
-                  <span className="tnum whitespace-nowrap text-sm text-[#d29922]">{fmtDmg(r.total_damage)}</span>
+                  <span className="tnum whitespace-nowrap text-sm text-[#d29922]">{fmtDmg(r.total_damage)}<span className="ml-1 text-xs text-dim">damage</span></span>
                 </Link>
               </li>
             ))}

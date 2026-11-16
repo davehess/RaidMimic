@@ -556,11 +556,11 @@ export default async function ParsesPage(
                     <span aria-hidden>📍</span>
                     <span>{zone.label}</span>
                     <span className="text-dim text-xs">
-                      · {kills.length} kill{kills.length === 1 ? '' : 's'}
+                      {kills.length > 0 && <>· {kills.length} kill{kills.length === 1 ? '' : 's'}</>}
                       {kills.length > 1 && <span> · {fmtDmg(killDamage)} total</span>}
                       {excluded > 0 && (
                         <span title="Wipes / Live / PvP / Test pulls — not counted as guild kills">
-                          {' '}· +{excluded} other
+                          {' '}· {excluded} not counted
                         </span>
                       )}
                     </span>
