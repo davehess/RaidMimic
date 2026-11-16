@@ -36638,7 +36638,8 @@ const COMMAND_HTML = `<!doctype html>
   .hail-clock{margin-left:auto;text-transform:none;letter-spacing:0;font-size:10px;font-weight:700;
     color:#d29922;font-variant-numeric:tabular-nums}
   .hail-clock.soon{color:#ffa657}
-  .hail-clock.crit{color:#f85149}
+  .hail-clock.crit,.hail-rule.fail,.hail-rule.fail b{color:#f85149}
+  .hail-rule.fail{font-weight:700}
   /* The NPC's flag cap (the guild lead, 2026-10-07): "Flags: 23 / 72 used", amber and bold when the flags left
      do not cover the raiders still to hail. Drawn only when the bot sends a cap. */
   .hail-cap{font-size:9px;margin:3px 0 2px;color:#c9d1d9}
@@ -36649,7 +36650,7 @@ const COMMAND_HTML = `<!doctype html>
   .hail-sub b{font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums}
   .hail-sub.todo{color:#e6edf3;font-weight:700}
   .hail-sub.done{color:#7ee787;font-weight:700}
-  .hail-sub.done b{color:#7ee787}
+  .hail-sub.done b,.hail-rule b{color:#7ee787}
   .hail-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:10px;line-height:1.5}
   .hail-chip{padding:0 5px;border-radius:3px;border:1px solid transparent;white-space:nowrap;color:#e6edf3;
     background:rgba(255,255,255,0.06)}
@@ -37055,6 +37056,15 @@ const COMMAND_HTML = `<!doctype html>
          + (tight ? '<div class="hail-cap warn">' + (left === 0 ? '⚠ No flags left, ' : '⚠ Only ' + left + ' flag' + (left === 1 ? '' : 's') + ' left, ')
          + stillCount + ' still to hail</div>' : '');
   }
+  // Flagged vs not flagged (the guild lead, 2026-11-16) for the elemental planes and Time: the server lets a
+  // raid in with unflagged members while flagged x 100 >= raid size x 85, counting the whole raid. The agent
+  // does the sums (planarFlagRule) and sends w.rule; nothing is drawn when it is absent.
+  function hailRuleHtml(r){
+    if (!r || !(r.size > 0)) return '';
+    return '<div class="hail-cap hail-rule" title="Who has the flag from this kill: hailed now or already flagged, out of the raid at the kill. A hail we did not see shows as not flagged.">'
+         + 'Flagged <b>' + r.flagged + ' / ' + r.size + ' (' + r.pct_flagged + '%)</b> &middot; Not flagged <b>' + r.not_flagged
+         + ' (' + r.pct_not + '%)</b></div>';
+  }
   function hailMoreHtml(key, total, cap, open){
     if (total <= cap) return '';
     return '<span class="hail-more" data-wp-interact data-hail-more="' + esc(key) + '" title="'
@@ -37080,7 +37090,7 @@ const COMMAND_HTML = `<!doctype html>
          +   '<span class="hail-clock" data-end="' + esc(end) + '"></span>'
          + '</div>';
       if (!col) {
-        h += hailCapHtml(w, still.length);
+        h += hailCapHtml(w, still.length) + hailRuleHtml(w.rule);
         if (still.length) {
           var stillOpen = _hailMore.has(wid + '|still');
           var sMax = stillOpen ? still.length : Math.min(still.length, HAIL_STILL_CAP);
@@ -63168,6 +63178,23 @@ function _hailReplaceWindow(w) {
 // clock (nowMs is on it) and an absolute end on THIS machine's clock for the overlay's ticking clock.
 // raidNames (a lowercase Set) narrows every list to this Mimic's own raid while two raids run; a
 // window with nobody of yours in it is the other raid's and is left out.
+// Flagged vs not flagged, as counts and whole percentages (floored, so 84.9% never reads 85%). It also answers the
+// 85% entry rule for the elemental planes and Time (EQMacEmu c2cd2651 zone/zoning.cpp:41-73, zone/raids.cpp:617-638;
+// DECISIONS 596: flagged x 100 >= raid size x 85), which the hail card does not show (a kill's flag is not a zone's
+// entry flag). Pure; integer maths only.
+function planarFlagRule(size, flagged) {
+  const n = Math.max(0, Math.floor(Number(size) || 0));
+  const f = Math.min(n, Math.max(0, Math.floor(Number(flagged) || 0)));
+  const maxUnflagged = n - Math.floor((85 * n + 99) / 100);   // size - ceil(0.85 * size)
+  const notFlagged = n - f;
+  const passes = n > 0 && f * 100 >= n * 85;
+  return {
+    size: n, flagged: f, not_flagged: notFlagged,
+    pct_flagged: n ? Math.round((f * 100) / n) : 0, pct_not: n ? Math.round((notFlagged * 100) / n) : 0,
+    max_unflagged: maxUnflagged, passes,
+    spare: passes ? maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,
+  };
+}
 function _hailBoardSnapshot(nowMs, raidNames) {
   const out = [];
   for (const w of _hailBoard.windows) {
@@ -63177,8 +63204,14 @@ function _hailBoardSnapshot(nowMs, raidNames) {
     const still = w.still.filter(s => mine(s.name));
     const hailed = w.hailed.filter(h => mine(h.name));
     if (raidNames && !still.length && !hailed.length) continue;
-    out.push({ ...w, still, hailed, already_flagged: w.already_flagged.filter(mine),
-      ms_left: left, ends_at_ms: Math.round((Date.now() + left) / 1000) * 1000 });
+    const already = w.already_flagged.filter(mine);
+    const row = { ...w, still, hailed, already_flagged: already,
+      ms_left: left, ends_at_ms: Math.round((Date.now() + left) / 1000) * 1000 };
+    // Flagged vs not flagged for THIS kill's credit, on every window (the guild lead, 2026-11-16: "show flagged vs
+    // not flagged on command center, counts and percentages"). Counted over the people this window tracks (the raid at
+    // the kill). The 85% entry rule is a different flag (zone access) and lives on the PoP raid page, not here.
+    row.rule = planarFlagRule(still.length + hailed.length + already.length, hailed.length + already.length);
+    out.push(row);
   }
   return out;
 }
