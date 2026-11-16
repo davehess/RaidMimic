@@ -156,6 +156,12 @@ export type ImportDeps = {
   insertFlags: (rows: (FlagRow & { player_id: string })[]) => Promise<string | null>;
 };
 
+/** The words a refused claim gets, shared by the flag import and the inventory import. */
+export function claimRefusalText(reason: 'wolfpack_linked' | 'held_by_other'): string {
+  return reason === 'wolfpack_linked'
+    ? 'That name is linked to another Discord account in Wolf Pack.' : 'Another player has already proven that name.';
+}
+
 const unavailable: ImportResult = { ok: false, error: 'Could not save just now. Try again in a minute.' };
 
 export async function importExports(files: UploadFile[], deps: ImportDeps): Promise<ImportResult> {
@@ -205,8 +211,7 @@ export async function importExports(files: UploadFile[], deps: ImportDeps): Prom
       const v = decideClaim({ playerId: deps.playerId, discordId: deps.discordId, wolfpackDiscordId: owners.get(lc), holders: holders.get(lc) });
       const name = byChar.get(lc)!.parsed.character;
       if (v.verdict === 'refused') {
-        outcomes.push({ character: name, status: 'refused', flags: 0, reason: v.reason === 'wolfpack_linked'
-          ? 'That name is linked to another Discord account in Wolf Pack.' : 'Another player has already proven that name.' });
+        outcomes.push({ character: name, status: 'refused', flags: 0, reason: claimRefusalText(v.reason) });
         continue;
       }
       live.push(lc);

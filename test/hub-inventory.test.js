@@ -102,7 +102,7 @@ describe('the caps', () => {
   });
   it('more files than the limit is refused before anything is read', async () => {
     const files = Array.from({ length: MAX_INV_FILES + 1 }, () => file('Corvale-Inventory.txt', INV));
-    const r = await importInventory(files, { playerId: 'p1', now: () => 0, heldNames: async () => { throw new Error('read'); }, replace: async () => null });
+    const r = await importInventory(files, { ...depsFor(fakeClient(), 'p1', [], 0), heldNames: async () => { throw new Error('read'); } });
     expect(r.ok).toBe(false);
   });
   it('quantity and item id are clamped', () => {
@@ -156,9 +156,20 @@ function fakeClient() {
   return { from, table, calls };
 }
 
-function depsFor(db, playerId, held, nowMs) {
+// The claim side is a fake of hub_characters: `chars` is [{player_id, name_lc, proof}] across every player.
+function depsFor(db, playerId, held, nowMs, o = {}) {
+  const chars = o.chars ?? [];
   return {
     playerId, now: () => nowMs, heldNames: async () => held,
+    discordId: o.discordId ?? 'd-' + playerId,
+    wolfpackOwners: async () => new Map(Object.entries(o.wolfpack ?? {})),
+    holders: async (lcs) => {
+      const m = new Map();
+      for (const c of chars) if (lcs.includes(c.name_lc)) m.set(c.name_lc, [...(m.get(c.name_lc) ?? []), { player_id: c.player_id, proof: c.proof }]);
+      return m;
+    },
+    insertCharacters: async (rows) => { chars.push(...rows.map(r => ({ player_id: r.player_id, name_lc: r.name_lc, proof: r.proof }))); return null; },
+    flipContested: async (lcs) => { for (const c of chars) if (lcs.includes(c.name_lc) && c.proof === 'claimed') c.proof = 'contested'; return null; },
     replace: (pid, lc, character, source, observedAt, rows) => replaceRows(db, pid, lc, character, source, observedAt, rows),
   };
 }
@@ -194,12 +205,50 @@ describe('per-player keying', () => {
     expect(db.calls.every(c => c[0] !== 'delete' || c[1] === 4)).toBe(true);   // player, name, source, older-than
   });
 
-  it('a character the player does not hold is not written (no claim happens here)', async () => {
+  it('a character the player does not hold is claimed by the file, then its items are written', async () => {
     const db = fakeClient();
-    const r = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(db, 'player-a', ['someoneelse'], 1_000));
+    const chars = [];
+    const r = await importInventory([file('Corvale-Inventory.txt', INV), file('CorvaleQuarmy.txt', QUARMY)], depsFor(db, 'player-a', ['someoneelse'], 1_000, { chars }));
+    expect(r.ok && r.saved.map(s => s.source).sort()).toEqual(['inventory', 'quarmy']);
+    expect(chars).toEqual([{ player_id: 'player-a', name_lc: 'corvale', proof: 'claimed' }]);
+    expect(new Set(db.table.map(x => x.player_id))).toEqual(new Set(['player-a']));
+    expect(db.table.length).toBe(9);
+  });
+
+  it('a name another player holds as claimed becomes contested for both, and the items are still written', async () => {
+    const db = fakeClient();
+    const chars = [{ player_id: 'player-b', name_lc: 'corvale', proof: 'claimed' }];
+    const r = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(db, 'player-a', [], 1_000, { chars }));
+    expect(r.ok && r.saved.length).toBe(1);
+    expect(chars.find(c => c.player_id === 'player-a').proof).toBe('contested');
+    expect(chars.find(c => c.player_id === 'player-b').proof).toBe('contested');
+    expect(db.table.every(x => x.player_id === 'player-a')).toBe(true);
+  });
+
+  it('a name another player has proven, or Wolf Pack links to another Discord account, is refused and writes nothing', async () => {
+    const db = fakeClient();
+    const chars = [{ player_id: 'player-b', name_lc: 'corvale', proof: 'proven' }];
+    const r = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(db, 'player-a', [], 1_000, { chars }));
     expect(r.ok && r.saved).toEqual([]);
-    expect(r.ok && r.problems[0].message).toMatch(/PoP flags first/);
+    expect(r.ok && r.problems[0].message).toBe('Another player has already proven that name.');
+    expect(chars.length).toBe(1);
     expect(db.table.length).toBe(0);
+    const r2 = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(db, 'player-a', [], 1_000, { wolfpack: { corvale: 'someone-else' } }));
+    expect(r2.ok && r2.problems[0].message).toBe('That name is linked to another Discord account in Wolf Pack.');
+    expect(db.table.length).toBe(0);
+  });
+
+  it('the 50-character cap holds: a new name past it is refused, a held one still saves', async () => {
+    const db = fakeClient();
+    const held = Array.from({ length: 50 }, (_, i) => 'held' + String.fromCharCode(97 + (i % 26)) + String.fromCharCode(97 + Math.floor(i / 26)));
+    const chars = [];
+    const r = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(db, 'player-a', held, 1_000, { chars }));
+    expect(r.ok && r.saved).toEqual([]);
+    expect(r.ok && r.problems[0].message).toMatch(/already have 50 characters/);
+    expect(chars.length).toBe(0);
+    expect(db.table.length).toBe(0);
+    const r2 = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(db, 'player-a', [...held.slice(1), 'corvale'], 1_000, { chars }));
+    expect(r2.ok && r2.saved.length).toBe(1);
   });
 
   it('the character page\'s own form (only) refuses a file for another character', async () => {
@@ -211,7 +260,7 @@ describe('per-player keying', () => {
   });
 
   it('an unreadable held list fails closed', async () => {
-    const r = await importInventory([file('Corvale-Inventory.txt', INV)], { playerId: 'p', now: () => 1, heldNames: async () => null, replace: async () => null });
+    const r = await importInventory([file('Corvale-Inventory.txt', INV)], depsFor(fakeClient(), 'p', null, 1));
     expect(r.ok).toBe(false);
   });
 });

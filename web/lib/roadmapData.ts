@@ -37,6 +37,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'combat-page-and-inventory-start-2026-11-16',
+    title: 'Combat for everyone, inventory can start a character',
+    version: 'Web 2.2.5',
+    date: '2026-11-16',
+    headline: 'Any guild member can open a character\'s Combat page, and an inventory file can add a new character on raidmimic.com.',
+    features: [
+      { name: 'Combat page for every member', blurb: 'Swings avoided, damage trends and hit sizes are now open to every signed-in guild member, like the parses. A character whose player opted out of stats stays hidden from everyone but its player.' },
+      { name: 'Inventory or Quarmy file starts a character', blurb: 'On raidmimic.com, an inventory or Quarmy file for a character you have not added yet now adds it, the same way a PoPFlags file does, then shows its gear and bags.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'raidmimic-wolfpack-layout-2026-11-16',
     title: 'Raid Mimic in Wolf Pack\'s layout',
     version: 'Web 2.2.4',

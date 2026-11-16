@@ -8,7 +8,8 @@
 // (test/hub-inventory.test.js). Nothing here reads a Wolf Pack table. Everything is keyed on the session player's id,
 // handed in by the caller, never read from a file or a URL; a file only says WHICH of that player's characters it is for.
 
-import { NAME_RX, normalizeText } from './hubImport';
+import { NAME_RX, MAX_CHARACTERS_PER_PLAYER, normalizeText, claimRefusalText, type ImportDeps } from './hubImport';
+import { decideClaim } from './hubClaim';
 import { characterFromInventoryFilename, parseInventory, type ParsedInvRow } from './inventoryFile';
 
 export const MAX_INV_FILE_BYTES = 192 * 1024;   // a full /output inventory with both banks is ~25 KB
@@ -131,6 +132,12 @@ export type InventoryDeps = {
   heldNames: () => Promise<string[] | null>;
   /** Replace this player's rows for one (character, source): write `rows`, drop that set's older rows. null = saved. */
   replace: (playerId: string, nameLc: string, character: string, source: InvSource, observedAt: string, rows: InvRow[]) => Promise<string | null>;
+  // A file for a character the player does not hold yet starts it, by the same claim rule as a PoPFlags upload.
+  discordId: string;
+  wolfpackOwners: ImportDeps['wolfpackOwners'];
+  holders: ImportDeps['holders'];
+  insertCharacters: ImportDeps['insertCharacters'];
+  flipContested: ImportDeps['flipContested'];
 };
 
 /** `only` (lower case name) is the character page's own form: a file for any other character is a problem, not a save. */
@@ -154,10 +161,42 @@ export async function importInventory(files: InvFile[], deps: InventoryDeps, onl
   const heldSet = new Set(held);
   const observedAt = new Date(deps.now()).toISOString();
   const saved: InvOutcome[] = [];
+
+  // A character not held yet: the cap, then the claim rule, once per name (an inventory and a Quarmy file share one).
+  const fresh = new Map<string, string>();
+  for (const [key, v] of picked) { const lc = key.split('|')[0]; if (!heldSet.has(lc) && !fresh.has(lc)) fresh.set(lc, v.character); }
+  const refused = new Map<string, string>();
+  const claimed: { lc: string; name: string; proof: string }[] = [];
+  if (fresh.size) {
+    let slots = Math.max(0, MAX_CHARACTERS_PER_PLAYER - heldSet.size);
+    const candidates: string[] = [];
+    for (const [lc] of fresh) {
+      if (slots > 0) { slots--; candidates.push(lc); }
+      else refused.set(lc, `You already have ${MAX_CHARACTERS_PER_PLAYER} characters, the most one player can load.`);
+    }
+    if (candidates.length) {
+      const owners = await deps.wolfpackOwners(candidates);
+      const holders = await deps.holders(candidates);
+      if (!owners || !holders) return { ok: false, error: 'Could not save just now. Try again in a minute.' };
+      for (const lc of candidates) {
+        const v = decideClaim({ playerId: deps.playerId, discordId: deps.discordId, wolfpackDiscordId: owners.get(lc), holders: holders.get(lc) });
+        if (v.verdict === 'refused') refused.set(lc, claimRefusalText(v.reason));
+        else claimed.push({ lc, name: fresh.get(lc)!, proof: v.verdict === 'contested' ? 'contested' : 'claimed' });
+      }
+    }
+    if (claimed.length) {
+      const err = await deps.insertCharacters(claimed.map(c => ({ player_id: deps.playerId, name: c.name, name_lc: c.lc, proof: c.proof })));
+      if (err) return { ok: false, error: 'Could not save just now. Try again in a minute.' };
+      const contested = claimed.filter(c => c.proof === 'contested').map(c => c.lc);
+      if (contested.length && await deps.flipContested(contested)) return { ok: false, error: 'Could not save just now. Try again in a minute.' };
+    }
+  }
+  const claimedSet = new Set(claimed.map(c => c.lc));
+
   for (const [key, v] of picked) {
     const lc = key.split('|')[0];
-    if (!heldSet.has(lc)) {
-      problems.push({ file: v.character, message: 'Load this character’s PoP flags first (a PoPFlags file or a paste), then add its inventory.' });
+    if (!heldSet.has(lc) && !claimedSet.has(lc)) {
+      problems.push({ file: v.character, message: refused.get(lc) ?? 'Could not add this character.' });
       continue;
     }
     const err = await deps.replace(deps.playerId, lc, v.character, v.source, observedAt, v.rows);

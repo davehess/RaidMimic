@@ -129,7 +129,7 @@ export async function importPaste(formData: FormData): Promise<ImportResult & { 
   return result.ok ? { ...result, unrecognised: made.unrecognised } : result;
 }
 
-/** Inventory (`Name-Inventory.txt`) and Quarmy (`NameQuarmy.txt`) files for characters this player already holds. `only` is
+/** Inventory (`Name-Inventory.txt`) and Quarmy (`NameQuarmy.txt`) files; a character the player does not hold yet is claimed by the same rule as a PoPFlags upload. `only` is
  *  the character page's own name: a file for another character is refused. The player is the session's, the same two
  *  limiter layers apply, and rows are written only under that player's id (web/lib/hubInventoryDb.ts). */
 export async function importInventoryFiles(formData: FormData): Promise<InvResult> {
@@ -143,13 +143,13 @@ export async function importInventoryFiles(formData: FormData): Promise<InvResul
   const files = await Promise.all(entries.map(async f => ({
     name: String(f.name || 'file'), size: f.size, text: f.size > MAX_INV_FILE_BYTES ? '' : await f.text(),
   })));
-  const { admin, playerId } = s;
+  const { admin, playerId, discordId } = s;
+  const claimDeps = depsFor(admin, playerId, discordId);
   const result = await importInventory(files, {
     playerId, now: Date.now,
-    async heldNames() {
-      const { data, error } = await admin.from('hub_characters').select('name_lc').eq('player_id', playerId).limit(200);
-      return error ? null : (data ?? []).map(r => r.name_lc as string);
-    },
+    heldNames: claimDeps.heldNames,
+    discordId, wolfpackOwners: claimDeps.wolfpackOwners, holders: claimDeps.holders,
+    insertCharacters: claimDeps.insertCharacters, flipContested: claimDeps.flipContested,
     replace: (pid, lc, character, source, observedAt, rows) => replaceRows(admin, pid, lc, character, source, observedAt, rows),
   }, onlyRaw || undefined);
   if (result.ok) { revalidatePath('/characters'); revalidatePath('/characters/[name]', 'page'); }

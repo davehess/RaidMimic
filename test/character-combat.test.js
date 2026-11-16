@@ -6,14 +6,33 @@ import { describe, it, expect } from 'vitest';
 import {
   nightKey, median, avoidance, summarizeTaken, aggregateNights, dpsSpread, mergeHist, histQuantile,
   abilityTable, abilityShareByNight, harmTouch, summarizeWeave, weaveByNight, parseDays, cleanFights,
-  COMBAT_VISIBILITY,
+  COMBAT_VISIBILITY, combatAccess,
 } from '../web/lib/characterCombat.ts';
 
 const T = (o = {}) => ({ hits: 0, damageTaken: 0, misses: 0, dodges: 0, parries: 0, ripostes: 0, blocks: 0, invulns: 0, rampageHits: 0, rampageDmg: 0, ...o });
 const F = (o = {}) => ({ encounter_id: 1, started_at: '2026-11-12T01:00:00Z', boss: 'x', duration: 60, total_damage: 6000, dps: 100, by_skill: {}, taken: null, ...o });
 
 describe('visibility', () => {
-  it('defaults to the safe scope', () => expect(COMBAT_VISIBILITY).toBe('OWNER'));
+  it('is the whole guild since 2026-11-15', () => expect(COMBAT_VISIBILITY).toBe('GUILD'));
+});
+
+describe('combatAccess', () => {
+  it('a member sees another member\'s page', () => {
+    expect(combatAccess({ isOwner: false, isOfficer: false, excluded: false })).toBe('show');
+  });
+  it('an opted-out character is hidden from others but the owner still sees it', () => {
+    expect(combatAccess({ isOwner: false, isOfficer: false, excluded: true })).toBe('hidden');
+    expect(combatAccess({ isOwner: true, isOfficer: false, excluded: true })).toBe('show');
+  });
+  it('officers see every character that has not opted out; an opt-out holds for officers too', () => {
+    expect(combatAccess({ isOwner: false, isOfficer: true, excluded: false })).toBe('show');
+    expect(combatAccess({ isOwner: false, isOfficer: true, excluded: true })).toBe('hidden');
+  });
+  it('under the owner-only scope a stranger is turned away, the owner and officers are not', () => {
+    expect(combatAccess({ isOwner: false, isOfficer: false, excluded: false, scope: 'OWNER' })).toBe('private');
+    expect(combatAccess({ isOwner: true, isOfficer: false, excluded: false, scope: 'OWNER' })).toBe('show');
+    expect(combatAccess({ isOwner: false, isOfficer: true, excluded: false, scope: 'OWNER' })).toBe('show');
+  });
 });
 
 describe('nightKey', () => {
