@@ -73,3 +73,25 @@ component with that loop: screenshot, change, screenshot. Adding the server to t
 5. `guild_theme` + the bot's identity payload + `embedColor()` + `/admin/theme`.
 6. The designer strips in the Canvas, Overlays tab and UI Studio.
 7. The component sweep with the DevTools loop, surface by surface, each round as a beta preview.
+
+## 8. Uniformity audit and the one standard (2026-11-16)
+
+The guild lead: *"too many pages use different fonts, layouts, etc. There's no uniformity. It should be the same, fit into the
+same crisp package, work on both mobile and desktop, but with different layouts."* Measured on main/beta the same day (grep
+counts, so floors):
+
+| Surface | What is shared | What is not |
+|---|---|---|
+| wolfpack.quest + raidmimic.com (`web/`) | colours via `tokens.css`; mono body everywhere | no page shell or title component (156 pages roll their own; ≥12 root-wrapper patterns); titles h1 on 55 pages, h2 on 69, sizes xl/2xl/3xl, colours gold/text/bone/white/orange; content width max-w-2xl…7xl plus `ch` measures, 85 pages none; 239 distinct card strings; 58 button strings + raidmimic's own `BTN`; 30 table styles, 19 files with a table and no scroll wrapper (mostly `/admin`); 1,176 arbitrary `text-[Npx]` (9/10/11/13px); 460 arbitrary colour classes (`#f2ede1` bone ×95, `#21262d` ×36 unnamed); Prata/Faustina serif only on `/`, `/start`, `/about`, `/zeal-icons`; three different headers and frames |
+| Mimic local site (`web/local`) | Tailwind config spreads the web one | did not load `tokens.css` until agent 4.0.96 (every themed colour and the font had no value) |
+| Dashboard (`dashboard.html`) | `body` reads `--wp-font-mono` | 1,408 inline `style=`; legacy aliases (`--border`, `--text`…) used ~5× more than `--wp-*`; `--fg`, `--muted`, `--card` used but never defined; 456 raw hex; 14 font sizes; ~12 button looks; 11 radii, `--wp-radius` unused; 76 padding values; `.grid` minmax(380px) overflows a 375px phone |
+| Mimic windows + overlays (`apps/mimic`) | 25 of 27 link `theme.css` | `--wp-font-*` used once, `--wp-radius` never; UI Studio is sans, the rest mono; window background `#0e1116` and border `#2a3140` copied by hand (not the tokens); 4 greys for muted text; 5 button systems; overlay title colours picked per file with no meaning; `command.html` links nothing |
+
+**The standard** (the same in every direction offered): type scale 11 / 13 / 15 / 20 (phone) – 24 (desktop); spacing
+4/8/12/16/24/32; radius 4 (controls), 8 (panels), 999 (pills); two new tokens `--wp-raised #21262d` and `--wp-bone #f2ede1`;
+one page header (eyebrow, title, one line, actions); one card, one table (11px uppercase headers, 13px cells, tabular
+numbers right-aligned), three buttons (primary, default, ghost; 44px tap height on a phone). Layout differs by device: a side
+rail and real tables on desktop; a pill row, tables as stacked cards and full-width primary buttons on a phone. Overlays keep
+their mid-raid density but take the same font and tokens. **Open: the font voice** (Decision Desk card `ui-standard`: A
+monospace everywhere, recommended; B sans with mono numbers; C serif page titles), with follow-ups on the landing serif,
+phone tables and roll-out order. Samples were rendered from a static mock (not committed).
