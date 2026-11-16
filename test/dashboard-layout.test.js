@@ -35,7 +35,7 @@ describe('the rail is grouped by when you reach for a tab', () => {
   it('has the four groups, in order, with the tabs the guild lead named', () => {
     expect(groups).toEqual([
       { title: 'Live — raid night', tabs: ['dash', 'raid', 'fights'] },
-      { title: 'After the raid', tabs: ['myparses', 'stats', 'loot'] },
+      { title: 'After the raid', tabs: ['myparses', 'stats', 'loot', 'replay'] },
       { title: 'Set up', tabs: ['overlays', 'triggers', 'voice', 'buffs'] },
       { title: 'Machine', tabs: ['diag', 'info', 'optin', 'admin'] },
     ]);
@@ -43,7 +43,7 @@ describe('the rail is grouped by when you reach for a tab', () => {
 
   it('still reaches every tab: one button each, a section each, nothing else lost', () => {
     const tabs = groups.flatMap((g) => g.tabs);
-    expect([...tabs].sort()).toEqual(['admin', 'buffs', 'dash', 'diag', 'fights', 'info', 'loot', 'myparses', 'optin', 'overlays', 'raid', 'stats', 'triggers', 'voice']);
+    expect([...tabs].sort()).toEqual(['admin', 'buffs', 'dash', 'diag', 'fights', 'info', 'loot', 'myparses', 'optin', 'overlays', 'raid', 'replay', 'stats', 'triggers', 'voice']);
     for (const t of tabs) expect(html, `section for ${t}`).toMatch(new RegExp('<div id="' + t + '" class="section[ "]'));
   });
 
@@ -95,8 +95,8 @@ function fightState() {
 // The cards of the whole Fights tab, in DOM order, named the way the pinned index names them.
 function fightsCards(s) {
   const { api, writes } = loadFights();
-  api.renderReplayCard(s); api.renderTanks(s); api.renderDeeps(s); api.renderFightsMore(s);
-  const dom = writes.fightsReplay + writes.tanks + writes.deeps + writes.fightsMore;
+  api.renderTanks(s); api.renderDeeps(s); api.renderFightsMore(s);
+  const dom = writes.tanks + writes.deeps + writes.fightsMore;
   const cards = [];
   for (const m of dom.matchAll(/<div class="card[^"]*"( data-index="([^"]*)")?>(?:<details[^>]*><summary>)?(?:[\s\S]*?)<h2>([^<]*)/g)) {
     cards.push(m[2] || m[3].split('(')[0].split('—')[0].split('·')[0].trim());
@@ -105,28 +105,29 @@ function fightsCards(s) {
 }
 
 describe('⚔️ Fights runs most important first', () => {
-  it('has the Replay target on top, then tanks, deeps, and the folded three last', () => {
-    const fights = sliceBlock(html, '<div id="fights" class="section">', '</div>\n<div id="myparses"');
+  it('has tanks, deeps, and the folded three last, with Replay gone to its own tab', () => {
+    const fights = sliceBlock(html, '<div id="fights" class="section">', '<div id="replay" class="section">');
     const ids = [...fights.matchAll(/<div id="([A-Za-z]+)"><\/div>/g)].map((m) => m[1]);
-    expect(ids).toEqual(['fightsReplay', 'tanks', 'deeps', 'fightsMore']);
+    expect(ids).toEqual(['tanks', 'deeps', 'fightsMore']);
+    expect(html).toMatch(/<div id="replay" class="section">\s*<div id="fightsReplay"><\/div>/);
     expect(code).toMatch(/\['fightsMore', renderFightsMore\]/);
   });
 
-  it('lists the cards Replay · Threat · Deaths · Incoming · Healers · Exceptional heals · DPS · Abilities · Pets · Shields · Loadouts', () => {
-    expect(fightsCards(fightState()).cards).toEqual(['Replay', 'Threat', 'Deaths', 'Incoming', 'Healers', 'Exceptional heals', 'DPS', 'Abilities', 'Pets', 'Shields', 'Loadouts']);
+  it('lists the cards Threat · Deaths · Incoming · Healers · Exceptional heals · DPS · Abilities · Pets · Shields · Loadouts', () => {
+    expect(fightsCards(fightState()).cards).toEqual(['Threat', 'Deaths', 'Incoming', 'Healers', 'Exceptional heals', 'DPS', 'Abilities', 'Pets', 'Shields', 'Loadouts']);
   });
 
-  it('starts Replay, Exceptional heals, Pets, Damage shields and Weapon loadouts folded (wpKeep, closed)', () => {
+  it('starts Exceptional heals, Pets, Damage shields and Weapon loadouts folded (wpKeep, closed)', () => {
     const { dom } = fightsCards(fightState());
-    for (const k of ['fights|replay', 'fights|exceptional', 'fights|pets', 'fights|damage-shields', 'fights|loadouts']) {
+    for (const k of ['fights|exceptional', 'fights|pets', 'fights|damage-shields', 'fights|loadouts']) {
       expect(dom, k).toContain('<details data-keep="' + k + '"><summary><h2>');   // no " open"
     }
   });
 
   it('puts every one of them behind the same wp-fold card shape, so the Panels hide and overlay matcher still see an h2', () => {
     const { dom } = fightsCards(fightState());
-    expect((dom.match(/class="card[^"]*wp-fold"/g) || []).length).toBe(5);
-    expect((dom.match(/<summary><h2>/g) || []).length).toBe(5);
+    expect((dom.match(/class="card[^"]*wp-fold"/g) || []).length).toBe(4);
+    expect((dom.match(/<summary><h2>/g) || []).length).toBe(4);
   });
 
   it('every <details> it draws carries wpKeep', () => {
@@ -145,8 +146,8 @@ describe('⚔️ Fights runs most important first', () => {
     for (const t of ['Incoming Damage', 'Threat Detail', 'DEEPS']) expect(dom).toContain(t);
   });
 
-  it('a #replay deep link opens the folded card', () => {
-    expect(code).toMatch(/_wpOpenDetails\['fights\|replay'\] = true/);
+  it('a #replay deep link opens the form on the Replay tab', () => {
+    expect(code).toMatch(/_wpOpenDetails\['replay\|form'\] = true/);
   });
 });
 
@@ -224,6 +225,13 @@ describe('ℹ️ Info leads with Parser info and Log archiving', () => {
     expect(at('h += _cvH;')).toBeLessThan(at('<h2>🏷 Zeal tag capture</h2>'));
     // the settings-backups placeholder moved below the grid, after the cards above
     expect(at('id="wpBackupsCard"')).toBeGreaterThan(at('<h2>🏷 Zeal tag capture</h2>'));
+  });
+
+  it('folds Zeal tag capture closed and caps Client versions at five characters behind "N more"', () => {
+    const info = sliceBlock(code, 'function renderInfo(s) {', "setSectionHTML('info', h);");
+    expect(info).toContain("<div class=\"card wp-fold\" data-index=\"Zeal tags\"><details ' + wpKeep('info|zeal-tags')");
+    expect(info).toContain("wpMoreList('info|client-versions'");
+    expect(info).toMatch(/\{ show: 5, cols: 2, noun: 'more characters' \}/);
   });
 });
 

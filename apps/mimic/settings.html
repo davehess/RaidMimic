@@ -217,8 +217,8 @@
         <option value="pinned">Pinned to a tag</option>
       </select>
       <input id="zealWatchPin" type="text" placeholder="tag, e.g. v1.5.0" style="width:120px;display:none" aria-label="Pinned release tag">
-      <button id="zealWatchAdd" type="button" style="background:#21262d;border:1px solid #2a3140">+ Watch</button>
-      <span id="zealWatchMsg" style="font-size:11px;color:#8b949e"></span>
+      <button id="zealWatchAdd" type="button" style="background:var(--wp-panel);border:1px solid var(--wp-border)">+ Watch</button>
+      <span id="zealWatchMsg" style="font-size:11px;color:var(--wp-dim)"></span>
     </div>
   </div>
 
@@ -1713,12 +1713,12 @@
         + (active === 'w:' + w.id ? ' checked' : '') + '><label for="' + id + '">' + _esc(w.label) + ' — ' + _esc(w.repo)
         + ' · ' + _esc(_ZEAL_MODE_TXT[w.mode] || w.mode) + (w.mode === 'pinned' ? ' ' + _esc(w.pin) : '')
         + '</label> <button type="button" data-zw-del="' + _esc(w.id) + '" aria-label="Stop watching ' + _esc(w.repo)
-        + '" style="background:none;border:0;color:#8b949e;cursor:pointer">✕</button></div>';
+        + '" style="background:none;border:0;margin:0;color:var(--wp-dim);cursor:pointer">✕</button></div>';
     }).join('');
   }
   async function _saveZealWatch(list, msgEl){
     var r = await window.mimic.zealWatchSave(list);
-    if (!r || !r.ok) { if (msgEl) { msgEl.style.color = '#ff9b9b'; msgEl.textContent = '✕ ' + ((r && r.error) || 'could not save'); } return false; }
+    if (!r || !r.ok) { if (msgEl) { msgEl.style.color = 'var(--wp-red)'; msgEl.textContent = '✕ ' + ((r && r.error) || 'could not save'); } return false; }
     _zealWatch = r.watch || [];
     _renderZealWatch(r.source);
     return true;
@@ -1769,18 +1769,18 @@
       if (!r || r.name !== 'zealSource' || !r.checked) return;
       try {
         var res = await window.mimic.zealSetSource(r.value);
-        if (!res || !res.ok) { msg.style.color = '#ff9b9b'; msg.textContent = '✕ ' + ((res && res.error) || 'could not switch'); return; }
+        if (!res || !res.ok) { msg.style.color = 'var(--wp-red)'; msg.textContent = '✕ ' + ((res && res.error) || 'could not switch'); return; }
         checkBtn.click();
-      } catch (err) { msg.style.color = '#ff9b9b'; msg.textContent = '✕ ' + ((err && err.message) || err); }
+      } catch (err) { msg.style.color = 'var(--wp-red)'; msg.textContent = '✕ ' + ((err && err.message) || err); }
     });
     var wMode = document.getElementById('zealWatchMode'), wPin = document.getElementById('zealWatchPin');
     var wRepo = document.getElementById('zealWatchRepo'), wMsg = document.getElementById('zealWatchMsg');
     wMode.addEventListener('change', function(){ wPin.style.display = wMode.value === 'pinned' ? '' : 'none'; });
     document.getElementById('zealWatchAdd').addEventListener('click', async function(){
-      wMsg.style.color = '#8b949e'; wMsg.textContent = '';
+      wMsg.style.color = 'var(--wp-dim)'; wMsg.textContent = '';
       var repo = wRepo.value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\/+$/, '');
-      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) { wMsg.style.color = '#ff9b9b'; wMsg.textContent = 'Write it as owner/repo.'; return; }
-      if (wMode.value === 'pinned' && !wPin.value.trim()) { wMsg.style.color = '#ff9b9b'; wMsg.textContent = 'Type the tag to pin.'; return; }
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) { wMsg.style.color = 'var(--wp-red)'; wMsg.textContent = 'Write it as owner/repo.'; return; }
+      if (wMode.value === 'pinned' && !wPin.value.trim()) { wMsg.style.color = 'var(--wp-red)'; wMsg.textContent = 'Type the tag to pin.'; return; }
       var entry = { id: Date.now().toString(36), repo: repo, label: repo, mode: wMode.value, pin: wPin.value.trim() };
       if (await _saveZealWatch(_zealWatch.concat([entry]), wMsg)) { wRepo.value = ''; wPin.value = ''; }
     });

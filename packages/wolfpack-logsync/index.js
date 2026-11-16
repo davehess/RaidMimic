@@ -21401,6 +21401,9 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
   <button data-tab="myparses">📈 My parses</button>
   <button data-tab="stats">📊 Stats</button>
   <button data-tab="loot">💰 Loot</button>
+  <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
+       the raid, so it sits in this group. The Rehearse tab (§401) will grow out of it. -->
+  <button data-tab="replay">⏪ Replay</button>
   <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead
        2026-08-13 — "having to scroll in our dashboard is somewhat annoying to
        navigate"). Info had grown to 16 cards and Triggers to 12 by mixing three
@@ -21472,15 +21475,17 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <!-- Fights = Tanks/Healers + DPS combined. #tanks and #deeps are inner
      render-targets (renderTanks/renderDeeps still setSectionHTML into them),
      not independent .section tabs, so both show whenever Fights is active.
-     #fightsReplay holds the ⏪ Replay card (renderReplayCard), folded at the TOP; #fightsMore holds the three
-     cards that start folded below everything else (pets, damage shields, weapon loadouts: renderFightsMore).
-     Layout A order, most important first: Replay (folded) · threat · deaths · incoming · healers · DPS breakdown
-     · top abilities · the folded three. -->
+     #fightsMore holds the three cards that start folded below everything else (pets, damage shields, weapon
+     loadouts: renderFightsMore). Layout A order, most important first: threat · deaths · incoming · healers · DPS
+     breakdown · top abilities · the folded three. The ⏪ Replay card (renderReplayCard, host #fightsReplay) left
+     this tab for the ⏪ Replay tab below (Layout A - Triage, the guild lead, 2026-11-15). -->
 <div id="fights" class="section">
-  <div id="fightsReplay"></div>
   <div id="tanks"></div>
   <div id="deeps"></div>
   <div id="fightsMore"></div>
+</div>
+<div id="replay" class="section">
+  <div id="fightsReplay"></div>
 </div>
 <div id="myparses" class="section"></div>
 <div id="loot" class="section"></div>
@@ -26650,10 +26655,9 @@ function wpReplayLinkSync() {
 }
 function renderReplayCard(s) {
   var h = '<div class="grid">';
-  // Layout A (the guild lead, 2026-10-21): a compact entry at the TOP of Fights, folded until opened. It leaves
-  // this tab for a Rehearse tab of its own later (a separate job); until then the form lives here. A #replay
-  // deep link opens it (see the hash handler).
-  h += '<div class="card wide wp-fold" data-index="Replay"><details ' + wpKeep('fights|replay') + '><summary><h2>⏪ Replay <span class="dim" style="font-size:11px;font-weight:normal">· walk part of a log back through the real trigger pipeline — hear the TTS, nothing uploads · Rehearse tab coming</span></h2></summary>';
+  // Layout A (the guild lead, 2026-11-15): Replay left Fights for the ⏪ Replay tab, the card's only occupant, so it
+  // starts open. The Rehearse tab (§401) grows out of it. A #replay deep link opens the tab (see the hash handler).
+  h += '<div class="card wide wp-fold" data-index="Replay"><details ' + wpKeep('replay|form', true) + '><summary><h2>⏪ Replay <span class="dim" style="font-size:11px;font-weight:normal">· walk part of a log back through the real trigger pipeline — hear the TTS, nothing uploads · Rehearse tab coming</span></h2></summary>';
   var _rls = (s.watchedLogs || []).filter(function(w){ return w && w.logPath; });
   // Characters known to be under 46, or hidden by their owner, sit behind the same toggle as the Me card's
   // list, and ones with no known level close up in a trailing "no known level" group (a <select> cannot hold
@@ -29794,15 +29798,16 @@ function renderInfo(s) {
   if (!_cv.length) {
     _cvH += '<div class="dim">Nothing captured yet. Type <b>/zeal version</b> in game and it appears here — Zeal, eqw.dll and eqgame.dll builds, per character. We never send the command for you.</div>';
   } else {
-    _cvH += '<table>';
-    for (const c of _cv) {
-      _cvH += '<tr><td colspan="2" style="padding-top:6px"><b>' + esc(c.character) + '</b></td></tr>';
-      if (c.zeal)   _cvH += '<tr><td>Zeal</td><td class="num">' + esc(c.zeal) + (c.zeal_hash ? ' <span class="dim">(' + esc(c.zeal_hash) + ')</span>' : '') + '</td></tr>';
-      if (c.eqw)    _cvH += '<tr><td>eqw.dll</td><td class="num">' + esc(c.eqw) + '</td></tr>';
-      if (c.eqgame) _cvH += '<tr><td>eqgame.dll</td><td class="num">' + esc(c.eqgame) + '</td></tr>';
-      if (c.at)     _cvH += '<tr><td class="dim">read</td><td class="dim num">' + esc(String(c.at).replace('T', ' ').slice(0, 19)) + '</td></tr>';
-    }
-    _cvH += '</table>';
+    // One row per character (Layout A - Triage), five shown and the rest behind "N more characters": a long
+    // roster used to run four lines per character down the page.
+    _cvH += '<table>' + wpMoreList('info|client-versions', _cv.map(function (c) {
+      return '<tr><td style="padding-top:6px"><b>' + esc(c.character) + '</b></td><td class="num" style="padding-top:6px">'
+        + (c.zeal ? 'Zeal ' + esc(c.zeal) + (c.zeal_hash ? ' <span class="dim">(' + esc(c.zeal_hash) + ')</span>' : '') : '')
+        + (c.eqw ? '<div>eqw.dll ' + esc(c.eqw) + '</div>' : '')
+        + (c.eqgame ? '<div>eqgame.dll ' + esc(c.eqgame) + '</div>' : '')
+        + (c.at ? '<div class="dim">read ' + esc(String(c.at).replace('T', ' ').slice(0, 19)) + '</div>' : '')
+        + '</td></tr>';
+    }), { show: 5, cols: 2, noun: 'more characters' }) + '</table>';
   }
   _cvH += '</div>';
   // 🏷 Zeal tag capture readiness (#194). Byte-stable: zeal.ini values change
@@ -29860,7 +29865,8 @@ function renderInfo(s) {
     h += '</div>';
   }
   h += _cvH;
-  h += '<div class="card"><h2>🏷 Zeal tag capture</h2>';
+  // Folded (Layout A - Triage): a setup walkthrough you open when tags misbehave, not something to read every visit.
+  h += '<div class="card wp-fold" data-index="Zeal tags"><details ' + wpKeep('info|zeal-tags') + '><summary><h2>🏷 Zeal tag capture</h2></summary>';
   if (s.zealTagRateLimit) {
     h += '<div style="margin-bottom:4px;color:#f2b632;font-size:11px">⚠️ The server rate limited your chat around <code>'
       + esc(new Date(s.zealTagRateLimit.at).toLocaleTimeString())
@@ -29908,7 +29914,7 @@ function renderInfo(s) {
       h += '<div class="dim" style="font-size:11px;margin-top:4px">Arrow in game but nothing here? The arrow only proves Zeal applied the tag locally. Three ways it never reaches the log: <code>/tag local</code> (never broadcasts at all), <code>/tag chat</code> with the channel not actually joined (Zeal prints “You must join a channel”), and <code>/tag suppress on</code> — that one hides the broadcast from your chat window AND your log while still drawing the arrow.</div>';
     }
   }
-  h += '</div>';
+  h += '</details></div>';
   h += '</div>';
   h += '<div id="wpBackupsCard" class="card wide" style="display:none"></div>';
   // GINA/EQLP scan placeholder card — populated by wpScanLocalTriggers() on
@@ -31149,7 +31155,7 @@ document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListen
 })();
 // ⏪ Replay deep-link (#101) — a link like #replay&from=<iso>&to=<iso> (built
 // by wolfpack.quest/parses on the "Replay this fight locally" link) opens the
-// Fights tab (where the Replay card lives since 2026-10-17) with the form prefilled. It never auto-starts — the user
+// ⏪ Replay tab (it left Fights under Layout A - Triage) with the form prefilled. It never auto-starts — the user
 // still clicks Start. from/to arrive as ISO instants; we render them into the
 // datetime-local inputs as LOCAL wall-clock (the basis the agent parses EQ log
 // timestamps on this machine).
@@ -31181,8 +31187,8 @@ function _wpApplyReplayPrefill(attempt) {
     if (i > 0) { try { params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { void e; } }
   });
   window._wpReplayPrefill = { from: params.from || '', to: params.to || '' };
-  _wpOpenDetails['fights|replay'] = true;   // the card starts folded; a link that prefills it wants it open
-  var btn = document.querySelector('.nav button[data-tab="fights"]');
+  _wpOpenDetails['replay|form'] = true;   // a link that prefills the form wants it open
+  var btn = document.querySelector('.nav button[data-tab="replay"]');
   if (btn) btn.click();
   _wpApplyReplayPrefill(0);
 })();
@@ -31759,7 +31765,7 @@ async function dismissTopDamage(key) {
     });
   }
   var obs = new MutationObserver(function(){ applyHidden(); });
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -31928,7 +31934,7 @@ async function dismissTopDamage(key) {
     try { if (window.mimic) window.mimic.createPanelOverlay(pk); } catch (err) {}
   }, true);
   var obs = new MutationObserver(decorateButtons);
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -31968,7 +31974,7 @@ async function dismissTopDamage(key) {
       return matched;
     }
     var obs2 = new MutationObserver(applyOverlayTarget);
-    ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+    ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
       var el = document.getElementById(id);
       if (el) obs2.observe(el, { childList: true, subtree: true });
     });
@@ -32133,7 +32139,7 @@ async function dismissTopDamage(key) {
     }
   }
   var obs = new MutationObserver(decorate);
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -35108,8 +35114,8 @@ function wpTrigApplyForm(base, f) {
     // Clear-overlay buttons get re-rendered by renderTriggers every 2s poll,
     // so direct addEventListener would die on the first refresh. Use event
     // delegation on the section root — it survives every inner morph and
-    // routes clicks by element id. The same handler is bound to #fights too: the ⏪ Replay
-    // card (Start / Stop / journal link) lives there since 2026-10-17.
+    // routes clicks by element id. The same handler is bound to #replay too: the ⏪ Replay
+    // card (Start / Stop / journal link) has its own tab since Layout A (Triage); #fights stays bound for old links.
     var onSectionClick = function(e){
         var t = e.target;
         if (!t) return;
@@ -35164,7 +35170,7 @@ function wpTrigApplyForm(base, f) {
           if (j) j.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
-    [section, document.getElementById('fights')].forEach(function(host){
+    [section, document.getElementById('fights'), document.getElementById('replay')].forEach(function(host){
       if (host && !host._wpTrigClickBound) { host.addEventListener('click', onSectionClick); host._wpTrigClickBound = true; }
     });
     // Delegated change handler (survives the 2s section morph) for the loot
