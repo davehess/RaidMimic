@@ -1,4 +1,4 @@
-// The footer of the ?v=b and ?v=c shells, modelled on Wolf Pack's (web/app/layout.tsx): a line about where the data lives,
+// The raidmimic.com footer (the shell the guild lead picked, Desk rm-shell B), modelled on Wolf Pack's (web/app/layout.tsx): a line about where the data lives,
 // the small-print links (privacy, security, terms, refunds, contact, costs) and the quietest thing last, the
 // EverQuest trademark notice. Server component; the sentences come from the shared lists, none is written here twice.
 import LegalLinks from '@/components/LegalLinks';
@@ -10,8 +10,11 @@ export default function RaidmimicShellFooter() {
       <div>
         Raid Mimic reads the log EverQuest already writes. Your logs stay on your device; guild features share only what you switch on.
       </div>
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-1 [&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center [&_a]:text-blue">
-        <LegalLinks onHost /> <span aria-hidden>&middot;</span>{' '}
+      {/* Two rows, so a phone never wraps a row and leaves a separator dangling at its end. */}
+      <div className="[&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center [&_a]:text-blue">
+        <LegalLinks onHost />
+      </div>
+      <div className="[&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center [&_a]:text-blue">
         <a href="/costs">What it costs to run</a> <span aria-hidden>&middot;</span>{' '}
         <a href={REPO_URL} target="_blank" rel="noreferrer">Source code</a>
       </div>
