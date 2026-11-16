@@ -246,3 +246,44 @@
     .rm-frame { width: min(100%, var(--sh)); aspect-ratio: 1 / 1; }
   }
 }
+
+/* ── Design-system preview (2026-11-16) ───────────────────────────────────────────────────────────────────────────
+   EVERYTHING below is scoped to html[data-ds], which only the beta build ever sets (app/layout.tsx), so production
+   is untouched. The values come from tokens.css. No !important anywhere: `html[data-ds] <sel>` out-ranks a single
+   Tailwind utility class on specificity alone, and a rule that needed !important would be fighting an inline style,
+   which a preview should leave alone. (A responsive utility such as sm:text-3xl has the same single-class weight, so
+   the preview wins at every width: that is why the h1 below sets its own md size.)
+
+   Hero headings on the landing pages (the #f2ede1 / clamp() h1s) are excluded: they are the plate voice, not page titles. */
+html[data-ds] body { font-family: var(--wp-font-body); font-variant-numeric: tabular-nums; font-size: 14px; line-height: 1.55; }
+/* b swaps the voice everywhere a component pinned font-mono; code stays mono. */
+html[data-ds="b"] .font-mono:not(code):not(pre):not(kbd) { font-family: var(--wp-font-body); }
+
+/* One page title: 22px on a phone, 26px from md. */
+html[data-ds] main h1:not([class*="f2ede1"]):not([class*="clamp"]),
+html[data-ds] main h2.text-2xl,
+html[data-ds] main h2.text-xl {
+  font-family: var(--wp-font-title);
+  font-size: 22px; line-height: 1.2; font-weight: 650;
+  color: rgb(var(--wp-title));
+}
+@media (min-width: 768px) {
+  html[data-ds] main h1:not([class*="f2ede1"]):not([class*="clamp"]),
+  html[data-ds] main h2.text-2xl,
+  html[data-ds] main h2.text-xl { font-size: 26px; }
+}
+/* Colour goes back to meaning (status, damage, DKP): a section heading is text-coloured whatever hue it carried. */
+html[data-ds] main :is(h2, h3)[class*="text-orange"],
+html[data-ds] main :is(h2, h3)[class*="text-gold"],
+html[data-ds] main :is(h2, h3)[class*="text-blue"],
+html[data-ds] main :is(h2, h3)[class*="text-purple"] { color: rgb(var(--wp-text)); }
+
+/* Smallest readable text: 9/10px -> 11, 11px/xs -> 12. */
+html[data-ds] .text-\[9px\],
+html[data-ds] .text-\[10px\] { font-size: 11px; line-height: 1.35; }
+html[data-ds] .text-\[11px\],
+html[data-ds] .text-xs { font-size: 12px; line-height: 1.4; }
+
+/* One link style: accent blue, underline on hover (already the base rule; this pins it past utility colours on prose links). */
+html[data-ds] main a:not([class]) { color: rgb(var(--wp-blue)); text-decoration: none; }
+html[data-ds] main a:not([class]):hover { text-decoration: underline; }

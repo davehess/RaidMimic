@@ -98,3 +98,24 @@ describe('the frame', () => {
     expect(legal).toContain('{!onHost && <footer');
   });
 });
+
+// One Download button with a menu of three (the guild lead, 2026-11-16, design review: three chips ahead of the nav).
+describe('raidmimic header: one Download menu', () => {
+  const header = fs.readFileSync(path.join(__dirname, '..', 'web/components/RaidmimicHeader.tsx'), 'utf8');
+  const menu = fs.readFileSync(path.join(__dirname, '..', 'web/components/HeaderMenu.tsx'), 'utf8');
+  it('renders a single HeaderMenu fed by RM_DOWNLOADS, with the three channel labels', () => {
+    expect(header).toMatch(/<DownloadMenu \/>/);
+    expect(header).not.toMatch(/DownloadChips/);
+    expect(header).toMatch(/RM_DOWNLOADS\.map/);
+    for (const l of ['Windows (stable)', 'Windows beta', 'Linux / Steam Deck']) expect(header).toContain(l);
+    expect(header).toMatch(/ariaLabel="Download Raid Mimic"/);
+  });
+  it('the menu is accessible: button, menu role, Escape and outside click close it', () => {
+    expect(menu).toMatch(/aria-haspopup="menu"/);
+    expect(menu).toMatch(/aria-expanded=\{open\}/);
+    expect(menu).toMatch(/role="menu"/);
+    expect(menu).toMatch(/role="menuitem"/);
+    expect(menu).toMatch(/e\.key === 'Escape'/);
+    expect(menu).toMatch(/addEventListener\('mousedown'/);
+  });
+});

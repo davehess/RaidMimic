@@ -21,7 +21,11 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Nav, { GROUPS } from './Nav';
 import TimezonePicker from './TimezonePicker';
-import { CHANNELS, ChannelLink } from './HeaderIcons';
+import { CHANNELS, DownloadArrow } from './HeaderIcons';
+
+// Short names in the Download menu, the ones raidmimic.com's menu uses (each item's title keeps the long text).
+const DOWNLOAD_NAMES: Record<string, string> = { stable: 'Windows', beta: 'Windows beta', linux: 'Linux / Steam Deck' };
+import HeaderMenu from './HeaderMenu';
 import HeaderDraft from './lab/site-header/HeaderDraft';
 
 // Applied before paint, so a page that loads already scrolled — a refresh, a
@@ -30,7 +34,9 @@ const useIsoLayout = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 // Below this the full row cannot hold brand + channels + categories + account,
 // so the compact bar takes over. Measured, not guessed: see header-chrome test.
-const ROOMY = '(min-width: 1180px)';
+// (the guild lead, 2026-11-16, design review: 1024px is the desktop line; the measured fold below handles a bar that
+// still does not fit, so this only has to be the real mobile breakpoint.)
+const ROOMY = '(min-width: 1024px)';
 
 const chip = 'inline-flex items-center gap-1 rounded border border-border bg-panel px-2 py-1' +
              ' text-xs text-text no-underline whitespace-nowrap transition-colors hover:bg-[#21262d]';
@@ -113,7 +119,10 @@ function SiteHeaderToday({
     return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
   }, []);
 
-  const compact = scrolled || !roomy || tight;
+  // ⚠ Scrolling no longer folds the bar (the guild lead, 2026-11-16: "when you scroll down, the primary nav collapses
+  // into Menu even at desktop width"; acceptance: at 1440px the nav looks the same after scrolling). Only width does:
+  // below 1024px, or when the full bar measurably does not fit. `scrolled` now only drives the bar's shadow.
+  const compact = !roomy || tight;
 
   // The menu belongs to the compact bar; going back to the full one must not
   // leave an orphaned panel open.
@@ -135,30 +144,35 @@ function SiteHeaderToday({
   const utility = (
     <>
       {tour}
-      <Link href="/feedback" aria-label="Feedback" className={chip}>
-        <span aria-hidden>💬</span><span className="hidden min-[1800px]:inline">Feedback</span>
+      <Link href="/feedback" aria-label="Feedback" title="Send feedback — report a bug or suggest an idea" className={chip}>
+        <span aria-hidden>💬</span><span className="hidden min-[1280px]:inline">Feedback</span>
       </Link>
-      <a href="https://wolfpack.opendkp.com" target="_blank" rel="noreferrer"
-         aria-label="OpenDKP" title="Wolf Pack OpenDKP — roster, DKP, raid attendance, auctions"
-         className={chip}>
-        <span aria-hidden>💰</span><span className="hidden min-[1800px]:inline">OpenDKP</span>
-      </a>
       {showAdmin && (
-        <Link href="/admin" aria-label="Admin" className={chip}>
-          <span aria-hidden>🛡️</span><span className="hidden min-[1800px]:inline">Admin</span>
+        <Link href="/admin" aria-label="Admin" title="Officer admin console" className={chip}>
+          <span aria-hidden>🛡️</span><span className="hidden min-[1280px]:inline">Admin</span>
         </Link>
       )}
-      {showMe && (
-        <Link href="/test-server" aria-label="Test server" title="Test server"
-              className={`${chip} opacity-70`}>
-          <span aria-hidden>🧪</span><span className="hidden min-[1800px]:inline">Test server</span>
-        </Link>
-      )}
+      {/* The two clearly secondary links live in one overflow menu (the guild lead, 2026-11-16, design review: fewer
+          controls in the bar; nothing removed). OpenDKP is an external site and the test server is a members-only
+          side page; neither is part of the raid-night loop. */}
+      <HeaderMenu
+        label={<span>More</span>}
+        ariaLabel="More"
+        title="More: OpenDKP and the test server"
+        align="right"
+        items={[
+          { key: 'opendkp', href: 'https://wolfpack.opendkp.com', external: true, ariaLabel: 'OpenDKP',
+            title: 'Wolf Pack OpenDKP — roster, DKP, raid attendance, auctions', label: <><span aria-hidden>💰</span> OpenDKP <span aria-hidden className="text-[10px] text-dim">↗</span></> },
+          ...(showMe ? [{ key: 'test-server', href: '/test-server', ariaLabel: 'Test server', title: 'Test server',
+            label: <><span aria-hidden>🧪</span> Test server</> }] : []),
+        ]}
+        buttonClassName={chip}
+      />
     </>
   );
 
   return (
-    <div ref={wrap} className="border-b border-border/60 bg-bg/95 backdrop-blur">
+    <div ref={wrap} className={`border-b border-border/60 bg-bg/95 backdrop-blur ${scrolled ? 'shadow-md shadow-black/30' : ''}`}>
       {/* ⚠ overflow-x-CLIP, not overflow-hidden (the guild lead, 2026-09-21: "top nav
           still isn't working when not collapsed"). Two correct changes collided:
           this row clips so that "does not fit" is a measurable overflow the fold
@@ -187,10 +201,19 @@ function SiteHeaderToday({
           )}
         </Link>
 
-        {/* The three channels. Labels only when the bar is full. */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {CHANNELS.map(c => <ChannelLink key={c.key} c={c} showLabel={!compact} />)}
-        </div>
+        {/* One Download menu for the three channels (the guild lead, 2026-11-16, design review §5: "three download buttons
+            sit ahead of the nav ... merge into one Download with a platform dropdown"); the same menu raidmimic.com has. */}
+        <HeaderMenu
+          className="shrink-0"
+          label={<><DownloadArrow className="scale-110" />{!compact && <span>Download</span>}</>}
+          ariaLabel="Download Mimic"
+          title="Download Mimic: stable, beta or Linux"
+          items={CHANNELS.map(c => ({
+            key: c.key, href: c.href, ariaLabel: c.name, title: c.title,
+            label: <span className="inline-flex items-center gap-2 whitespace-nowrap"><span className="inline-flex w-4 justify-center">{c.glyph}</span>{DOWNLOAD_NAMES[c.key] ?? c.label}</span>,
+          }))}
+          buttonClassName={chip}
+        />
 
         {compact ? (
           <>

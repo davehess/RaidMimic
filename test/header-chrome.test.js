@@ -62,7 +62,7 @@ describe('header chrome', () => {
 
   // Chips that drop their text MUST carry the label some other way, or their
   // accessible name becomes an emoji.
-  it.each([['/feedback', 'Feedback'], ['https://wolfpack.opendkp.com', 'OpenDKP'], ['/admin', 'Admin']])(
+  it.each([['/feedback', 'Feedback'], ['/admin', 'Admin']])(
     'keeps an accessible name on the %s chip when its text is hidden',
     (href, label) => {
       const i = headerCode.indexOf(href);
@@ -81,15 +81,37 @@ describe('header chrome', () => {
     expect(headerCode).toMatch(/!compact && \(/);
   });
 
-  it('folds on scroll AND on width, through one piece of state', () => {
-    // "when you scroll down collapse it to one bar" and "when there isn't
-    // enough room, like in mobile mode" are the same layout, so they must not
-    // become two. One `compact` drives both.
-    expect(headerCode).toMatch(/const compact = scrolled \|\| !roomy/);
+  it('folds on width only, never on scroll (the guild lead, 2026-11-16)', () => {
+    // 2026-08-28 folded on scroll too; the 2026-11-16 design review reversed it: "the primary nav collapses into
+    // Menu even at desktop width". At >= 1024px the nav must look the same after scrolling. `scrolled` survives only
+    // as a shadow, so the compact layout is one state driven by width / measured fit.
+    expect(headerCode).toMatch(/const compact = !roomy \|\| tight;/);
+    expect(headerCode).not.toMatch(/const compact = scrolled/);
+    expect(headerCode).toMatch(/\(min-width: 1024px\)/);
     expect(headerCode).toMatch(/window\.addEventListener\('scroll'/);
     expect(headerCode).toMatch(/matchMedia\(ROOMY\)/);
     // Passive, or the listener fights the scroll it is watching.
     expect(headerCode).toMatch(/\{ passive: true \}/);
+  });
+
+  it('every header control is identifiable without hovering (the guild lead, 2026-11-16)', () => {
+    // Each icon button carries a visible word at desktop widths plus aria-label + title.
+    for (const label of ['Feedback', 'Admin']) {
+      const i = headerCode.indexOf(`aria-label="${label}"`);
+      expect(i).toBeGreaterThan(-1);
+      const el = headerCode.slice(i, i + 300);
+      expect(el).toMatch(/title="/);
+      expect(el).toContain(`>${label}</span>`);
+      expect(el).toMatch(/hidden min-\[1280px\]:inline/);
+    }
+    // The tour launcher is the other icon button.
+    const tour = strip(read('components/GuidedTour.tsx'));
+    expect(tour).toMatch(/aria-label="Take the guided tour"/);
+    expect(tour).toMatch(/hidden min-\[1280px\]:inline"> Tour/);
+    // Secondary links live in one "More" menu, with names and titles intact.
+    expect(headerCode).toMatch(/<HeaderMenu[\s\S]{0,200}ariaLabel="More"/);
+    expect(headerCode).toContain("ariaLabel: 'OpenDKP'");
+    expect(headerCode).toContain("ariaLabel: 'Test server'");
   });
 
   it('builds the Menu from the nav\'s own groups, never a second copy', () => {
@@ -184,7 +206,7 @@ describe('the signed-in bar fits, or folds — never stacks', () => {
     expect(headerCode).toContain('ResizeObserver');
     // Before paint — nobody should see the too-wide bar.
     expect(headerCode).toMatch(/useIsoLayout\(\(\) => \{[\s\S]{0,400}scrollWidth/);
-    expect(headerCode).toMatch(/const compact = scrolled \|\| !roomy \|\| tight;/);
+    expect(headerCode).toMatch(/const compact = !roomy \|\| tight;/);
   });
 
   it('has hysteresis, or folding would immediately unfold and oscillate', () => {
@@ -227,15 +249,14 @@ describe('the signed-in bar fits, or folds — never stacks', () => {
     expect(headerCode).not.toMatch(/flex max-w-7xl items-center/);
   });
 
-  it('brings the chip labels back only where the row can afford them', () => {
-    // The labels are ~420px together. They may only appear at a width where
-    // the row is wide enough to hold them, and the row is capped at 1800 — so
-    // the label breakpoint and the cap have to be the same number.
-    const caps = headerCode.match(/max-w-\[(\d+)px\]/);
-    const labels = headerCode.match(/min-\[(\d+)px\]:inline/);
-    expect(caps).toBeTruthy();
-    expect(labels).toBeTruthy();
-    expect(labels[1]).toBe(caps[1]);
+  it('brings the chip labels back at desktop widths, with the measured fold as the guard', () => {
+    // 2026-08-30 tied the label breakpoint to the 1800px row cap. The guild lead's 2026-11-16 design review wants every
+    // control labelled without hovering at desktop widths, so the words now show from 1280px; a bar that then does not
+    // fit folds through the measured `tight` path (see the tests above) instead of stacking or clipping.
+    expect(headerCode).toMatch(/max-w-\[1800px\]/);
+    expect(headerCode).toMatch(/min-\[1280px\]:inline/);
+    expect(headerCode).not.toMatch(/min-\[1800px\]:inline/);
+    expect(strip(read('components/HeaderIcons.tsx'))).toMatch(/min-\[1280px\]:inline/);
   });
 
   it('moved Test server out of the four top-level doors', () => {

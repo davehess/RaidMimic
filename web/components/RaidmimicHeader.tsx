@@ -1,12 +1,13 @@
 'use client';
 // The Raid Mimic header (the guild lead, 2026-11-15, on raidmimic.com: "the formatting we have on Wolfpack.quest is what we
 // should be using here"; picked as option B the same day). Modelled on SiteHeader and Nav: a full-width sticky bar with the
-// logo and name, the three download chips beside it, the sections as dropdown buttons in the middle and the account block
+// logo and name, one Download menu beside it (Windows stable / beta / Linux, 2026-11-16), the sections as dropdown buttons in the middle and the account block
 // at the right; below lg the sections fold into one Menu.
 // The account block is handed in (the server's AuthBadge), so this file reads no session. Tokens only, no new colours.
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DownloadArrow } from '@/components/HeaderIcons';
+import HeaderMenu from '@/components/HeaderMenu';
 import { pageIsCurrent, sectionOfPath, type RaidmimicSection } from '@/lib/raidmimicNav';
 import { RM_DOWNLOADS, RM_HEADER_SECTIONS } from '@/lib/raidmimicShell';
 
@@ -23,23 +24,22 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function DownloadChips() {
+// ONE Download button with a small menu (the guild lead, 2026-11-16, design review: three chips ahead of the nav read as
+// clutter). Same three URLs as before, from RM_DOWNLOADS.
+const MENU_LABEL: Record<string, string> = { stable: 'Windows (stable)', beta: 'Windows beta', linux: 'Linux / Steam Deck' };
+function DownloadMenu() {
+  const items = RM_DOWNLOADS.map(d => ({
+    key: d.key, href: d.href, label: MENU_LABEL[d.key] ?? d.label, title: d.title, ariaLabel: d.name, external: true,
+  }));
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
-      {RM_DOWNLOADS.map(d => {
-        const primary = d.key === 'stable';
-        const tone = primary ? 'border-blue bg-accent/20 text-blue hover:bg-accent/40' : 'border-border bg-bg/40 text-dim hover:bg-bg/70 hover:text-text';
-        return (
-          <a key={d.key} href={d.href} target="_blank" rel="noreferrer" aria-label={d.name} title={d.title}
-            className={`inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded border px-2 text-xs no-underline transition-colors hover:no-underline ${tone} ${FOCUS}`}>
-            {d.key === 'stable' && <DownloadArrow className="scale-110" />}
-            {d.key === 'beta' && <span aria-hidden className="font-semibold leading-none">β</span>}
-            {d.key === 'linux' && <span aria-hidden className="leading-none">🐧</span>}
-            <span className="hidden xl:inline">{d.label}</span>
-          </a>
-        );
-      })}
-    </div>
+    <HeaderMenu
+      className="shrink-0"
+      label={<><DownloadArrow className="scale-110" /><span>Download</span></>}
+      ariaLabel="Download Raid Mimic"
+      title="Download Raid Mimic: Windows (stable), Windows beta, or Linux / Steam Deck."
+      items={items}
+      buttonClassName={`${chip} border-blue bg-accent/20 text-blue hover:bg-accent/40`}
+    />
   );
 }
 
@@ -155,7 +155,7 @@ export default function RaidmimicHeader({ authBadge }: { authBadge: ReactNode })
           <img src="/mimic-logo.png" alt="" width={30} height={30} className="h-[30px] w-[30px] rounded-md" />
           <span className="hidden whitespace-nowrap text-base font-bold text-white sm:inline lg:text-xl">Raid Mimic</span>
         </a>
-        <DownloadChips />
+        <DownloadMenu />
         <div className="mx-auto hidden lg:block"><SectionMenu sections={RM_HEADER_SECTIONS} path={path} /></div>
         <button type="button" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-controls="rm-menu"
           className={`${chip} ml-1 lg:hidden ${menu ? active : idle}`}>

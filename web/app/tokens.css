@@ -33,3 +33,37 @@
   --wp-font-mono: Cascadia Code, Consolas, ui-monospace, monospace;
   --wp-font-ui: ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ── Tokens v2 (2026-11-16, "start with base design, so everything can feel like one site") ───────────────────────
+   Defaults below equal what the site shows today, so production does not move. The new looks are PREVIEWS: an
+   html[data-ds="a"|"b"|"c"] attribute, set only on the beta build (app/layout.tsx reads the wp_ds cookie, the
+   middleware writes it from ?ds=). Rules that use them live in globals.css, also under html[data-ds].
+   Contrast against --wp-bg / --wp-panel / --wp-raised (WCAG 2.x, computed 2026-11-16):
+     text   #c9d1d9  12.26 / 11.21 / 9.86      text-2 #aeb7c0  9.31 / 8.51 / 7.49
+     text-3 #8b949e   6.15 /  5.62 /  4.95      dim (preview) #9aa4ad  7.47 / 6.83 / 6.01
+     dim today #6e7681 4.12 / 3.77 / 3.31  <- below AA 4.5 on every ground; the preview lifts it. */
+:root {
+  --wp-raised: 33 38 45;       /* #21262d a surface above --wp-panel: hover rows, chips, inputs */
+  --wp-text-2: 139 148 158;    /* #8b949e secondary copy (today's look: no change, nothing reads it yet) */
+  --wp-text-3: 110 118 129;    /* #6e7681 muted (same as --wp-dim today) */
+  --wp-title: var(--wp-gold);  /* page-title colour; gold today, --wp-text in every preview */
+  --wp-font-body: var(--wp-font-mono);
+  --wp-font-title: var(--wp-font-mono);
+}
+
+/* Shared by all three previews: AA-safe greys, and gold goes back to meaning only (DKP, top, warning). */
+html[data-ds] {
+  --wp-dim:    154 164 173;   /* #9aa4ad */
+  --wp-text-2: 174 183 192;   /* #aeb7c0 */
+  --wp-text-3: 139 148 158;   /* #8b949e */
+  --wp-title:  var(--wp-text);
+}
+/* a: one voice, the mono everything already uses. */
+html[data-ds="a"] { --wp-font-body: var(--wp-font-mono); --wp-font-title: var(--wp-font-mono); }
+/* b: system sans for reading, tabular figures keep the numbers aligned. */
+html[data-ds="b"] {
+  --wp-font-body:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --wp-font-title: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+/* c: mono body, the landing page's Prata for titles (--font-display is set by next/font on <html>). */
+html[data-ds="c"] { --wp-font-body: var(--wp-font-mono); --wp-font-title: var(--font-display), Georgia, serif; }

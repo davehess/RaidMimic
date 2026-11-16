@@ -88,7 +88,7 @@ export function ChannelLink({ c, showLabel }: { c: Channel; showLabel: boolean }
           viewport: the labels are 45px across the three chips. */}
       {/* The label is the first casualty when the row is tight — the icon and
           the tooltip carry the meaning on their own. */}
-      {showLabel && <span className="hidden min-[1800px]:inline">{c.label}</span>}
+      {showLabel && <span className="hidden min-[1280px]:inline">{c.label}</span>}
     </a>
   );
 }
