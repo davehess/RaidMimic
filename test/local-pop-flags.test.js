@@ -196,7 +196,7 @@ describe('wiring', () => {
     expect(stripJs(read('web/local/app/LocalNav.tsx'))).toMatch(/\{ href: '\/flags\/',\s+label: 'PoP flags', icon: '🗺️' \}/);
     expect(stripJs(read('web/local/app/me/page.tsx'))).toContain("href: '/flags/'");
     expect(stripJs(read('apps/mimic/main.js'))).toMatch(/openLocalSite\('flags'\)/);
-    expect(read('packages/wolfpack-logsync/dashboard.html')).toMatch(/onclick="wpOpenLocalSite\('flags'\)"/);
+    expect(read('packages/wolfpack-logsync/dashboard.html')).toMatch(/onclick="wpOpenLocalSite\('flags', event\)"/);
     for (const wf of ['release-mimic', 'build-mimic-linux', 'build-mimic-win7']) {
       expect(read(`.github/workflows/${wf}.yml`), wf).toMatch(/test -f out\/flags\/index\.html/);
     }

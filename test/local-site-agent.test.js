@@ -257,7 +257,8 @@ describe('wiring and packaging', () => {
     const pkg = JSON.parse(read('apps/mimic/package.json'));
     expect(pkg.build.extraResources).toContainEqual({ from: '../../web/local/out', to: 'local-site' });
     const dash = read('packages/wolfpack-logsync/dashboard.html');
-    expect(dash).toMatch(/onclick="wpOpenLocalSite\('inventory'\)"/);
+    expect(dash).toMatch(/onclick="wpOpenLocalSite\('inventory', event\)"/);    // same window (2026-11-16)
+    expect(dash).toMatch(/onclick="wpOpenLocalSite\('inventory', 'window'\)"/); // its ↗: its own window
     expect(dash).toMatch(/On this PC/);
   });
   it('the release builds the local site before electron-builder and fails when the export is missing', () => {
