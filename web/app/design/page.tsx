@@ -1,5 +1,6 @@
 // /design — the living style guide for the design-system preview (the guild lead, 2026-11-16: "start with base design,
-// so everything can feel like one site"). New page, so it carries the [beta] tag. It shows no data, so no sign-in.
+// so everything can feel like one site"). New page, so it carries the [beta] tag. Members only: its table and list samples
+// are the guild's live boss timers (lib/designSamples.ts), not made-up rows.
 // Switch the look with the chip bottom-right on b.wolfpack.quest, or ?ds=a|b|c (?ds=off for today's).
 // Everything below is built from web/components/ui and token classes; the swatches are the only place a value is named.
 import type { Metadata } from 'next';
@@ -11,6 +12,14 @@ import Card from '@/components/ui/Card';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import Progress, { FILL_TEXT, fillOf } from '@/components/ui/Progress';
 import TwoPane from './TwoPane';
+import { type Tone } from '@/components/ui/Chip';
+import { redirect } from 'next/navigation';
+import { supabaseServer } from '@/lib/supabase-server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { requireMember } from '@/lib/member';
+import { userTz } from '@/lib/timezone';
+import { fmtAbs } from '@/lib/timezone-shared';
+import { pickSamples, type TimerRow, type TimerSample } from '@/lib/designSamples';
 
 export const metadata: Metadata = {
   title: '[beta] Design system',
@@ -42,29 +51,46 @@ const ratio = (a: number[], b: number[]) => {
 };
 const hex = (r: number, g: number, b: number) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 
-type Row = { boss: string; kills: number; total: number };
-const ROWS: Row[] = [
-  { boss: 'Lord Nagafen', kills: 0, total: 6 },
-  { boss: 'Lady Vox', kills: 4, total: 6 },
-  { boss: 'Trakanon', kills: 6, total: 6 },
-  { boss: 'Severilous', kills: 2, total: 6 },
-];
-const COLS: Column<Row>[] = [
-  { key: 'boss', label: 'Boss' },
-  { key: 'kills', label: 'Kills', numeric: true, render: r => <span className={FILL_TEXT[fillOf(r.kills, r.total)]}>{r.kills} / {r.total}</span> },
-  { key: 'bar', label: 'Cleared', render: r => <div className="min-w-[140px]"><Progress done={r.kills} total={r.total} label={`${r.boss} kills`} /></div> },
+// The live samples: the real boss timers, as /boards reads them (lib/designSamples.ts picks which and words them).
+async function loadTimers(): Promise<TimerRow[]> {
+  try {
+    const { data } = await supabaseAdmin().from('bot_boards')
+      .select('boss_id, name, zone, timer_hours, killed_at, next_spawn').limit(400);
+    return (data ?? []) as TimerRow[];
+  } catch { return []; }
+}
+
+const COLS: Column<TimerSample>[] = [
+  { key: 'boss', label: 'Boss', render: s => <span>{s.name}<span className="block text-xs text-text3">{s.zone}</span></span> },
+  { key: 'respawn', label: 'Respawn', numeric: true, render: s => s.respawn },
+  { key: 'when', label: 'Spawns', numeric: true, render: s => <span className={FILL_TEXT[fillOf(s.done, s.total)]}>{s.when}</span> },
+  { key: 'bar', label: 'Timer run', render: s => <div className="min-w-[140px]"><Progress done={s.done} total={s.total} label={`${s.name} respawn timer`} /></div> },
 ];
 
-const PANE = [
-  { id: 'a', name: 'Trakanon', status: 'Down', tone: 'success' as const, note: 'Killed three nights running. The pane on the right is the detail; on a phone it replaces the list and a Back button returns.' },
-  { id: 'b', name: 'Lady Vox', status: 'Window open', tone: 'warning' as const, note: 'Spawn window opened this evening. Status chips always carry the word as well as the colour.' },
-  { id: 'c', name: 'Lord Nagafen', status: 'Missed', tone: 'danger' as const, note: 'No kill recorded this week. Red is for bad outcomes only, never for decoration.' },
-  { id: 'd', name: 'Severilous', status: 'Scheduled', tone: 'info' as const, note: 'Planned for the next raid night.' },
-];
+const STATE: Record<TimerSample['state'], { tone: Tone; word: (s: TimerSample) => string }> = {
+  up: { tone: 'success', word: () => 'Available' },
+  soon: { tone: 'warning', word: s => `Spawns ${s.when}` },
+  cooldown: { tone: 'neutral', word: s => `Back ${s.when}` },
+};
+const at = (iso: string | null, tz: string) => (iso ? fmtAbs(iso, tz) : '—');
 
 const H2 = 'mb-3 text-base font-semibold text-text';
 
-export default function DesignPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function DesignPage() {
+  // Members only, like /boards: the samples are the guild's live timers.
+  const { data: { user } } = await supabaseServer().auth.getUser();
+  if (!user) redirect('/auth/signin?next=/design');
+  await requireMember(user.id);
+  const [rows, tz] = await Promise.all([loadTimers(), userTz()]);
+  const samples = pickSamples(rows, Date.now());
+  const pane = samples.map(s => ({
+    id: s.id, name: s.name, status: STATE[s.state].word(s), tone: STATE[s.state].tone,
+    note: s.state === 'up'
+      ? `${s.zone ? s.zone + ' · ' : ''}${s.respawn} respawn timer · no timer running: available now.`
+      : `${s.zone ? s.zone + ' · ' : ''}${s.respawn} respawn timer · killed ${at(s.killedAt, tz)} · back ${at(s.nextSpawn, tz)} (${s.when}).`,
+  }));
   return (
     <div className="space-y-10">
       <NewPageTag note="The shared look, in one place. Switch it with the chip at the bottom right." />
@@ -166,13 +192,15 @@ export default function DesignPage() {
 
       <section aria-labelledby="ds-table">
         <h2 id="ds-table" className={H2}>Table, counts and progress</h2>
-        <p className="mb-3 max-w-prose text-sm text-text2">Numbers are tabular and right-aligned. Zero is faint, partial is gold, complete is green.</p>
-        <DataTable columns={COLS} rows={ROWS} rowKey={r => r.boss} caption="Boss kills this season" />
+        <p className="mb-3 max-w-prose text-sm text-text2">The live boss timers: every timer running now, soonest first, then bosses still available in the same zones. The bar is how much of the respawn timer has run: gold while it runs (faint at the very start), green when the boss is available.</p>
+        {samples.length
+          ? <DataTable columns={COLS} rows={samples} rowKey={s => s.id} caption="Boss respawn timers" />
+          : <p className="text-sm text-text3">No timers could be read right now.</p>}
       </section>
 
       <section aria-labelledby="ds-twopane">
         <h2 id="ds-twopane" className={H2}>List and detail</h2>
-        <TwoPane items={PANE} />
+        {pane.length > 0 && <TwoPane items={pane} />}
       </section>
     </div>
   );

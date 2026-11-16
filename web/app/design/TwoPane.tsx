@@ -14,7 +14,7 @@ export default function TwoPane({ items }: { items: Item[] }) {
   const detail = cur ?? items[0];
   return (
     <div className="grid overflow-hidden rounded-lg border border-border md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-      <ul className={`divide-y divide-border bg-panel ${cur ? 'hidden md:block' : ''}`} aria-label="Kills">
+      <ul className={`divide-y divide-border bg-panel ${cur ? 'hidden md:block' : ''}`} aria-label="Boss timers">
         {items.map(i => (
           <li key={i.id}>
             <button
