@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { ROOT, readSource, stripJs, stripCss } from './_source-slice.js';
 import { dsChoice, DS_COOKIE } from '../web/lib/designPreview.ts';
 import { metaForPath } from '../web/lib/pageMeta.ts';
+import { pickSamples, span, timerSample } from '../web/lib/designSamples.ts';
 
 const web = (...p) => path.join(ROOT, 'web', ...p);
 
@@ -68,6 +69,37 @@ describe('/design', () => {
     const m = metaForPath('/design');
     expect(m.title).toMatch(/Design system/);
     expect(m.description.length).toBeGreaterThan(30);
+  });
+
+  // The guild lead, 2026-11-16: "These examples are crappy. Nagafen isn't killable every day ... Use real timers."
+  it('samples are the real boss timers: members only, read from bot_boards, no made-up rows', () => {
+    const page = stripJs(readSource(web('app', 'design', 'page.tsx')));
+    expect(page).toMatch(/await requireMember\(user\.id\)/);
+    expect(page).toMatch(/from\('bot_boards'\)/);
+    expect(page).not.toMatch(/three nights running|kills: \d, total: 6/);
+  });
+});
+
+describe('designSamples', () => {
+  const now = Date.parse('2026-11-16T22:00:00Z');
+  const h = 3_600_000;
+  const row = (id, hours, killedAgoH, name = id) => ({
+    boss_id: id, name, zone: 'Zone', timer_hours: hours,
+    killed_at: killedAgoH == null ? null : new Date(now - killedAgoH * h).toISOString(),
+    next_spawn: killedAgoH == null ? null : new Date(now - killedAgoH * h + hours * h).toISOString(),
+  });
+  it('words a timer: running (gold), available (green, no kill time = available, as /boards reads it), days past 48 hours', () => {
+    expect(timerSample(row('a', 162, 100), now)).toMatchObject({ state: 'cooldown', when: 'in 2d 14h', done: 6000, total: 9720 });
+    expect(timerSample(row('b', 72, 66), now)).toMatchObject({ state: 'soon', when: 'in 6h 0m' });
+    expect(timerSample(row('c', 72, 80), now)).toMatchObject({ state: 'up', when: 'available now', done: 4320, total: 4320 });
+    expect(timerSample(row('d', 72, null), now)).toMatchObject({ state: 'up', when: 'available now', done: 4320 });
+    expect(span(214 * h + 60_000)).toBe('8d 22h');
+  });
+  it('shows every running timer soonest first, then available bosses in the same zones before any other', () => {
+    const z = (r, zone) => ({ ...r, zone });
+    const rows = [z(row('late', 162, 10), 'Air'), z(row('soon', 72, 70), 'Air'), z(row('xeg', 138, null), 'Air'),
+      z(row('elsewhere', 162, null), 'Hate'), z(row('mid', 96, 50), 'Air')];
+    expect(pickSamples(rows, now, 5).map(s => s.id)).toEqual(['soon', 'mid', 'late', 'xeg', 'elsewhere']);
   });
 });
 
