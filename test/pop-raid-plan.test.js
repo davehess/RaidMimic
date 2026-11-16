@@ -84,7 +84,8 @@ describe('who is on the night', () => {
 });
 
 describe('the page', () => {
-  const page = read('web/app/pop/raid/page.tsx');
+  // The per-target section moved to PlanSectionView.tsx with the tier split (2026-11-16); the page is both.
+  const page = read('web/app/pop/raid/page.tsx') + read('web/app/pop/raid/PlanSectionView.tsx');
   // Who is going and who holds each flag moved to lib/raidPreflags.ts (shared with the /screen Overview).
   const preflags = read('web/lib/raidPreflags.ts');
   it('reads the sign-ups and expands flags with stepsHeld', () => {
@@ -98,7 +99,7 @@ describe('the page', () => {
     expect(preflags).toMatch(/!NOT_GOING\.test\(String\(s\.status \|\| ''\)\) && !NOT_GOING\.test\(String\(s\.class_name \|\| ''\)\)/);
   });
   it('is members only and carries the beta tag', () => {
-    expect(page).toMatch(/redirect\('\/auth\/signin\?next=' \+ encodeURIComponent\(alt === 'a' \? '\/pop\/raid\?v=a' : '\/pop\/raid'\)\)/);
+    expect(page).toMatch(/if \(!user\) redirect\('\/auth\/signin\?next=' \+ encodeURIComponent\('\/pop\/raid' \+ \(alt \?/);
     expect(page).toMatch(/<NewPageTag/);
     expect(page).toMatch(/dynamic = 'force-dynamic'/);
   });

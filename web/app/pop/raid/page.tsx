@@ -13,21 +13,21 @@ import { supabaseServer } from '@/lib/supabase-server';
 import { requireMember } from '@/lib/member';
 import { selectAll } from '@/lib/selectAll';
 import NewPageTag from '@/components/NewPageTag';
-import { PLAN, PREFLAGS, RAID_DATE_LINE, TRAVEL_BASICS, bossAnchor, loc } from '@/lib/raidPlan';
-import { loadRaiders, loadHeld, type Raider } from '@/lib/raidPreflags';
-import ItemHover, { type ItemCard } from '@/app/character/[name]/inventory/ItemHover';
-import WishlistControls from '@/components/WishlistControls';
+import { PLAN, PREFLAGS, RAID_DATE_LINE, TRAVEL_BASICS, bossAnchor } from '@/lib/raidPlan';
+import { loadRaiders, loadHeld, loadFullReads, type Raider } from '@/lib/raidPreflags';
+import type { ItemCard } from '@/app/character/[name]/inventory/ItemHover';
 import { ownedCharacters } from '@/lib/ownedCharacters';
 import { loadMySignup, loadNextEvent } from '@/lib/raidMeLoad';
 import { bringingFrom } from '@/lib/raidMe';
 import { loadWishView, type WishView } from '@/lib/wishlistLoad';
-import ZoneSvg from './ZoneSvg';
 import { loadWalls } from './walls';
 import { loadSavedRoute } from './savedRoute';
-import { chooseRoute, markerLetter } from '@/lib/popRaidMap';
+import { chooseRoute } from '@/lib/popRaidMap';
 import { mapBlockers } from '@/lib/popTonightBlockersView';
 import BlockersStrip, { FlagFold } from '@/components/lab/pop-tonight-blockers/BlockersStrip';
 import EntryLines from './EntryLines';
+import PlanSectionView, { type Drop } from './PlanSectionView';
+import TierPage from './TierPage';
 import { entryViews, ENTRY_ZONES } from '@/lib/popRaidEntry';
 
 export const metadata: Metadata = {
@@ -51,7 +51,6 @@ async function load(): Promise<Loaded> {
 }
 
 // Loot straight from the server's drop tables (eqemu_npc_drops), not typed by hand, plus the hover cards.
-type Drop = { npc_id: number; item_id: number; item_name: string; effective_chance: number | null };
 async function loadLoot(): Promise<{ drops: Map<number, Drop[]>; cards: Record<number, ItemCard> }> {
   const sb = supabaseAdmin();
   const npcs = PLAN.flatMap(s => s.bosses.map(b => b.npc));
@@ -96,19 +95,18 @@ async function loadRaidWish(userId: string, itemIds: number[]): Promise<WishView
   }
 }
 
-const pct = (n: number | null) => n == null ? '' : n >= 99.95 ? 'always' : `${Number(n.toFixed(1))}%`;
-
 const List = ({ items }: { items: string[] }) => (
   <ul className="list-disc space-y-0.5 pl-4 text-xs text-text">{items.map((t, i) => <li key={i}>{t}</li>)}</ul>
 );
-const H = ({ children }: { children: React.ReactNode }) => (
-  <h4 className="mt-3 mb-1 text-[11px] font-semibold uppercase tracking-wider text-dim">{children}</h4>
-);
 
-export default async function RaidPlanPage({ searchParams }: { searchParams?: Promise<{ v?: string }> }) {
-  const alt = (await searchParams)?.v; // ?v=a: the blockers strip first, the full raider table folded (draft)
+export default async function RaidPlanPage({ searchParams }: { searchParams?: Promise<{ v?: string; tier?: string }> }) {
+  const sp = await searchParams;
+  // ?v=a: the blockers strip first, the full raider table folded (draft). ?v=b / ?v=c: the page split into tiers
+  // (the guild lead, 2026-11-16); no ?v= is the page as it was.
+  const alt = sp?.v === 'a' || sp?.v === 'b' || sp?.v === 'c' ? sp.v : undefined;
+  const tierPick = Number(sp?.tier);
   const { data: { user } } = await supabaseServer().auth.getUser();
-  if (!user) redirect('/auth/signin?next=' + encodeURIComponent(alt === 'a' ? '/pop/raid?v=a' : '/pop/raid'));
+  if (!user) redirect('/auth/signin?next=' + encodeURIComponent('/pop/raid' + (alt ? `?v=${alt}` + (alt === 'c' && tierPick >= 1 && tierPick <= 5 ? `&tier=${tierPick}` : '') : '')));
   await requireMember(user.id);
 
   const [data, walls, saved, loot] = await Promise.all([
@@ -129,6 +127,15 @@ export default async function RaidPlanPage({ searchParams }: { searchParams?: Pr
   const entrySections = Object.keys(ENTRY_ZONES).map(z => ({ id: PLAN.find(s => s.zone === z)?.id ?? `entry-${z}`, zone: z }));
   const entry = !error && raiders.length ? entryViews(entrySections, raiders, has) : [];
   const missing = (key: string) => raiders.filter(r => !has(r.name, key)).map(r => r.name);
+
+  if (alt === 'b' || alt === 'c') {
+    // A failed read of the recent full reads leaves the set empty: everyone then reads "not recorded", never "missing".
+    const fullRead = !error && raiders.length ? await loadFullReads(raiders.map(r => r.name)).catch(() => new Set<string>()) : new Set<string>();
+    return (
+      <TierPage variant={alt} selected={tierPick >= 1 && tierPick <= 5 ? tierPick : 5} raiders={raiders} held={held}
+        fullRead={fullRead} note={note} error={error} walls={walls} routes={routes} loot={loot} wish={wish} missing={missing} />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl py-2">
@@ -239,104 +246,8 @@ export default async function RaidPlanPage({ searchParams }: { searchParams?: Pr
       <EntryLines views={entry} source={`from ${note.replace(/\.$/, '').toLowerCase().startsWith('sign-ups') ? 'the sign-ups' : 'the raid roster'} (${raiders.length} raiders)`} />
 
       {PLAN.map((s, i) => (
-        <section key={s.id} id={s.id} className="mt-6 scroll-mt-4">
-          <h2 className="text-lg text-gold">{i + 1}. {s.title}</h2>
-          <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
-            {s.needs.map(k => {
-              const p = PREFLAGS.find(x => x.key === k);
-              const m = missing(k).length;
-              return (
-                <span key={k} className={`rounded border px-1.5 py-0.5 ${raiders.length && m === 0 ? 'border-green/60 text-green' : 'border-border text-dim'}`}>
-                  needs: {p?.short ?? k}{raiders.length > 0 && !error && <> · {m === 0 ? 'all set' : `${m} missing`}</>}
-                </span>
-              );
-            })}
-          </div>
-          <div className="mt-2 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-border bg-panel p-3">
-              <H>Before</H>
-              <List items={s.before} />
-              <H>Travel</H>
-              <List items={s.travel} />
-              {s.bosses.map(b => (
-                <div key={b.npc} id={bossAnchor(s.id, b.npc)} className="mt-4 scroll-mt-4 border-t border-border/60 pt-2">
-                  <div className="text-sm font-semibold text-text">
-                    <a href={`https://www.pqdi.cc/npc/${b.npc}`} target="_blank" rel="noreferrer" className="text-blue hover:underline">{b.name} ↗</a>
-                    <span className="font-normal text-dim"> · PQDI npc {b.npc}</span>
-                  </div>
-                  <div className="text-xs text-gold">{b.stats}</div>
-                  <div className="mt-0.5 text-xs text-dim">{b.abilities}</div>
-                  {b.before && <><H>Before this one</H><List items={b.before} /></>}
-                  <H>Expect</H>
-                  <List items={b.mechanics} />
-                  {b.after && <><H>After</H><List items={b.after} /></>}
-                  <H>Loot</H>
-                  {(loot.drops.get(b.npc) ?? []).length === 0 ? (
-                    <p className="text-xs text-dim">Drop table not loaded; see PQDI.</p>
-                  ) : (
-                    <ul className="space-y-0.5 text-xs">
-                      {loot.drops.get(b.npc)!.map(d => (
-                        <li key={d.item_id}>
-                          <ItemHover card={loot.cards[d.item_id]} fallbackName={d.item_name}>
-                            <a href={`https://www.pqdi.cc/item/${d.item_id}`} target="_blank" rel="noreferrer" className="text-blue hover:underline">{d.item_name}</a>
-                          </ItemHover>
-                          <span className="text-dim"> {pct(d.effective_chance)}</span>
-                          {wish && (
-                            <WishlistControls
-                              compact itemId={d.item_id} itemName={d.item_name} enabled={wish.enabled}
-                              characters={wish.characters} defaultCharacter={wish.defaultCharacter}
-                              states={wish.states.get(d.item_id) ?? {}}
-                            />
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {b.history && <p className="mt-2 text-[11px] text-dim">{b.history}</p>}
-                </div>
-              ))}
-            </div>
-            <div>
-              <ZoneSvg
-                walls={walls[i]}
-                markers={s.markers}
-                route={routes[i]}
-                altRoutes={routes[i].kind === 'planned' ? s.altRoutes : undefined}
-                patrol={s.patrol}
-                label={`Map of ${s.zoneName} with the route`}
-              />
-              <p className="mt-1 text-[11px] text-dim">
-                <span className="text-red">●</span> boss · <span className="text-green">◆</span> zone-in or door · <span className="text-gold">▲</span> NPC ·{' '}
-                {routes[i].kind === 'walked'
-                  ? <><span className="text-orange">——</span> numbered route, {routes[i].note}</>
-                  : <><span className="text-orange">- - -</span> numbered route, {routes[i].note}: straight legs in order, not a walking path</>}
-                {s.patrol && <> · <span className="text-purple">——</span> patrol</>}
-                {walls[i] ? '' : ' · walls unavailable for this zone right now'}
-              </p>
-              <ul className="mt-1 columns-2 text-[11px] text-dim">
-                {s.markers.map((m, j) => (
-                  <li key={`${m.label}${j}`} className="break-inside-avoid">
-                    <span className={m.kind === 'boss' ? 'text-red' : m.kind === 'zonein' ? 'text-green' : 'text-gold'}>{markerLetter(j)}</span> {m.label}
-                  </li>
-                ))}
-              </ul>
-              <ol className="mt-1 list-decimal pl-5 text-[11px] text-dim">
-                {routes[i].stops.map((p, j) => <li key={j}>{p.label}</li>)}
-              </ol>
-              {routes[i].kind === 'planned' && s.altRoutes?.map((rt, j) => (
-                <ol key={j} className="mt-1 list-decimal pl-5 text-[11px] text-blue">
-                  {rt.map((p, k) => <li key={k}>{p.label}</li>)}
-                </ol>
-              ))}
-              <details className="mt-2 text-[11px] text-dim">
-                <summary className="cursor-pointer hover:text-text">Where things stand (/loc)</summary>
-                <ul className="mt-1 space-y-0.5">
-                  {s.markers.map(m => <li key={m.label}>{m.label}: <span className="font-mono text-text">{loc(m.x, m.y)}</span></li>)}
-                </ul>
-              </details>
-            </div>
-          </div>
-        </section>
+        <PlanSectionView key={s.id} s={s} i={i} walls={walls[i]} route={routes[i]} loot={loot} wish={wish}
+          raiders={raiders} error={error} missing={missing} />
       ))}
 
       <p className="mt-8 text-xs text-dim">

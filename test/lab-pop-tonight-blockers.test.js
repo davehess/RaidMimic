@@ -64,7 +64,9 @@ describe('wording and redirect', () => {
     expect(read(files[0])).toMatch(/\} missing</);
   });
   it('the signed-out redirect keeps ?v=a', () => {
-    expect(read('../web/app/pop/raid/page.tsx')).toMatch(/signin\?next=' \+ encodeURIComponent\(alt === 'a' \? '\/pop\/raid\?v=a'/);
+    const page = read('../web/app/pop/raid/page.tsx');
+    expect(page).toMatch(/const alt = sp\?\.v === 'a' \|\| sp\?\.v === 'b' \|\| sp\?\.v === 'c' \? sp\.v : undefined/);
+    expect(page).toMatch(/signin\?next=' \+ encodeURIComponent\('\/pop\/raid' \+ \(alt \? `\?v=\$\{alt\}`/);
   });
 });
 
