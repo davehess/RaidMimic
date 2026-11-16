@@ -37,6 +37,23 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'parse-page-and-clean-ups-2026-11-16',
+    title: 'A parse page that leads with the result, and fifteen clean-ups',
+    version: 'Web 2.2.7',
+    date: '2026-11-16',
+    headline: 'A fight\'s page now opens on how it went, with tabs for the detail, and a batch of small clean-ups across the site.',
+    features: [
+      { name: 'Result first on a parse', blurb: 'Killed, wipe or no kill seen in large type with the time, total damage and raid DPS, then your own rows marked in gold. Damage, Deaths, Tank, Heal, Timeline and Loot are tabs, and the page remembers the last one you opened. The old layout stays at the "Old layout" link for a week.' },
+      { name: 'Tables that keep their header', blurb: 'The leaderboard, the PvP lists and the boss top-damage table keep their header row in view while you scroll, and two more tables no longer push a phone sideways.' },
+      { name: 'Plain wording', blurb: 'The Raid and Buffs pages lose their build-notes boxes, Boards loses its explainer, the Fun page loses a stale list, and the PoP flags bar gains a Tonight link.' },
+      { name: 'Small touches', blurb: 'A copy button on the PowerShell fix in the set-up guide, "Register interest" opens in the same tab, and Tells says "Showing 50 of N" when the list is cut.' },
+    ],
+    fixes: [
+      'Database pages link back to the database and no longer show an internal name.',
+      'The character page no longer says "back to parses" when you did not come from there.',
+    ],
+  },
+  {
     key: 'poair-ring-details-2026-11-16',
     title: 'Plane of Air ring details corrected',
     version: 'Web 2.2.6',
