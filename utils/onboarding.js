@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.2': [
+    '"Delete everything" on your data page now also removes your party trial date and reaches our nightly archive, so nothing of yours is left behind.',
+  ],
   '4.1.1': [
     'Mob Info (newest Mimic beta): the target\'s aggro and assist radius, with your distance to it and the area rampage reach, red when you are inside it.',
   ],
