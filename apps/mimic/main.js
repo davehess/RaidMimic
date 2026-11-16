@@ -11694,6 +11694,7 @@ function buildTrayMenu() {
     { label: '📈 My parses', click: () => showDashboardTab('myparses') },
     // Tray ↔ dashboard parity: the dashboard rail's "On this PC › Inventory" opens this same window (openLocalSite).
     { label: '🎒 Inventory (on this PC)', click: () => { if (!openLocalSite('inventory')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/inventory/`); } },
+    { label: '🗺️ PoP flags (on this PC)', click: () => { if (!openLocalSite('flags')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/flags/`); } },
     { label: '📊 My fights (on this PC)', click: () => { if (!openLocalSite('parses')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/parses/`); } },
     { label: '🎬 My replay (on this PC)', click: () => { if (!openLocalSite('replay')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/replay/`); } },
     // Tray ↔ dashboard parity: the dashboard rail's "On this PC › Join a raid with a code" is the other half. A code is

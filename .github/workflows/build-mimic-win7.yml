@@ -70,6 +70,7 @@ jobs:
           npm install --no-audit --no-fund
           npx next build
           test -f out/inventory/index.html || { echo "::error::web/local did not export out/inventory/index.html"; exit 1; }
+          test -f out/flags/index.html || { echo "::error::web/local did not export out/flags/index.html"; exit 1; }
 
       - name: Build Windows installer (Electron 22)
         working-directory: apps/mimic

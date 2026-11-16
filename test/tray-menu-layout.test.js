@@ -30,7 +30,7 @@ const CONTAINERS = ['Settings', 'Updates', 'Open', 'Help', '🗂 Overlay sets'];
 // ... and the EQ file-date repair beside them (the guild lead, 2026-11-03), the tray door to Settings' card.
 // ... and the local-site doors under Open and the raid-code join (the local site and raid codes shipped with Mimic 3.0).
 const NEW_ITEMS = [/^ {2}↳ Span all screens/, /^✨ Setup walkthrough$/, /^🧭 Take the tour again$/, /^Fix EQ file dates \(time-zone crash\)…$/,
-  /^🎒 Inventory \(on this PC\)$/, /^📊 My fights \(on this PC\)$/, /^🎬 My replay \(on this PC\)$/, /^🎟 Join a raid with a code…$/,
+  /^🎒 Inventory \(on this PC\)$/, /^🗺️ PoP flags \(on this PC\)$/, /^📊 My fights \(on this PC\)$/, /^🎬 My replay \(on this PC\)$/, /^🎟 Join a raid with a code…$/,
   // ... and the Raid Mimic party's door to the dashboard card (the party relay client, 2026-11-15).
   /^🐺 Raid Mimic party…$/,
   // ... and its checkbox, "Share with my in-game group and raid" (party auto mode, 2026-11-15; default off).
@@ -197,6 +197,7 @@ describe('the groups behind the submenus', () => {
     expect(labelsOf(sub(top('win32 full, stable, flags on'), 'Open'))).toEqual([
       '📈 My parses',
       '🎒 Inventory (on this PC)',
+      '🗺️ PoP flags (on this PC)',
       '📊 My fights (on this PC)',
       '🎬 My replay (on this PC)',
       '🎟 Join a raid with a code…',

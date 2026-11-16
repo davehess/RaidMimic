@@ -38,7 +38,7 @@ function load(world = {}) {
     uploadPopFlags: () => Promise.resolve(), _getApiBase: () => 'http://bot.test/api/agent', _getAgentToken: () => 'tok',
     fetch: async () => ({ ok: true, status: 200 }), _localOnly: () => false, _controlStandDown: () => ({ down: false }),
     // Zeal's saved #popflags file is read in the same run (test/pop-flags-file.test.js covers it); none here.
-    path, _latestPopFlagsExport: () => null, popFlagsFileEvents: () => ({ events: [], found: 0 }), ...world,
+    path, _localPopFlagsNote: () => {}, _latestPopFlagsExport: () => null, popFlagsFileEvents: () => ({ events: [], found: 0 }), ...world,
   };
   const names = Object.keys(w);
   const body = tsBlock + '\n' + gateBlock.replace('function parsePopFlagLine(', 'function _realParsePopFlagLine(') + '\n'

@@ -21435,6 +21435,7 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
   <div class="wp-rail-grp" id="wpLocalGrp">
     <div class="wp-lbl">On this PC</div>
     <button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory')" title="Every item across your characters, from the inventory files on this PC (opens in its own window). Nothing leaves the PC.">🎒 Inventory</button>
+    <button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags')" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC (opens in its own window). Nothing leaves the PC.">🗺️ PoP flags</button>
     <button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses')" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member (opens in its own window). Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button>
     <button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay')" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC (opens in its own window). Nothing leaves the PC.">🎬 My replay</button>
     <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
@@ -37880,6 +37881,7 @@ function startWebDashboard(port) {
       // files by /api/local/*. Read-only, never uploads.
       if (req.url && (req.url === '/local' || req.url.indexOf('/local/') === 0 || req.url.indexOf('/local?') === 0)) return _serveLocalSite(req, res);
       if (req.url && req.url.split('?')[0] === '/api/local/inventory') return _handleLocalInventory(req, res);
+      if (req.url && req.url.split('?')[0] === '/api/local/pop-flags') return _handleLocalPopFlags(req, res);
       if (req.url && req.url.split('?')[0] === '/api/local/account-list') return _handleLocalAccountList(req, res);
       if (req.url === '/api/state') {
         // Serve every poller the SAME serialized snapshot for 400ms. The
@@ -42113,8 +42115,9 @@ function _readPopFlagsExport(fullPath) {
   return { parsed, blocked: !!parsed && _pfFileBlocked(parsed.character.toLowerCase()) };
 }
 /** The newest export of one character in one folder (by file time; host-tagged copies compete), read: { path, parsed },
- *  or null for none / unreadable / not an export / kept out of stats. */
-function _latestPopFlagsExport(dir, characterLower) {
+ *  or null for none / unreadable / not an export / kept out of stats. `forThisPc` (the local PoP flags page, the guild
+ *  lead, 2026-11-16) skips the kept-out check: flags are not stats, and that page never leaves this machine. */
+function _latestPopFlagsExport(dir, characterLower, forThisPc) {
   let entries;
   try { entries = fs.readdirSync(dir); } catch { return null; }
   let best = null;
@@ -42130,7 +42133,7 @@ function _latestPopFlagsExport(dir, characterLower) {
   if (!best) return null;
   try {
     const x = _readPopFlagsExport(best.full);
-    return x.parsed && !x.blocked ? { path: best.full, parsed: x.parsed } : null;
+    return x.parsed && (forThisPc || !x.blocked) ? { path: best.full, parsed: x.parsed } : null;
   } catch { return null; }
 }
 function scanPopFlagsFiles(opts) {   // opts: see scanQuarmyExports
@@ -42370,6 +42373,77 @@ async function _handleLocalInventory(req, res) {
     body = JSON.stringify(snap);
   }
   catch (e) { console.error('[api/local/inventory] failed:', e && (e.stack || e.message || e)); res.writeHead(500, { 'Content-Type': 'application/json' }); return res.end('{"error":"could not read the inventory files"}'); }
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  return res.end(body);
+}
+// ── The PoP flags page on this PC (the guild lead, 2026-11-16: "We should have Popflags in the local mimic as well") ──
+// Per character this PC knows: the newest Zeal <Name>-PoPFlags.txt in any of the EQ folders, merged with the rows the
+// log reader kept in the local store (kind pop_flags: #popflags replies and the Seer's recital). Same flag key from two
+// places keeps the EARLIEST time. The page (web/local/app/flags) expands step keys into catalog flags itself. A
+// character with no rows is left out; a missing folder is an empty answer. Flags are not stats, so exclude_from_stats
+// does not hide a character here (the page never leaves this machine).
+function _localPopFlagsSnapshot(dirs, storeRows) {
+  const byChar = new Map();   // lower-cased name -> { name, rows: Map(flag_key -> row), export_at, exportMs }
+  const slot = (name) => {
+    const k = String(name).toLowerCase();
+    let c = byChar.get(k);
+    if (!c) { c = { name: String(name), rows: new Map(), export_at: null, exportMs: 0 }; byChar.set(k, c); }
+    return c;
+  };
+  const keep = (c, r) => {
+    const have = c.rows.get(r.flag_key);
+    if (!have || r.earned_at < have.earned_at) c.rows.set(r.flag_key, { flag_key: r.flag_key, earned_at: r.earned_at, source: r.source });
+  };
+  for (const r of Array.isArray(storeRows) ? storeRows : []) {
+    if (!r || typeof r.character !== 'string' || typeof r.flag_key !== 'string' || typeof r.earned_at !== 'string') continue;
+    keep(slot(r.character), { flag_key: r.flag_key, earned_at: r.earned_at, source: r.source === 'recital' ? 'recital' : 'popflags' });
+  }
+  const best = new Map();   // lower-cased name -> the newest parsed export over every folder
+  for (const dir of dirs) {
+    let entries;
+    try { entries = fs.readdirSync(dir); } catch { continue; }
+    const names = new Set();
+    for (const name of entries) { const m = name.match(POPFLAGS_FILENAME_RX); if (m) names.add(m[1].toLowerCase()); }
+    for (const cl of names) {
+      const x = _latestPopFlagsExport(dir, cl, true);
+      if (!x || x.parsed.character.toLowerCase() !== cl) continue;   // a renamed copy of another character's file is not this one's
+      const cur = best.get(cl);
+      if (!cur || x.parsed.atMs > cur.atMs) best.set(cl, x.parsed);
+    }
+  }
+  for (const [cl, parsed] of best) {
+    // popFlagsOutputEvents keeps a 6 h "already sent" memory per character for the upload path; this read must neither
+    // be starved by it nor spend it, so the character's entry is set aside while the file is read.
+    const saved = _pfState.get(cl);
+    _pfState.delete(cl);
+    let events;
+    try { events = popFlagsFileEvents(parsed, parsed.character).events; }
+    finally { if (saved) _pfState.set(cl, saved); else _pfState.delete(cl); }
+    const c = slot(parsed.character);
+    c.export_at = new Date(parsed.atMs).toISOString();
+    for (const r of _localPopFlagRows(events)) keep(c, r);
+  }
+  const characters = [];
+  for (const c of byChar.values()) {
+    if (!c.rows.size) continue;
+    const rows = [...c.rows.values()].sort((a, b) => (a.earned_at < b.earned_at ? -1 : a.earned_at > b.earned_at ? 1 : a.flag_key.localeCompare(b.flag_key)));
+    characters.push({ name: c.name, rows, export_at: c.export_at });
+  }
+  characters.sort((a, b) => a.name.localeCompare(b.name));
+  return { ok: true, generated_at: new Date().toISOString(), characters };
+}
+async function _handleLocalPopFlags(req, res) {
+  if (req.method !== 'GET') { res.writeHead(405, { 'Content-Type': 'application/json', 'Allow': 'GET' }); return res.end('{"error":"method not allowed"}'); }
+  let body;
+  try {
+    let stored = [];
+    try { stored = _localStore.scan('pop_flags').map(e => e.rec); } catch { stored = []; }
+    body = JSON.stringify(_localPopFlagsSnapshot(_localInventoryDirs(), stored));
+  } catch (e) {
+    console.error('[api/local/pop-flags] failed:', e && (e.stack || e.message || e));
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    return res.end('{"error":"could not read the PoP flags"}');
+  }
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   return res.end(body);
 }
@@ -64829,12 +64903,98 @@ function uploadLockouts(entries, { botUrl, token, dryRun, character }) {
 // incl. the at-cap forms) and 'con' (a /consider standing TRANSITION for a
 // mob). Bot-side unique constraints make backfill replays idempotent, so
 // crawling a complete log history is safe to re-run.
+// ── PoP flags kept on THIS PC for the local "PoP flags" page (the guild lead, 2026-11-16: "We should have Popflags in
+// the local mimic as well"). A copy of utils/popFlagStages.js RECITAL_STAGES (test/local-pop-flags.test.js holds it
+// equal): the agent sends the Seer's sentence and the bot names the step, so the page needs the same table here. Only
+// the step keys and times are stored (kind pop_flags); web/lib/popRecital.ts STAGE_IMPLIES expands them in the page.
+const _LOCAL_RECITAL_STAGES = [
+  ['Your soul has formed a bond with the Plane of Time', 'time_1'],
+  ['The History translated for you reveals the fate of Zebuxoruk', 'zebuxoruk_1'],
+  ["Learning of Zebuxoruk's fate, the only way to save him", 'zebuxoruk_2'],
+  ['The information obtained from Mithaniel is written', 'mmarr_book_1'],
+  ['You have shown your prowess in battle to Askr', 'karana_1'],
+  ['You have obtained the Talisman of Thunderous Foyer from Askr', 'karana_2'],
+  ['The information obtained from Karana is written', 'karana_4'],
+  ['The Cipher of the Divine Language appears on your arms', 'cipher_1'],
+  ['Saryrn been destroyed.', 'saryrn_1'],
+  ['Mithaniel has been bested.', 'mmarr_1'],
+  ["You have completed all of Honor's Trials.", 'hohtrials_111'],
+  ["You have beaten Rydda`Dar in the first of Honor's Trials.", 'hoh_trial_1'],
+  ["You have saved the villagers in the second of Honor's Trials.", 'hoh_trial_2'],
+  ["You have defeated the nomads in the third of Honor's Trials.", 'hoh_trial_3'],
+  ['You have bested Aerin`Dar and proven yourself honorable enough', 'aerindar_2'],
+  ['The evidence of Mavuin is the only thing that can save him now.', 'mavuin_1'],
+  ['Having endured the trials, the Tribunal has agreed to reconsider', 'mavuin_2'],
+  ['Mavuin is grateful to you for taking his case before the Tribunal.', 'mavuin_3'],
+  ['Tylis is being tortured by Saryrn.', 'tylis_1'],
+  ['Tylis has been removed from his agony.', 'tylis_2'],
+  ['Thelin being tormented by the imagery of Terris Thule', 'thelin_1'],
+  ['Thelin has completed his pact with Terris Thule', 'thelin_2'],
+  ["Terris Thule's grasp over Thelin has been released.", 'thelin_3'],
+  ['Saved from a world of eternal nightmares, Thelin is forever in your debt.', 'thelin_4'],
+  ['Alder Fuirstel wishes you to obtain the Ward', 'fuirstel_1'],
+  ['Grummus has been destroyed, about his corpse you found a small ward', 'fuirstel_2'],
+  ['Milyk has been saved from certain death, but is not recovering.', 'fuirstel_3'],
+  ['Bertoxxulous has been slain, the curse from Milyk now lifted.', 'fuirstel_4'],
+  ['Saved from certain doom, Milyk and Adler are forever in your debt.', 'fuirstel_5'],
+  ['Now that Grummus has been destroyed, the entrance to the Crypt of Bertoxxulous', 'grummus_1'],
+  ['The portal into the Plane of Fire has been altered.', 'pofire_1'],
+  ["Xuzl's arcane wisdom pulses in your mind.", 'sol_room_1'],
+  ["Arlyxir's wealth of knowledge flows through your mind.", 'sol_room_2'],
+  ['The power of Dresolik surges through you.', 'sol_room_3'],
+  ["Rizlona's song slips through your thoughts.", 'sol_room_4'],
+  ["Jiva's strength fills your body.", 'sol_room_5'],
+  ['The true route to the Plane of Fire is now clear in your mind.', 'pofire_2'],
+  ['Giwin would like you to find him in Drunder', 'zeks_2'],
+  ['The pack of notes from Vallon are scribbled', 'zeks_3'],
+  ['The pack of notes from Tallon are scribbled', 'zeks_4'],
+  ["The words of Maelin echo in your mind, 'The Zeks and Solusek", 'zeks_6'],
+  ['The parchments of Rallos are scribed in a language', 'zeks_7'],
+  ["You remember Nitram's words", 'poi_door_1'],
+];
+const _localRecitalNorm = (s) => String(s || '').replace(/[‘’ʼ`]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+const _LOCAL_RECITAL_NORMED = _LOCAL_RECITAL_STAGES.map(([prefix, stage]) => ({ prefix: _localRecitalNorm(prefix), stage }));
+/** pop_flag events → the rows the page keeps: { character, flag_key, earned_at, source }. A `#popflags` event
+ *  (source 'popflags') carries step keys; a Seer sentence is named by the table above; a grant or checklist event
+ *  names nothing here (the bot reads its previous line) and makes no row. */
+function _localPopFlagRows(events) {
+  const rows = [];
+  for (const e of Array.isArray(events) ? events : []) {
+    if (!e || !e.character || e.kind !== 'recital') continue;
+    const at = Date.parse(e.ts);
+    if (!Number.isFinite(at)) continue;
+    const earned_at = new Date(at).toISOString();
+    if (e.source === 'popflags') {
+      for (const k of Array.isArray(e.stages) ? e.stages : []) rows.push({ character: String(e.character), flag_key: String(k), earned_at, source: 'popflags' });
+    } else if (e.text) {
+      const t = _localRecitalNorm(e.text);
+      const hit = _LOCAL_RECITAL_NORMED.find(r => t.startsWith(r.prefix));
+      if (hit) rows.push({ character: String(e.character), flag_key: hit.stage, earned_at, source: 'recital' });
+    }
+  }
+  return rows;
+}
+const _localPopFlagsSeen = new Set();   // "character|flag_key|source" already kept this run: a second #popflags adds nothing
+/** Keep the rows of these events in the local store. Never uploads; a store that cannot write is no error. */
+function _localPopFlagsNote(events) {
+  try {
+    for (const r of _localPopFlagRows(events)) {
+      const seen = r.character.toLowerCase() + '|' + r.flag_key + '|' + r.source;
+      if (_localPopFlagsSeen.has(seen)) continue;
+      if (_localPopFlagsSeen.size > 5000) _localPopFlagsSeen.clear();
+      _localPopFlagsSeen.add(seen);
+      _localStore.put('pop_flags', r.character.toLowerCase() + '|' + r.flag_key + '|' + r.earned_at, r, { ts: Date.parse(r.earned_at) });
+    }
+  } catch { void 0; }
+}
+
 function uploadPopFlags(events, { dryRun } = {}) {
   if (!Array.isArray(events) || events.length === 0) return Promise.resolve();
   if (dryRun) {
     for (const e of events) console.log(`[pop-flag] ${e.character} · ${e.source || 'event'}${e.npc ? ' → ' + e.npc : ''} · ${e.zone || '?'} · ${e.boss || '?'} · ${e.ts}`);
     return Promise.resolve();
   }
+  _localPopFlagsNote(events);   // on this PC whether or not it is linked: enqueueUpload below sends nothing in local mode
   enqueueUpload('pop_flag', { agent_version: AGENT_VERSION, events });
   return Promise.resolve();
 }
@@ -67244,6 +67404,7 @@ const _LSTORE_POLICY = {
   death_story:    { retainDays: 90, maxBytes: 50 * _LSTORE_MB },   // "How I died": the last 30 s before each of your deaths
   hub_encounter:  { retainDays: 120, maxBytes: 64 * _LSTORE_MB },   // the guild's merged encounters, for My parses' difference
   hub_state:      { retainDays: 30, maxBytes: 4 * _LSTORE_MB },
+  pop_flags:      { retainDays: 400, maxBytes: 5 * _LSTORE_MB },   // the PoP flags page on this PC (the guild lead, 2026-11-16): step keys only
 };
 const _LSTORE_POLICY_DEFAULT = { retainDays: 0, maxBytes: 256 * _LSTORE_MB };   // 0 days = no age limit, the byte cap still applies
 
@@ -68931,7 +69092,7 @@ async function _rescanRun(req, prog) {
     flush() {
       if (!this.events.length) return;
       const evs = this.events.splice(0);
-      if (!mode.upload) return;
+      if (!mode.upload) { _localPopFlagsNote(evs); return; }   // local mode or paused: nothing leaves, the local page still fills (the guild lead, 2026-11-16)
       this.sent += evs.length;
       uploadPopFlags(evs, opts).catch(() => {});
     },
