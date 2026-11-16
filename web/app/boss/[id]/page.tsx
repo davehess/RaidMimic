@@ -141,14 +141,15 @@ export default async function BossPage({ params }: { params: Promise<{ id: strin
           <span aria-hidden>👑</span>
           <span>All-time top damage on {boss.name}</span>
         </h3>
-        <table className="w-full text-xs">
+        <div className="overflow-auto max-h-[80vh]">
+          <table className="w-full text-xs">
           <thead className="text-dim text-left">
             <tr className="border-b border-border">
-              <th className="py-1 pr-2 w-8">#</th>
-              <th className="py-1 pr-2">Character</th>
-              <th className="py-1 pr-2 text-right">Damage</th>
-              <th className="py-1 pr-2 text-right">DPS</th>
-              <th className="py-1 pr-2">When</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 w-8">#</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2">Character</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">Damage</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">DPS</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2">When</th>
             </tr>
           </thead>
           <tbody>
@@ -174,6 +175,7 @@ export default async function BossPage({ params }: { params: Promise<{ id: strin
             )}
           </tbody>
         </table>
+        </div>
       </section>
 
       {/* Recent kills of this boss */}

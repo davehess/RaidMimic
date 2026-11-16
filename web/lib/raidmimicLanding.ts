@@ -107,7 +107,7 @@ export const INTEREST_TEXT = 'raidmimic: register interest.\nGuild:\nGame:\nRoug
 export const CTA = {
   title: 'Register interest',
   body:
-    'There is no sales form and no account. Tell us your guild, your game and roughly how many raiders. ' +
+    'No account and nothing to buy. Tell us your guild, your game and roughly how many raiders. ' +
     'Leave a Discord name in the form if you want a reply.',
   button: 'Register interest',
   note: 'Opens a short form on eqmimic.quest.',

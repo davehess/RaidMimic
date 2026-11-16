@@ -203,20 +203,21 @@ export default async function ServerPvpPage() {
             as the agent observes them.
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-auto max-h-[80vh]">
+            <table className="w-full text-sm">
             <thead className="text-dim text-left">
               <tr className="border-b border-border">
-                <th className="py-1 pr-2 w-8">#</th>
-                <th className="py-1 pr-2">Killer</th>
-                <th className="py-1 pr-2">Guild</th>
-                <th className="py-1 pr-2 text-right">Kills <span className="text-dim/70">(unique)</span></th>
-                <th className="py-1 pr-2 text-right" title="Their kills against Wolf Pack victims">
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 w-8">#</th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2">Killer</th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2">Guild</th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">Kills <span className="text-dim/70">(unique)</span></th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right" title="Their kills against Wolf Pack victims">
                   <span className="text-red-400">vs WP</span>
                 </th>
-                <th className="py-1 pr-2 text-right" title="Wolf Pack kills against this character">
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right" title="Wolf Pack kills against this character">
                   <span className="text-green">WP vs them</span>
                 </th>
-                <th className="py-1 pr-2 text-right">Last kill</th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">Last kill</th>
               </tr>
             </thead>
             <tbody>
@@ -257,6 +258,7 @@ export default async function ServerPvpPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

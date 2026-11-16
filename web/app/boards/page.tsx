@@ -134,11 +134,6 @@ export default async function BoardsPage() {
             )}
           </div>
         </div>
-        <p className="text-sm text-dim mt-2">
-          Live mirror of the Discord raid-mobs board. Countdowns tick
-          client-side; the underlying timestamps come from the bot every
-          time it processes a kill.
-        </p>
       </section>
 
       {EXPANSION_ORDER.map(expansion => {

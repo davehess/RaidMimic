@@ -348,34 +348,6 @@ export default async function AdminSignupsPage({
         </form>
       </section>
 
-      {/* Pitch banner — visible at all times so a guild leader who clicks
-          through gets the context without needing to be briefed first. */}
-      <section className="bg-panel border border-blue rounded-lg p-5">
-        <h3 className="text-base text-blue mb-2">Why the Raid-Helper API integration is worth setting up</h3>
-        <div className="text-xs text-dim leading-6 space-y-2">
-          <p>
-            Today this page already works without the API — the embed scrape covers
-            roughly 80% of the signal because RH renders most signups in the visible
-            embed fields.
-          </p>
-          <MoreInfo className="mt-1 space-y-2">
-          <p>But the API gets us things the embed never shows:</p>
-          <ul className="list-disc ml-5 space-y-1">
-            <li><b>Signup timing.</b> Did they sign up days in advance or 5 minutes before raid start? Distinguishes planners from last-minute hopefuls.</li>
-            <li><b>Spec / role tracked separately from class.</b> The embed shows &quot;Cleric&quot; in a list; the API tells us &quot;Cleric — main heal&quot; vs &quot;Cleric — chain&quot;. Lets us audit comp coverage by spec.</li>
-            <li><b>Sign-out tracking.</b> Members who signed up Going then withdrew an hour before raid are flagged in the API but invisible in the embed — they look identical to a clean no-show.</li>
-            <li><b>Custom field state.</b> RH supports add-on questions (&quot;bringing alt?&quot;, &quot;buff specs?&quot;). The embed compresses these; the API returns the structured answer.</li>
-            <li><b>Pagination.</b> The embed lists ~30 names per role before truncating; the API returns everyone. Matters for large raids.</li>
-            <li><b>Server-wide attendance stats endpoint.</b> RH ships its own &quot;X attended N of last M raids&quot; — we cross-check our number against theirs to catch sync gaps.</li>
-            <li><b>Realtime.</b> No more 100-message channel scrape; just incremental polling on the events that changed.</li>
-          </ul>
-          <p className="mt-2">
-            <b>What it costs:</b> generate the key once in Discord (<code>/apikey refresh</code> then <code>/apikey show</code>), drop it into Railway as <code>RH_API_KEY</code>, redeploy. That&apos;s it — sync turns on automatically every 30 min and this page picks up the richer data without any other change.
-          </p>
-          </MoreInfo>
-        </div>
-      </section>
-
       {events.length === 0 ? (
         <section className="bg-panel border border-border rounded-lg p-6 text-sm text-dim space-y-2">
           <p>No Raid-Helper events ingested yet. Two ways to fix:</p>

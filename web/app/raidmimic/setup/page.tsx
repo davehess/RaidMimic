@@ -10,6 +10,7 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import NewPageTag from '@/components/NewPageTag';
+import CopyChip from '@/components/CopyChip';
 import { isRaidmimicHost, raidmimicSeo } from '@/lib/raidmimicHost';
 import { EQMIMIC_FEEDBACK_PATH, EQMIMIC_ORIGIN, interestUrl, RIGHTS_NOTICE } from '@/lib/raidmimicLanding';
 import {
@@ -121,7 +122,7 @@ export default function RaidmimicSetupPage({ searchParams }: { searchParams?: { 
               <p className="mt-2 max-w-[66ch] text-sm leading-6 text-text">{f.fix}</p>
               {f.code && (
                 <>
-                  <p className="mt-3 text-xs text-dim">{f.code.label}</p>
+                  <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-dim">{f.code.label} <CopyChip text={f.code.text} label="Copy script" /></p>
                   <pre className="mt-1 max-w-full overflow-x-auto rounded border border-border bg-black/30 p-3 text-xs leading-5 text-text">{f.code.text}</pre>
                 </>
               )}

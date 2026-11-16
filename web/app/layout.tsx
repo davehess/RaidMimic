@@ -170,7 +170,7 @@ provenance
           <main>{children}</main>
           <footer className="mt-12 text-xs text-dim space-y-1">
             <div>
-              Data shared with the Discord bot via Supabase · the Mimic Parser dashboard
+              Data shared with the Discord bot · the Mimic Parser dashboard
               lives at{' '}
               <LocalDashboardLink />{' '}
               for live in-raid stats.

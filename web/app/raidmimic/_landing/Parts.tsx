@@ -17,7 +17,7 @@ export const PRIMARY_BTN = `${BTN} border-gold bg-gold text-[#1a1206] hover:bg-[
 export const EXT = { target: '_blank', rel: 'noreferrer' } as const;
 
 export function InterestButton({ ctx, className = PRIMARY_BTN }: { ctx: Ctx; className?: string }) {
-  return <a href={ctx.interest} className={className} {...(ctx.onHost ? EXT : {})}>{CTA.button}</a>;
+  return <a href={ctx.interest} className={className}>{CTA.button}</a>;
 }
 
 // ─── Register interest ──────────────────────────────────────────────────────────────────────────────

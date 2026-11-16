@@ -77,9 +77,9 @@ export default async function DbRecipePage({ params }: { params: Promise<{ id: s
     <div className="space-y-4 max-w-3xl">
       <NewPageTag />
       <div className="text-sm text-dim">
-        <Link href="/search" className="text-blue hover:underline">← search</Link>
+        <Link href="/db" className="text-blue hover:underline">← database</Link>
         <span className="mx-2">·</span>
-        <span className="text-dim/70">wpqdi · recipe #{recipeId}</span>
+        <span className="text-dim/70">recipe #{recipeId}</span>
       </div>
 
       <section className="bg-panel border border-border rounded-lg p-4 font-mono">

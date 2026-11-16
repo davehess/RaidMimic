@@ -93,7 +93,7 @@ export default async function DbFactionPage({ params, searchParams }: {
       <div className="text-sm text-dim">
         <Link href="/db" className="text-blue hover:underline">← database</Link>
         <span className="mx-2">·</span>
-        <span className="text-dim/70">wpqdi · faction #{factionId}</span>
+        <span className="text-dim/70">faction #{factionId}</span>
       </div>
 
       <section className="bg-panel border border-border rounded-lg p-4">
