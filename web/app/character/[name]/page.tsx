@@ -266,10 +266,6 @@ export default async function CharacterPage({ params }: { params: Promise<{ name
 
   return (
     <div className="space-y-6">
-      <div className="text-sm">
-        <Link href="/parses" className="text-blue hover:underline">← back to parses</Link>
-      </div>
-
       <section className="bg-panel border border-border rounded-lg p-6">
         <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
           <h2 className="text-2xl text-gold flex items-center gap-3">
@@ -412,7 +408,8 @@ export default async function CharacterPage({ params }: { params: Promise<{ name
           <span>Recent parses</span>
           <span className="text-dim text-xs">· top 30 by date</span>
         </h3>
-        <table className="w-full text-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
           <thead className="text-dim text-left">
             <tr className="border-b border-border">
               <th className="py-1 pr-2">When</th>
@@ -449,6 +446,7 @@ export default async function CharacterPage({ params }: { params: Promise<{ name
             )}
           </tbody>
         </table>
+        </div>
       </section>
 
       {/* Loot — interactive browser: era + type filters, sort, pagination. */}

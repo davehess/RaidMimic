@@ -191,9 +191,9 @@ export default async function DbNpcPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="text-sm text-dim">
-        <Link href="/search" className="text-blue hover:underline">← search</Link>
+        <Link href="/db" className="text-blue hover:underline">← database</Link>
         <span className="mx-2">·</span>
-        <span className="text-dim/70">wpqdi · npc #{npcId}</span>
+        <span className="text-dim/70">npc #{npcId}</span>
       </div>
 
       {/* Header + stats */}

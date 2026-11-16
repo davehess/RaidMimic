@@ -1,10 +1,9 @@
-// test/raidmimic-shell.test.js — the ?v=b|c shells of raidmimic.com (the guild lead, 2026-11-15: "the formatting we have on
-// Wolfpack.quest is what we should be using here"). Three halves:
+// test/raidmimic-shell.test.js — the frame of raidmimic.com (the guild lead, 2026-11-15, option B: "the formatting we have on
+// Wolfpack.quest is what we should be using here"). Two halves:
 //   1. The data the header and side nav draw: every href is a raidmimic path or the project's GitHub releases, none spells the
 //      Wolf Pack address, and the sections are raidmimic's own (lib/raidmimicNav.ts), not a second list.
-//   2. The variant decision, RUN: production and a cookie-less visit are always the shell production has.
-//   3. The wiring, as text with comments stripped: HostFrame returns the old frame untouched when the shell is `a`, and the
-//      middleware only sets the cookie on a host that honours it.
+//   2. The wiring, as text with comments stripped: HostFrame is the shell on a raidmimic host and a pass-through elsewhere,
+//      and no cookie or ?v= picks it.
 // Run: npx vitest run test/raidmimic-shell.test.js
 
 import { describe, it, expect } from 'vitest';
@@ -13,7 +12,6 @@ import path from 'node:path';
 import { ROOT, stripJs } from './_source-slice.js';
 import { RAIDMIMIC_SECTIONS } from '../web/lib/raidmimicNav.ts';
 import { RM_ABOUT, RM_DOWNLOADS, RM_HEADER_SECTIONS, shellSectionOf } from '../web/lib/raidmimicShell.ts';
-import { RM_SHELL_COOKIE, rmShellAction, rmShellFor, rmShellHonoured } from '../web/lib/raidmimicShellVariant.ts';
 
 const code = (rel) => stripJs(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
 const WOLF = /wolfpack\.quest/i;
@@ -60,64 +58,43 @@ describe('the shell data', () => {
   });
 
   it('the shell components spell no Wolf Pack address', () => {
-    for (const rel of ['web/lib/raidmimicShell.ts', 'web/lib/raidmimicShellVariant.ts', 'web/components/RaidmimicHeader.tsx',
+    for (const rel of ['web/lib/raidmimicShell.ts', 'web/components/RaidmimicHeader.tsx',
       'web/components/RaidmimicSideShell.tsx', 'web/components/RaidmimicShell.tsx', 'web/components/RaidmimicShellFooter.tsx']) {
       expect(code(rel), rel).not.toMatch(WOLF);
     }
   });
 });
 
-describe('which shell a request gets', () => {
-  it('production hosts never honour a variant, cookie or not', () => {
-    for (const host of ['raidmimic.com', 'www.raidmimic.com', 'raidmimic.net', 'raidmimic.quest', 'wolf.raidmimic.com', null]) {
-      expect(rmShellHonoured(host, false), String(host)).toBe(false);
-      expect(rmShellFor(host, 'b', false), String(host)).toBe('a');
-      expect(rmShellFor(host, 'c', false), String(host)).toBe('a');
-    }
-  });
-
-  it('the beta mirror and a beta build honour it; no cookie, a clear cookie or junk is still the production shell', () => {
-    expect(rmShellFor('b.raidmimic.com', 'b', false)).toBe('b');
-    expect(rmShellFor('B.RaidMimic.com:3000', 'c', false)).toBe('c');
-    expect(rmShellFor('anything.example', 'b', true)).toBe('b');
-    for (const cookie of [undefined, '', 'a', 'x', 'B']) expect(rmShellFor('b.raidmimic.com', cookie, true)).toBe('a');
-  });
-
-  it('?v= sets for b and c, clears for a, and ignores everything else', () => {
-    expect(rmShellAction('b')).toBe('set');
-    expect(rmShellAction('c')).toBe('set');
-    expect(rmShellAction('a')).toBe('clear');
-    for (const v of [null, undefined, '', 'd', 'B']) expect(rmShellAction(v)).toBeNull();
-    expect(RM_SHELL_COOKIE).toBe('rm_shell');
-  });
-});
-
-describe('the wiring', () => {
-  it('HostFrame hands the page back untouched off a raidmimic host, and with shell `a` returns the frame production has', () => {
+describe('the frame', () => {
+  it('HostFrame hands the page back untouched off a raidmimic host, and on one it is the shell (B), with no variant left', () => {
     const src = code('web/components/RaidmimicFrame.tsx');
     const frame = src.slice(src.indexOf('export default function HostFrame'));
     expect(frame.indexOf('if (!onHost) return <>{children}</>;')).toBeGreaterThan(0);
-    const guard = frame.indexOf("if (shell !== 'a') return <ShellFrame variant={shell}>{children}</ShellFrame>;");
-    expect(guard).toBeGreaterThan(frame.indexOf('if (!onHost)'));
-    const tail = frame.slice(guard);
-    expect(tail).toContain('<div className={`mx-auto w-full ${width}`}>');
-    expect(tail).toContain('<HostBar />');
-    expect(tail).toContain('<Footer onHost />');
-    expect(src).toContain('export function HostBar()');   // the landing and the set-up guide still draw the old bar
+    expect(frame).toContain('return <ShellFrame>{children}</ShellFrame>;');
+    expect(src).not.toMatch(/HostBar|currentShell|rm_shell/);
   });
 
-  it('currentShell reads the cookie only on a host that honours it', () => {
+  it('the shell is the header, the side nav and the footer, and nothing reads a cookie or a ?v= to pick it', () => {
     const src = code('web/components/RaidmimicShell.tsx');
-    expect(src.indexOf('if (!rmShellHonoured(host, beta)) return \'a\';')).toBeGreaterThan(0);
-    expect(src.indexOf('if (!rmShellHonoured(host, beta))')).toBeLessThan(src.indexOf('cookies().get(RM_SHELL_COOKIE)'));
+    for (const part of ['<RaidmimicHeader', '<RaidmimicSideShell>', '<RaidmimicShellFooter />']) expect(src).toContain(part);
+    expect(src).not.toMatch(/cookies\(|headers\(|rm_shell|variant/);
+    expect(code('web/components/RaidmimicHeader.tsx')).not.toMatch(/variant|TabRow/);
+    expect(fs.existsSync(path.join(ROOT, 'web/lib/raidmimicShellVariant.ts'))).toBe(false);
   });
 
-  it('the middleware sets the cookie only for a raidmimic host that honours the variant, and never on the landing page', () => {
-    const src = code('web/middleware.ts');
-    const block = src.slice(src.indexOf('rmShellAction('), src.indexOf('// eqmimic.quest (the guild lead, 2026-10-08)'));
-    expect(block).toContain('isRaidmimicHost(host)');
-    expect(block).toContain("rmShellHonoured(host, process.env.NEXT_PUBLIC_IS_BETA === '1')");
-    expect(block).toContain('raidmimicLandingTarget(path).pathname !== RAIDMIMIC_LANDING_PATH');
-    expect(block).toContain("request.method === 'GET'");
+  it('the middleware has no shell preview left (no cookie, no ?v= redirect)', () => {
+    expect(code('web/middleware.ts')).not.toMatch(/rm_shell|RM_SHELL|rmShell/);
+  });
+
+  it('the landing page, the set-up guide and the legal pages sit in the same frame, on a raidmimic host', () => {
+    for (const rel of ['web/app/raidmimic/page.tsx', 'web/app/raidmimic/setup/page.tsx']) {
+      const src = code(rel);
+      expect(src, rel).toContain("import HostFrame from '@/components/RaidmimicFrame';");
+      expect(src, rel).toContain('<HostFrame onHost={onHost}>');
+      expect(src, rel).not.toMatch(/HostBar/);
+    }
+    const legal = code('web/app/raidmimic/_legal/LegalParts.tsx');
+    expect(legal).toContain('return onHost ? <ShellFrame>{page}</ShellFrame> : page;');
+    expect(legal).toContain('{!onHost && <footer');
   });
 });

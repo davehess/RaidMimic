@@ -206,7 +206,7 @@ export default async function FactionB({ factionId, userId }: { factionId: numbe
       <div className="text-sm text-dim">
         <Link href="/db" className="text-blue hover:underline">← database</Link>
         <span className="mx-2">·</span>
-        <span className="text-dim/70">wpqdi · faction #{factionId}</span>
+        <span className="text-dim/70">faction #{factionId}</span>
         <span className="mx-2">·</span>
         <Link href={`/db/faction/${factionId}`} className="text-blue hover:underline">default view</Link>
       </div>

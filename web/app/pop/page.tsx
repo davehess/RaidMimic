@@ -966,7 +966,7 @@ export default async function PopFlagsPage(
         { label: 'Chart', href: chartHref, active: chartBody },
         { label: 'Matrix', href: hrefFor({ view: 'matrix', zone: null }), active: matrixView || mineView },
       ]}
-      extras={[{ label: '☑ My checklist', href: '/pop/guide' }, { label: 'Latest flags', href: '/pop/latest' }, { label: 'Events & loot [beta]', href: '/pop/events' }, { label: 'Flag events [beta]', href: '/pop/flag-events' }, { label: 'Elemental planes [beta]', href: '/pop/elementals' }]}
+      extras={[{ label: '☑ My checklist', href: '/pop/guide' }, { label: 'Tonight', href: '/pop/raid' }, { label: 'Latest flags', href: '/pop/latest' }, { label: 'Events & loot [beta]', href: '/pop/events' }, { label: 'Flag events [beta]', href: '/pop/flag-events' }, { label: 'Elemental planes [beta]', href: '/pop/elementals' }]}
       groups={navGroups(topLevel, eligibleCount)}
       base={jumpBase}
       essencesQueued={essences.queue.length}
@@ -1091,7 +1091,8 @@ export default async function PopFlagsPage(
                 className={navCls(matrixView || mineView)}>Matrix</Link>
         </span>
         <Link href="/pop/guide" className={`${navCls(false)} shrink-0`}>☑ My checklist</Link>
-        <Link href="/pop/latest" className={`${navCls(false)} shrink-0`}>Latest flags (try the new view)</Link>
+        <Link href="/pop/latest" className={`${navCls(false)} shrink-0`}>Latest flags</Link>
+        <Link href="/pop/raid" className={`${navCls(false)} shrink-0`}>Tonight</Link>
         <Link href="/pop/events" className={`${navCls(false)} shrink-0`}>Events &amp; loot [beta]</Link>
       </div>
       </div>
@@ -1510,18 +1511,6 @@ export default async function PopFlagsPage(
         {shownUnknownNeeds.length > 0 && (
           <div className="mt-3">{noLevelFold(shownUnknownNeeds.length, <NeedsTable rows={shownUnknownNeeds} />)}</div>
         )}
-      </section>
-
-      <section className="bg-panel border border-border rounded-lg p-4 text-xs text-dim leading-5">
-        <b className="text-text">How this fills in:</b> agents detect the universal grant line and the bot attributes
-        it from the zone + the boss just killed; unattributable grants stay visible as <i>unmapped</i> until the
-        catalog names them.
-        <MoreInfo>
-        At launch: verify every * gate against Quarm&apos;s documented QoL changes (data-only
-        edits), wire Seer Mal Nae recital parsing for authoritative backfill, and split multi-step gates (earth
-        rings, Time phases) if Quarm keeps them. Sources: TAKP progression wiki · EQProgression planar guide ·
-        Samanna chart v3.0.
-        </MoreInfo>
       </section>
       </PopShell>
     </div>

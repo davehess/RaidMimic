@@ -1,14 +1,14 @@
 'use client';
-// The Raid Mimic header for the ?v=b and ?v=c shells (the guild lead, 2026-11-15, on raidmimic.com: "the formatting we have
-// on Wolfpack.quest is what we should be using here"). Modelled on SiteHeader and Nav: a full-width sticky bar with the
+// The Raid Mimic header (the guild lead, 2026-11-15, on raidmimic.com: "the formatting we have on Wolfpack.quest is what we
+// should be using here"; picked as option B the same day). Modelled on SiteHeader and Nav: a full-width sticky bar with the
 // logo and name, the three download chips beside it, the sections as dropdown buttons in the middle and the account block
-// at the right; below lg the sections fold into one Menu. In shell c the section's own pages sit as a tab row under the bar.
+// at the right; below lg the sections fold into one Menu.
 // The account block is handed in (the server's AuthBadge), so this file reads no session. Tokens only, no new colours.
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DownloadArrow } from '@/components/HeaderIcons';
 import { pageIsCurrent, sectionOfPath, type RaidmimicSection } from '@/lib/raidmimicNav';
-import { RM_DOWNLOADS, RM_HEADER_SECTIONS, shellSectionOf } from '@/lib/raidmimicShell';
+import { RM_DOWNLOADS, RM_HEADER_SECTIONS } from '@/lib/raidmimicShell';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue';
 const chip = `inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded border px-3 text-sm no-underline transition-colors hover:no-underline ${FOCUS}`;
@@ -131,28 +131,7 @@ function MenuPanel({ path }: { path: string }) {
   );
 }
 
-/** Shell c's tab row: the pages of the section you are in. Scrolls sideways inside its own strip, never the page. */
-function TabRow({ path }: { path: string }) {
-  const section = shellSectionOf(path);
-  if (!section) return null;
-  return (
-    <nav aria-label={`${section.label} pages`} className="border-t border-border/60">
-      <div className="mx-auto flex max-w-[1800px] gap-1 overflow-x-auto px-3 sm:px-4">
-        {section.pages.map(p => {
-          const cur = pageIsCurrent(section, p, path);
-          return (
-            <a key={p.href} href={p.href} aria-current={cur ? 'page' : undefined}
-              className={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm no-underline hover:no-underline ${FOCUS} ${cur ? 'border-accent text-white' : 'border-transparent text-dim hover:text-text'}`}>
-              {p.label}
-            </a>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
-export default function RaidmimicHeader({ variant, authBadge }: { variant: 'b' | 'c'; authBadge: ReactNode }) {
+export default function RaidmimicHeader({ authBadge }: { authBadge: ReactNode }) {
   const path = usePathname() || '/';
   const [menu, setMenu] = useState(false);
   const wrap = useRef<HTMLElement>(null);
@@ -168,7 +147,7 @@ export default function RaidmimicHeader({ variant, authBadge }: { variant: 'b' |
 
   return (
     // The bleed cancels the root layout's own padding so the bar runs edge to edge, like Wolf Pack's.
-    <header ref={wrap} data-rm-shell={variant}
+    <header ref={wrap} data-rm-shell
       className="sticky top-0 z-40 -mx-3 -mt-3 border-b border-border/60 bg-bg/95 backdrop-blur sm:-mx-4 sm:-mt-4">
       <div className="mx-auto flex max-w-[1800px] items-center gap-2 px-3 py-2 sm:px-4">
         <a href="/" aria-label="Raid Mimic home" className={`flex shrink-0 items-center gap-2 rounded no-underline hover:no-underline ${FOCUS}`}>
@@ -185,7 +164,6 @@ export default function RaidmimicHeader({ variant, authBadge }: { variant: 'b' |
         <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0 [&_a]:inline-flex [&_a]:min-h-9 [&_a]:items-center [&_button]:min-h-9">{authBadge}</div>
       </div>
       {menu && <div className="lg:hidden"><MenuPanel path={path} /></div>}
-      {variant === 'c' && <TabRow path={path} />}
     </header>
   );
 }

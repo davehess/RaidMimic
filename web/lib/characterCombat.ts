@@ -41,8 +41,20 @@ export type CombatFight = {
   weave?: Weave | null;
 };
 
-/** Who may open the page. One constant so the guild lead's pick flips it in one place. */
-export const COMBAT_VISIBILITY: 'OWNER' | 'GUILD' = 'OWNER';
+/** Who may open the page. One constant so the guild lead's pick flips it in one place. Every signed-in guild member
+ *  since 2026-11-15 (the guild lead: "every member"; "officers see everything"). */
+export const COMBAT_VISIBILITY: 'OWNER' | 'GUILD' = 'GUILD';
+
+/** What a signed-in guild member sees for a character. The owner and officers always see it; under GUILD scope any
+ *  other member sees it unless the character opted out of stats (`exclude_from_stats`), which is hidden from them. */
+export function combatAccess(a: { isOwner: boolean; isOfficer: boolean; excluded: boolean; scope?: 'OWNER' | 'GUILD' }): 'show' | 'private' | 'hidden' {
+  if (a.isOwner) return 'show';
+  // A player's "exclude from stats" holds for officers too: the database function returns nothing for an opted-out
+  // character to anyone but its owner (migration 20261116010000), so the page says so instead of showing an empty one.
+  if (a.excluded) return 'hidden';
+  if (a.isOfficer) return 'show';
+  return (a.scope ?? COMBAT_VISIBILITY) === 'OWNER' ? 'private' : 'show';
+}
 
 export const HARM_TOUCH_KEY = 'harm touch';
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);

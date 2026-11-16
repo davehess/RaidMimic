@@ -191,7 +191,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       {encounters.length > 0 && (
         <section className="bg-panel border border-border rounded-lg p-4">
           <h2 className="text-sm text-orange mb-2">⚔️ Parses ({encounters.length})</h2>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead>
               <tr className="text-dim text-xs text-left">
                 <th className="py-1 pr-3">Boss</th>
@@ -221,6 +222,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               ))}
             </tbody>
           </table>
+          </div>
           <p className="text-[11px] text-dim mt-2">Main Tank = the defender who engaged first (or took the most damage on older uploads). Click a boss to open the full parse.</p>
         </section>
       )}

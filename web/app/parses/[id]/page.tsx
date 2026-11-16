@@ -29,7 +29,7 @@ import { shownActor } from '@/lib/actorName';
 import { isWipe } from '@/lib/encounterMarks';
 import { GUILD_TAG } from '@/lib/guild';
 import { toResultView } from '@/lib/parseResultFirstView';
-import ResultFirstA from '@/components/lab/parse-result-first/VersionA';
+import TabbedResult from '@/components/parse-result/TabbedResult';
 
 export const dynamic = 'force-dynamic';
 
@@ -454,7 +454,7 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
   const { id } = await params;
   const view = (await searchParams)?.v;
   const { data: { user } } = await supabaseServer().auth.getUser();
-  if (!user) redirect(`/auth/signin?next=${view === 'a' ? encodeURIComponent(`/parses/${id}?v=a`) : `/parses/${encodeURIComponent(id)}`}`);
+  if (!user) redirect(`/auth/signin?next=${view === 'old' ? encodeURIComponent(`/parses/${id}?v=old`) : `/parses/${encodeURIComponent(id)}`}`);
   await requireMember(user.id);
 
   const data = await load(id);
@@ -650,19 +650,105 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
     );
   };
 
-  // ?v=a — the "result first" layout (design lab draft parse-result-first). The page does not load the viewer's own
-  // characters, so this version shows no "you" marks here; the default render below is untouched.
-  if (view === 'a') {
-    const v = toResultView({
+  // The officer controls (Mark Wipe / Live / PvP / Test / Non-Guild, Clear), shared by both layouts.
+  const officerAdmin = officer && (
+      <div className="mt-4 pt-3 border-t border-border flex flex-wrap items-center gap-2">
+        <span className="text-[10px] text-dim uppercase tracking-wide mr-1">officer admin</span>
+        {/* Wipe is a toggle that combines with the one-of marks after it (2026-10-23: "Wipe AND another thing"). */}
+        <form action={toggleWipe} className="contents">
+          <input type="hidden" name="id" value={enc.id} />
+          <button
+            type="submit"
+            aria-pressed={isWipe(enc)}
+            title={isWipe(enc)
+              ? 'Wipe is on — click to turn it off'
+              : 'Engaged but did not kill — excluded from kill counts + stats. Can be combined with Live / PvP / Test / Non-Guild'}
+            className={`px-2 py-1 rounded text-xs border border-orange/50 text-orange ${isWipe(enc) ? 'font-semibold bg-orange/20' : 'opacity-80 hover:opacity-100'}`}
+          >
+            {isWipe(enc) ? 'Wipe ✓' : 'Mark Wipe'}
+          </button>
+        </form>
+        {[
+          { val: 'live', label: 'Mark Live', cls: 'border-blue/50 text-blue',
+            desc: 'Live server, not guild instance — excluded from kill counts + stats' },
+          { val: 'pvp',  label: 'Mark PvP',  cls: 'border-red/50 text-red',
+            desc: 'PvP / Zek server — excluded from kill counts + stats' },
+          { val: 'test', label: 'Mark Test', cls: 'border-dim/60 text-dim',
+            desc: 'Practice / dummy pull — excluded from kill counts + stats' },
+          { val: 'foreign', label: 'Mark Non-Guild', cls: 'border-purple/50 text-purple',
+            desc: 'Primarily non-Wolf Pack raiders (a guildie pugging another guild) — excluded from kill counts + stats' },
+        ].map(b => (
+          <form key={b.val} action={classifyEncounter} className="contents">
+            <input type="hidden" name="id" value={enc.id} />
+            <input type="hidden" name="classification" value={b.val} />
+            <button
+              type="submit"
+              title={b.desc}
+              disabled={enc.classification === b.val}
+              className={`px-2 py-1 rounded text-xs border ${b.cls} ${enc.classification === b.val ? 'font-semibold' : 'opacity-80 hover:opacity-100'}`}
+            >
+              {b.label}
+            </button>
+          </form>
+        ))}
+        {enc.classification && (
+          <form action={clearClassification} className="ml-auto">
+            <input type="hidden" name="id" value={enc.id} />
+            <button
+              type="submit"
+              title="Clear classification — back to default (guild kill)"
+              className="px-2 py-1 rounded text-xs border border-border text-text hover:bg-bg"
+            >
+              Clear classification
+            </button>
+          </form>
+        )}
+      </div>
+  );
+
+  // The default layout (picked from the design lab, 2026-11-15): the result, then one panel at a time under a tab row.
+  // The earlier eight-panel layout stays reachable at ?v=old for a week, then is deleted (the guild lead's pick).
+  if (view !== 'old') {
+    // "You": the signed-in member's own characters, one small read through the same link /me uses
+    // (wolfpack_members.user_id -> discord_id -> characters.discord_id). Fails soft to no marks.
+    let mine: string[] = [];
+    try {
+      const sa = supabaseAdmin();
+      const { data: pack } = await sa.from('wolfpack_members').select('discord_id').eq('user_id', user.id).maybeSingle();
+      if (pack?.discord_id) {
+        const { data: own } = await sa.from('characters').select('name').eq('guild_id', GUILD_TAG).eq('discord_id', pack.discord_id);
+        mine = ((own ?? []) as { name: string }[]).map(c => c.name).filter(Boolean);
+      }
+    } catch { /* no marks */ }
+    const rv = toResultView({
       boss: bossName, zone: zoneLong, whenLabel: `${dayLabel(dispDate, tz)} ${fmtTime(enc.started_at, tz)}`,
       isWipe: enc.is_wipe, classification: enc.classification, endedAt: enc.ended_at, startedAt: enc.started_at, durationSec: enc.duration_sec,
-      totalDamage: enc.total_damage, totalDps: enc.total_dps, players: players, classOf: (n) => whoMap.get(n.toLowerCase())?.class ?? null,
-      deaths, contribs, events: raidEvents, loot,
+      totalDamage: enc.total_damage, totalDps: enc.total_dps, players, classOf: (n) => whoMap.get(n.toLowerCase())?.class ?? null,
+      deaths, contribs, events: raidEvents, loot, mine,
     });
     return (
       <div className="space-y-4">
         <div className="text-sm"><Link href="/parses" className="text-blue hover:underline">← back to parses</Link></div>
-        <ResultFirstA v={v} linkNames />
+        <TabbedResult v={rv} linkNames />
+        {enc.classification && (
+          <p className="text-xs text-dim italic">
+            Not counted as a guild kill
+            {enc.classification_reason ? <> — <span className="text-text">{enc.classification_reason}</span></> : null}
+            {enc.classification_by ? <span className="opacity-70"> · marked by {shownActor(enc.classification_by)}</span> : null}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-dim">
+          {bossId && <Link href={`/boss/${bossId}`} className="text-blue hover:underline">{bossName} history</Link>}
+          {bossId && <a href={`https://www.pqdi.cc/npc/${bossId}`} target="_blank" rel="noreferrer" className="text-blue hover:underline">[PQDI]</a>}
+          {enc.discord_msg_link && (
+            <a href={enc.discord_msg_link.replace(/^https:\/\/(?:\w+\.)?discord\.com\//, 'discord://-/')} className="text-blue hover:underline">View in Discord →</a>
+          )}
+          {replayHref && (
+            <a href={replayHref} target="_blank" rel="noreferrer" className="text-blue hover:underline" title="Opens the Replay tool in your local Mimic dashboard, prefilled with this fight's window">⏪ Replay locally</a>
+          )}
+          <Link href={`/parses/${encodeURIComponent(id)}?v=old`} className="hover:text-text hover:underline">Old layout</Link>
+        </div>
+        {officerAdmin && <section className="rounded-lg border border-border bg-panel px-3 pb-3">{officerAdmin}</section>}
       </div>
     );
   }
@@ -767,60 +853,7 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
           </div>
         )}
 
-        {officer && (
-          <div className="mt-4 pt-3 border-t border-border flex flex-wrap items-center gap-2">
-            <span className="text-[10px] text-dim uppercase tracking-wide mr-1">officer admin</span>
-            {/* Wipe is a toggle that combines with the one-of marks after it (2026-10-23: "Wipe AND another thing"). */}
-            <form action={toggleWipe} className="contents">
-              <input type="hidden" name="id" value={enc.id} />
-              <button
-                type="submit"
-                aria-pressed={isWipe(enc)}
-                title={isWipe(enc)
-                  ? 'Wipe is on — click to turn it off'
-                  : 'Engaged but did not kill — excluded from kill counts + stats. Can be combined with Live / PvP / Test / Non-Guild'}
-                className={`px-2 py-1 rounded text-xs border border-orange/50 text-orange ${isWipe(enc) ? 'font-semibold bg-orange/20' : 'opacity-80 hover:opacity-100'}`}
-              >
-                {isWipe(enc) ? 'Wipe ✓' : 'Mark Wipe'}
-              </button>
-            </form>
-            {[
-              { val: 'live', label: 'Mark Live', cls: 'border-blue/50 text-blue',
-                desc: 'Live server, not guild instance — excluded from kill counts + stats' },
-              { val: 'pvp',  label: 'Mark PvP',  cls: 'border-red/50 text-red',
-                desc: 'PvP / Zek server — excluded from kill counts + stats' },
-              { val: 'test', label: 'Mark Test', cls: 'border-dim/60 text-dim',
-                desc: 'Practice / dummy pull — excluded from kill counts + stats' },
-              { val: 'foreign', label: 'Mark Non-Guild', cls: 'border-purple/50 text-purple',
-                desc: 'Primarily non-Wolf Pack raiders (a guildie pugging another guild) — excluded from kill counts + stats' },
-            ].map(b => (
-              <form key={b.val} action={classifyEncounter} className="contents">
-                <input type="hidden" name="id" value={enc.id} />
-                <input type="hidden" name="classification" value={b.val} />
-                <button
-                  type="submit"
-                  title={b.desc}
-                  disabled={enc.classification === b.val}
-                  className={`px-2 py-1 rounded text-xs border ${b.cls} ${enc.classification === b.val ? 'font-semibold' : 'opacity-80 hover:opacity-100'}`}
-                >
-                  {b.label}
-                </button>
-              </form>
-            ))}
-            {enc.classification && (
-              <form action={clearClassification} className="ml-auto">
-                <input type="hidden" name="id" value={enc.id} />
-                <button
-                  type="submit"
-                  title="Clear classification — back to default (guild kill)"
-                  className="px-2 py-1 rounded text-xs border border-border text-text hover:bg-bg"
-                >
-                  Clear classification
-                </button>
-              </form>
-            )}
-          </div>
-        )}
+        {officerAdmin}
       </section>
 
       {/* Damage by class */}

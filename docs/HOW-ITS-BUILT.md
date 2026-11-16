@@ -97,6 +97,9 @@ writes.
 
 ## Identity & auth
 
+- **Upload sign-ins at rest (bot 4.1.5, 2026-11-16, §573/§597).** `utils/mimicLink.js` `hashToken` / `_lookupSessionToken`:
+  a Mimic session token is looked up by `mimic_sessions.token_hash` (sha256), plaintext fallback while
+  `SESSION_PLAINTEXT_FALLBACK` is on; `isIdleExpired` refuses a member session unused for `SESSION_IDLE_DAYS` (90).
 - **Free flag syncing for players outside Wolf Pack (bot 4.0.50, 2026-11-02, §526/§527; slice 1).** `utils/mimicLink.js`:
   `FREE_ROUTES` / `PAID_HUB_ROUTES` (`hubFreeRouteAllowed`, `hubPlanPaid`: paid = `hub_guilds.plan = 'managed'`), 403
   `plan_required` before a body is read; a player link (`{player:true}`, hub `'~player'`, `_hubPlayerOf`) mints `scope:
@@ -159,6 +162,12 @@ writes.
   Set up, For guild leaders; the landing page's `Footer` with privacy, terms, refunds, contact) and `/setup` takes the bar
   (it has its own footer); on a Wolf Pack host the frame renders nothing. The bar is sticky and one line (web 2.1.98), and
   the landing page carries it under its stage on a raidmimic host. `test/raidmimic-frame.test.js`.
+  **Since web 2.2.4 the frame is Wolf Pack's layout** (DECISIONS §592, Desk rm-shell B): `HostFrame` renders
+  `RaidmimicShell.tsx` on every raidmimic page, the landing and `/setup` included: a full-width sticky header
+  (`RaidmimicHeader.tsx`: logo, Download / Beta / Linux chips from `web/lib/raidmimicShell.ts`, the `raidmimicNav.ts`
+  sections as dropdowns, sign-in), a side nav of the section's pages (`RaidmimicSideShell.tsx`, PopShell's pattern; pages in
+  no section get About: costs, privacy, security, terms, refunds) and `RaidmimicShellFooter.tsx`. `LegalShell` wraps itself
+  in it. `test/raidmimic-shell.test.js`.
   `/guilds` (`web/app/guilds/`): the Wolf Pack card for members, one card per `hub_*` membership, join by invite code
   (rate-limited; uses, expiry and suspension honoured; `JoinForm.tsx`, `actions.ts`), "Find my guilds" (a second consent,
   `identify guilds`: matches the Discord server list against `hub_guilds.discord_guild_id`, joins `open_join` guilds, lists closed
@@ -2925,6 +2934,11 @@ roster fallback; flags = `pop_flags` + site ticks + `/who` sightings through `st
 a map per zone. All content is data in `web/lib/raidPlan.ts` (dated for one night; edit it for the next).
 `web/app/pop/raid/ZoneSvg.tsx` draws walls + route + markers + patrol; `walls.ts` reads `zone_map_lines.segs`
 only (never Brewall). `test/pop-raid-plan.test.js`.
+**By tier since web 2.2.10 (2026-11-16):** `TierPage.tsx` folds one section per tier, highest first; `TierBlocks.tsx`
+draws a line per gated plane from `web/lib/popRaidTiers.ts` (`gateReport` per raider: in / missing piece / "not
+recorded" when there is no `loadFullReads` recital or #popflags read in 14 days) plus the 85% door line
+(`popRaidEntry.ts` `doorLine`) for Air, Water, Fire, Earth and Time. The plan sections are `PlanSectionView.tsx`,
+folded inside their tier. `test/pop-raid-tiers.test.js`, `test/pop-raid-entry.test.js`.
 
 ### Your flags for tonight (`/pop/raid/me`, [beta], web 2.1.44)
 A member's own link for the next raid night: the character their sign-up brings (BRINGING card, gold), every other

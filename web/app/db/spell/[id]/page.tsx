@@ -58,9 +58,9 @@ export default async function DbSpellPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="text-sm text-dim">
-        <Link href="/search" className="text-blue hover:underline">← search</Link>
+        <Link href="/db" className="text-blue hover:underline">← database</Link>
         <span className="mx-2">·</span>
-        <span className="text-dim/70">wpqdi · spell #{spellId}</span>
+        <span className="text-dim/70">spell #{spellId}</span>
       </div>
 
       <section className="bg-panel border border-border rounded-lg p-4">

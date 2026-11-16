@@ -19,7 +19,7 @@ export function FeatureBlocks() {
   return (
     <section id="features" aria-label={W.featuresTitle} className="scroll-mt-4 pt-12">
       <h2 className="text-2xl text-[#f2ede1]">{W.featuresTitle}</h2>
-      <ul className="m-0 mt-5 grid list-none gap-6 p-0 sm:grid-cols-2">
+      <ul className="m-0 mt-5 grid list-none gap-6 p-0 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f, i) => {
           // An odd last block spans both columns, picture beside its words, so no block sits alone in a row.
           const wide = FEATURES.length % 2 === 1 && i === FEATURES.length - 1;

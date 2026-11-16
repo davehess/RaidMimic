@@ -107,7 +107,7 @@ export const INTEREST_TEXT = 'raidmimic: register interest.\nGuild:\nGame:\nRoug
 export const CTA = {
   title: 'Register interest',
   body:
-    'There is no sales form and no account. Tell us your guild, your game and roughly how many raiders. ' +
+    'No account and nothing to buy. Tell us your guild, your game and roughly how many raiders. ' +
     'Leave a Discord name in the form if you want a reply.',
   button: 'Register interest',
   note: 'Opens a short form on eqmimic.quest.',
@@ -215,7 +215,7 @@ export const MORE_HEAD = {
 // web/public/raidmimic/clips and are made by scripts/raidmimic-shots/scenes.mjs. `w` and `h` are the file's pixel size
 // and only set the aspect ratio, so a corrected number just works. A NEW scene is one more row here: it gets its tab
 // when it has a row and files, and no empty tab exists before that (next to record: loot rolls and DKP bids, for
-// `leaders`).
+// `leaders`; the guild lead picked them 2026-11-16, card raidmimic-layout-clips, and they are NOT recorded yet).
 export type Audience = 'raiders' | 'leaders';
 export interface Clip {
   id: string;
@@ -248,8 +248,8 @@ export const CLIPS: Clip[] = [
 ];
 export const CLIPS_NOTE = 'Recordings of the real overlays, running today for one guild, on invented raiders.';
 export const CLIPS_HEAD = {
-  title: 'Watch a raid night',
-  lead: 'Raiders get the overlays; the people running the night get the coordination. Pick a side and watch it run.',
+  title: 'A raid night, in three beats',
+  lead: 'Raiders get the overlays; the people running the night get the coordination.',
   stageLabel: 'Overlay clips',
   audienceLabel: 'Who it is for',
   scenesLabel: 'Pick an overlay',
