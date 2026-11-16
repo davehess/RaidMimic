@@ -3440,6 +3440,14 @@ Personal data lives on each player's PC; the hub keeps the shared raid record. N
   recorder). Id = death time in ms, bumped a millisecond when two characters die in the same second. `/api/local/deaths` and
   `/api/local/deaths/<id>`; panel `web/local/app/replay/HowIDied.tsx` above My replay. Only your target's position is known; other
   attackers' are not (the panel says so). Nothing is uploaded. Test: `test/death-story.test.js`.
+- **PoP flags on this PC (agent 4.0.95, beta, 2026-11-16).** Page `web/local/app/flags/` (`LocalFlags.tsx`: the same
+  `hubCharactersView` / `GateTable` / `FlagsBody` as raidmimic.com/characters, step keys expanded with `STAGE_IMPLIES`, gate
+  picker in the URL hash). `GET /api/local/pop-flags` (`_localPopFlagsSnapshot` / `_handleLocalPopFlags`): newest Zeal
+  `<Name>-PoPFlags.txt` per character across `_localInventoryDirs()`, merged with local store kind `pop_flags` (400 days,
+  5 MB; earliest time per flag wins). `_localPopFlagsNote` fills the store from `uploadPopFlags` (live tail, `--since`, file
+  scan) and from `_rescanRun` in local mode; `_LOCAL_RECITAL_STAGES` is a copy of the bot's `RECITAL_STAGES` (held equal by
+  the test). Grants and checklist lines make no row (they need the bot's previous-line table). Tray "PoP flags (on this
+  PC)" + dashboard rail `wpLocalFlags`. Nothing uploads. Test: `test/local-pop-flags.test.js`.
 - **Rebuild from my logs (3.8.46).** `/api/local/backfill/start|stop|status` and `/api/local/raids`: walks old EverQuest logs
   from a start date and writes `fight`, `raid_session`, `death`, `loot` and `zone_visit` records to the local store (no
   `enqueueUpload`, no network; the opt-in upload backfill is a separate path). Reuses the live tail's privacy filters
