@@ -173,6 +173,9 @@ export default async function TellsPage() {
               </li>
             ))}
           </ul>
+          {conversations.length > 50 && (
+            <p className="mt-2 text-xs text-dim">Showing 50 of {conversations.length} conversations.</p>
+          )}
         </section>
       )}
 

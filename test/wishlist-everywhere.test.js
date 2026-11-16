@@ -232,7 +232,11 @@ describe('what the loader reads for a page', () => {
 });
 
 describe('one control, one write path', () => {
-  const src = (rel) => stripJs(read(rel));
+  // The raid plan's per-target section (loot lines included) lives in PlanSectionView.tsx since the tier split
+  // (2026-11-16), so "the raid plan" is the page plus that component.
+  const src = (rel) => rel === 'web/app/pop/raid/page.tsx'
+    ? stripJs(read(rel)) + stripJs(read('web/app/pop/raid/PlanSectionView.tsx'))
+    : stripJs(read(rel));
 
   it('the control calls the three server actions and nothing else: no fetch, no bot client, no key, no bid column', () => {
     const s = src('web/components/WishlistControls.tsx');

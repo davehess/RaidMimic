@@ -19,11 +19,9 @@
 import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { isEqmimicHost, eqmimicLandingTarget } from './lib/eqmimicHost';
-import { isRaidmimicAsset, isRaidmimicBetaHost, isRaidmimicHost, isRaidmimicOpenPath, raidmimicLandingTarget, RAIDMIMIC_LANDING_PATH } from './lib/raidmimicHost';
-import { isHomeVariant } from './lib/lab/fixtures/rm-home';
+import { isRaidmimicAsset, isRaidmimicHost, isRaidmimicOpenPath, raidmimicLandingTarget } from './lib/raidmimicHost';
 import { otherGuildHostSlug, otherGuildHostRedirect } from './lib/guildHost';
 import { isLockedOut } from './lib/lockout';
-import { RM_SHELL_COOKIE, RM_SHELL_MAX_AGE, rmShellAction, rmShellHonoured } from './lib/raidmimicShellVariant';
 import { ADMIN_SHELL_COOKIE, ADMIN_SHELL_MAX_AGE, adminShellChoice, isAdminPath } from './lib/adminShell';
 
 // Routes we never log: API/RSC payloads, auth callbacks, admin pages
@@ -89,26 +87,6 @@ async function lockedOutResponse(
 }
 
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
-  // The raidmimic.com shell previews (the guild lead, 2026-11-15; lib/raidmimicShellVariant.ts): on the beta mirror only,
-  // `?v=b|c` sets the rm_shell cookie and `?v=a` clears it, then the request is redirected to the same address without
-  // `?v=` so the page that follows reads the cookie. Not on the landing page, whose own `?v=` drafts are a different preview.
-  // Production hosts skip this block entirely.
-  {
-    const host = request.headers.get('host');
-    const action = request.method === 'GET' ? rmShellAction(request.nextUrl.searchParams.get('v')) : null;
-    const path = request.nextUrl.pathname;
-    if (action && isRaidmimicHost(host) && rmShellHonoured(host, process.env.NEXT_PUBLIC_IS_BETA === '1')
-        && (isRaidmimicOpenPath(path) || raidmimicLandingTarget(path).pathname !== RAIDMIMIC_LANDING_PATH)) {
-      const to = request.nextUrl.clone();
-      const v = to.searchParams.get('v')!;
-      to.searchParams.delete('v');
-      const res = NextResponse.redirect(to, 307);
-      if (action === 'set') res.cookies.set({ name: RM_SHELL_COOKIE, value: v, path: '/', maxAge: RM_SHELL_MAX_AGE, sameSite: 'lax' });
-      else res.cookies.set({ name: RM_SHELL_COOKIE, value: '', path: '/', maxAge: 0 });
-      return res;
-    }
-  }
-
   // eqmimic.quest (the guild lead, 2026-10-08) serves TWO pages and no Wolf Pack page at all: the
   // anonymous feedback form at /feedback (Mimic opens exactly that address) and the landing page for
   // everything else. Decided before anything else runs: no session refresh (neither page has a
@@ -156,9 +134,6 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     const to = raidmimicLandingTarget(request.nextUrl.pathname);
     url.pathname = to.pathname;
     url.search = to.search;
-    // b.raidmimic.com only: the landing's ?v=a|b|c design drafts (rm-home) need their query to survive the rewrite.
-    const draft = request.nextUrl.searchParams.get('v');
-    if (isRaidmimicBetaHost(request.headers.get('host')) && to.pathname === RAIDMIMIC_LANDING_PATH && isHomeVariant(draft)) url.search = `?v=${draft}`;
     return NextResponse.rewrite(url);
   }
 

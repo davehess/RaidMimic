@@ -201,9 +201,9 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
   return (
     <div className="space-y-4 max-w-3xl">
       <div className="text-sm text-dim">
-        <Link href="/search" className="text-blue hover:underline">← search</Link>
+        <Link href="/db" className="text-blue hover:underline">← database</Link>
         <span className="mx-2">·</span>
-        <span className="text-dim/70">wpqdi · item #{itemId}</span>
+        <span className="text-dim/70">item #{itemId}</span>
       </div>
 
       {/* Item window — laid out like the in-game card: a flags line, then one

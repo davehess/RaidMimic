@@ -3930,7 +3930,9 @@ async function checkQuakeAlert(readyClient) {
 // ── Nightly parse consolidation ────────────────────────────────────────────────
 async function consolidateNightlyParses(client) {
   const { loadParses, saveParses, logParseToDiscord } = require('./commands/parse');
-  const { groupKillsBySession, mergeKillGroup }        = require('./commands/parsestats');
+  // The two helpers live in commands/parse.js; commands/parsestats.js only imports them, and requiring them from there
+  // gave undefined, so the midnight consolidation threw every night ("groupKillsBySession is not a function").
+  const { groupKillsBySession, mergeKillGroup }        = require('./commands/parse');
 
   const allParses = loadParses();
   const now       = Date.now();
@@ -14156,7 +14158,7 @@ async function _preRaidHealthCheck() {
 
   // Postgres/PostgREST via the service-role client the bot actually uses.
   const dbStart = Date.now();
-  const dbRows = await supabase.select('eqemu_zone', 'select=id&limit=1').catch(() => null);
+  const dbRows = await supabase.select('eqemu_zone', 'select=short_name&limit=1').catch(() => null);   // the table has no id column
   const dbMs = Date.now() - dbStart;
   const dbOk = Array.isArray(dbRows);
   const dbLine = `${mark(dbOk, dbMs)} DB ${dbMs}ms`;
@@ -15548,8 +15550,7 @@ async function _handleAgentLiveDamage(req, res) {
   return { body, keep: true };
   // Bounded at 50 keys — boss names are unbounded over a long uptime.
   }, { shouldCache: (r) => r.keep, max: 50 });
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  return res.end(out.body);
+  return require('./utils/gzipReply').sendJson(req, res, 200, out.body);
 }
 
 // GET /api/agent/my-parses?w=<1d|7d|30d|90d|exp|life>&scope=<bosses|all>&char=<name>&zone=<id>&q=<mob text>
@@ -17285,8 +17286,7 @@ async function _handleAgentRaidBuffQueue(req, res) {
     }
     if (burstSpec) { out[burstSpec.key] = burstQueue; out.burst_label = burstSpec.label; }
     if (raidSplit.multi) out.raids = raidSplit.raids.map(r => _raidGroups.raidSummary(r, r === myRaid));
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(out));
+    return require('./utils/gzipReply').sendJson(req, res, 200, JSON.stringify(out));
   } catch (err) {
     console.warn('[raid-buff-queue] failed:', err && err.message);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -22316,8 +22316,7 @@ async function _handleAgentPoll(req, res) {
   out.agent_kill        = control.agent_kill;
   out.min_agent_ver_num = control.min_agent_ver_num;
 
-  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-  return res.end(JSON.stringify(out));
+  return require('./utils/gzipReply').sendJson(req, res, 200, JSON.stringify(out), { 'Cache-Control': 'no-store' });
 }
 
 // POST /api/agent/rescan-done — the agent closes a "Sync from my logs" request it was handed on the poll's `rescan`

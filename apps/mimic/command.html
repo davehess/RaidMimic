@@ -210,7 +210,8 @@
   .hail-clock{margin-left:auto;text-transform:none;letter-spacing:0;font-size:10px;font-weight:700;
     color:#d29922;font-variant-numeric:tabular-nums}
   .hail-clock.soon{color:#ffa657}
-  .hail-clock.crit{color:#f85149}
+  .hail-clock.crit,.hail-rule.fail,.hail-rule.fail b{color:#f85149}
+  .hail-rule.fail{font-weight:700}
   /* The NPC's flag cap (the guild lead, 2026-10-07): "Flags: 23 / 72 used", amber and bold when the flags left
      do not cover the raiders still to hail. Drawn only when the bot sends a cap. */
   .hail-cap{font-size:9px;margin:3px 0 2px;color:#c9d1d9}
@@ -221,7 +222,7 @@
   .hail-sub b{font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums}
   .hail-sub.todo{color:#e6edf3;font-weight:700}
   .hail-sub.done{color:#7ee787;font-weight:700}
-  .hail-sub.done b{color:#7ee787}
+  .hail-sub.done b,.hail-rule b{color:#7ee787}
   .hail-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:10px;line-height:1.5}
   .hail-chip{padding:0 5px;border-radius:3px;border:1px solid transparent;white-space:nowrap;color:#e6edf3;
     background:rgba(255,255,255,0.06)}
@@ -627,6 +628,15 @@
          + (tight ? '<div class="hail-cap warn">' + (left === 0 ? '⚠ No flags left, ' : '⚠ Only ' + left + ' flag' + (left === 1 ? '' : 's') + ' left, ')
          + stillCount + ' still to hail</div>' : '');
   }
+  // Flagged vs not flagged (the guild lead, 2026-11-16) for the elemental planes and Time: the server lets a
+  // raid in with unflagged members while flagged x 100 >= raid size x 85, counting the whole raid. The agent
+  // does the sums (planarFlagRule) and sends w.rule; nothing is drawn when it is absent.
+  function hailRuleHtml(r){
+    if (!r || !(r.size > 0)) return '';
+    return '<div class="hail-cap hail-rule" title="Who has the flag from this kill: hailed now or already flagged, out of the raid at the kill. A hail we did not see shows as not flagged.">'
+         + 'Flagged <b>' + r.flagged + ' / ' + r.size + ' (' + r.pct_flagged + '%)</b> &middot; Not flagged <b>' + r.not_flagged
+         + ' (' + r.pct_not + '%)</b></div>';
+  }
   function hailMoreHtml(key, total, cap, open){
     if (total <= cap) return '';
     return '<span class="hail-more" data-wp-interact data-hail-more="' + esc(key) + '" title="'
@@ -652,7 +662,7 @@
          +   '<span class="hail-clock" data-end="' + esc(end) + '"></span>'
          + '</div>';
       if (!col) {
-        h += hailCapHtml(w, still.length);
+        h += hailCapHtml(w, still.length) + hailRuleHtml(w.rule);
         if (still.length) {
           var stillOpen = _hailMore.has(wid + '|still');
           var sMax = stillOpen ? still.length : Math.min(still.length, HAIL_STILL_CAP);

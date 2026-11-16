@@ -119,3 +119,17 @@ export async function loadHeld(names: string[]): Promise<Map<string, Set<string>
 
   return new Map([...flags].map(([k, set]) => [k, stepsHeld(set)]));
 }
+
+// Who has had a FULL flag read lately (the Seer's recital or a #popflags read list every flag a character holds),
+// so for them an absent flag is a real "no" (the guild lead, 2026-11-16: the tiers page). Lowercased names.
+// popflags_paste is the same read pasted by hand, which the gate sidebar (app/pop/guide/gateData.ts) also counts.
+export const FULL_READ_DAYS = 14;
+export async function loadFullReads(names: string[]): Promise<Set<string>> {
+  const sb = supabaseAdmin();
+  const since = new Date(Date.now() - FULL_READ_DAYS * 86_400_000).toISOString();
+  const rows = await Promise.all(chunks(names).map(part => selectAll<{ character: string }>((from, to) =>
+    sb.from('pop_flags').select('character')
+      .eq('guild_id', GUILD).in('character', part).in('source', ['recital', 'popflags', 'popflags_paste']).gte('created_at', since)
+      .order('id', { ascending: true }).range(from, to))));
+  return new Set(rows.flat().map(r => r.character.toLowerCase()));
+}

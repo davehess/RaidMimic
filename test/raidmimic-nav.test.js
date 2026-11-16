@@ -1,5 +1,5 @@
-// test/raidmimic-nav.test.js — the raidmimic.com top bar (the guild lead, 2026-11-09, Decision Desk pick A, centred):
-// five top links, and a centred second row of the current section's pages. Runs the pure data in web/lib/raidmimicNav.ts.
+// test/raidmimic-nav.test.js — the raidmimic.com sections (the guild lead, 2026-11-09): five top links, and the pages of the
+// current section, which the header's menus and the side nav draw (test/raidmimic-shell.test.js). Runs the pure data in web/lib/raidmimicNav.ts.
 //
 // Run: npx vitest run test/raidmimic-nav.test.js
 
@@ -34,7 +34,6 @@ describe('the raidmimic.com nav data', () => {
   it('spells no Wolf Pack address', () => {
     for (const h of allHrefs) expect(h).not.toMatch(/wolfpack|quest|https?:/i);
     expect(code('web/lib/raidmimicNav.ts')).not.toMatch(/wolfpack/i);
-    expect(code('web/components/RaidmimicSubnav.tsx')).not.toMatch(/wolfpack/i);
   });
   it('gives a second row only to sections with 2+ pages (Flagging, Guild, Raids)', () => {
     expect(RAIDMIMIC_SECTIONS.filter(s => s.pages.length > 1).map(s => s.key)).toEqual(['flagging', 'guild', 'raids']);
@@ -76,25 +75,5 @@ describe('sectionOfPath', () => {
     expect(g.pages.filter(p => pageIsCurrent(g, p, '/guilds/abc')).map(p => p.label)).toEqual(['Your guilds']);
     const r = sectionOfPath('/demo/events/needs');
     expect(r.pages.filter(p => pageIsCurrent(r, p, '/demo/events/needs')).map(p => p.label)).toEqual(['Needs board']);
-  });
-});
-
-describe('the bar', () => {
-  const frame = code('web/components/RaidmimicFrame.tsx');
-  const sub = code('web/components/RaidmimicSubnav.tsx');
-  it('keeps HostBar a server component and only the second row a client one', () => {
-    expect(frame).not.toMatch(/['"]use client['"]/);
-    expect(sub).toMatch(/^'use client';/);
-    expect(sub).toMatch(/usePathname\(\)/);
-  });
-  it('centres the second row and marks the current page', () => {
-    expect(sub).toMatch(/justify-center/);
-    expect(sub).toMatch(/aria-current=\{on \? 'page' : undefined\}/);
-    expect(frame).toMatch(/<RaidmimicSubnav \/>/);
-  });
-  it('keeps the second row inside the sticky header', () => {
-    const header = frame.slice(frame.indexOf('<header'), frame.indexOf('</header>'));
-    expect(header).toMatch(/sticky top-0/);
-    expect(header).toMatch(/<RaidmimicSubnav \/>/);
   });
 });

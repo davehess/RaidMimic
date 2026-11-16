@@ -19,7 +19,9 @@ Decision Desk.
 | Code | `web/app/lab`, `web/components/lab`, `web/lib/lab` (registry, made-up people, fixtures) |
 | The rule that keeps the lab closed | `test/lab-drafts.test.js`: nothing under the lab reads the database, the session, the request or a secret |
 
-Nothing here is on `main`.
+Two picks are on `main` (web 2.2.6, 2026-11-16): the fifteen quick wins below (all built), and the parse page, where version B (tabs) is
+now the default at `https://wolfpack.quest/parses/<id>`. The old eight-panel layout stays at `?v=old` for a week, then it is deleted (the
+officer controls are shared by both layouts and must move into the new page before that). The other drafts are still beta-only.
 
 ## What the audit found (nine themes)
 
@@ -70,7 +72,7 @@ What each staged version does NOT have yet, so a pick knows its distance from do
   one-line fields per zone in the plan data.
 - **raidmimic.com** drops every query on its own host, so the first-screen drafts run on the beta host only.
 
-## Quick wins (small, no design choice; listed for one yes or no)
+## Quick wins (picked A, all fifteen, 2026-11-15; built in web 2.2.6)
 
 1. Raid HQ: remove the mockup subtitle and the "wiring next" box.
 2. Buffs: drop the "stage 1 mockup" card above the grid; keep a small "Grouped view" link.

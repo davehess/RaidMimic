@@ -25,8 +25,8 @@ const esc = sliceBlock(html, '  function esc(s){', '\n');
 const chipBits = sliceBlock(html, '  var WARN_SPECS = {', "esc(s ? s[0] : label)+'</span>';\n  }\n")
   .replace(/function isReverseSlow[\s\S]*?\n  }\n/, '');
 const range = sliceBlock(html, '  var AGGRO_DEFAULT = 70;', '  // ── end range block');
-const { rangeDist, mobRadii, aeRange, aeHot, aeChip, rangeRow } = evalBlock(
-  esc + chipBits + range, ['rangeDist', 'mobRadii', 'aeRange', 'aeHot', 'aeChip', 'rangeRow']);
+const { rangeDist, mobRadii, aeRange, aeHot, aeChip, rangeRow, rangeZone } = evalBlock(
+  esc + chipBits + range, ['rangeDist', 'mobRadii', 'aeRange', 'aeHot', 'aeChip', 'rangeRow', 'rangeZone']);
 
 const agent = fs.readFileSync(AGENT_INDEX, 'utf8');
 const mapXY = sliceBlock(agent, 'function _mapServerXY(loc) {', '\n}\n');
@@ -119,6 +119,58 @@ describe('rangeRow', () => {
     expect(h).not.toContain('Aggro');
     expect(h).not.toContain('Assist');
     expect(rangeRow(null)).toContain('wpDistWrap');
+  });
+});
+
+// The guild lead, 2026-11-16 (Decision Desk pick A, "Bigger, coloured line", follow-up "Yes"): the distance number is
+// green clear of the assist radius, orange inside it, red inside the aggro radius.
+describe('rangeZone (the distance colour)', () => {
+  it('outside both radii is clear (green)', () => {
+    expect(rangeZone(120, 60, 80)).toBe('clear');
+  });
+  it('inside the assist radius only is assist (orange)', () => {
+    expect(rangeZone(70, 60, 80)).toBe('assist');
+  });
+  it('inside the aggro radius is aggro (red), even when assist is wider', () => {
+    expect(rangeZone(40, 60, 80)).toBe('aggro');
+    expect(rangeZone(40, 60, 60)).toBe('aggro');
+  });
+  it('the edges are inclusive', () => {
+    expect(rangeZone(60, 60, 80)).toBe('aggro');
+    expect(rangeZone(80, 60, 80)).toBe('assist');
+    expect(rangeZone(80.1, 60, 80)).toBe('clear');
+  });
+  it('an unknown radius is not compared against', () => {
+    expect(rangeZone(70, 60, null)).toBe('clear');
+    expect(rangeZone(40, 60, null)).toBe('aggro');
+    expect(rangeZone(70, null, 80)).toBe('assist');
+    expect(rangeZone(90, null, 80)).toBe('clear');
+  });
+  it('no colour when neither radius is known, or the distance is', () => {
+    expect(rangeZone(10, null, null)).toBe('');
+    expect(rangeZone(10, undefined, undefined)).toBe('');
+    expect(rangeZone(10, NaN, 0)).toBe('');
+    expect(rangeZone(null, 60, 80)).toBe('');
+    expect(rangeZone(NaN, 60, 80)).toBe('');
+  });
+});
+
+describe('range row colour wiring', () => {
+  it('the radii ride on the distance number as data-*, fixed per target (byte-stable)', () => {
+    const h = rangeRow({ aggroradius: 60, assistradius: 45 });
+    expect(h).toContain('id="wpDist" data-wp-aggro="60" data-wp-assist="45"');
+    expect(rangeRow({ aggroradius: 60 })).not.toContain('data-wp-assist');
+    expect(rangeRow({})).not.toContain('data-wp-aggro');
+  });
+  it('is no longer the small grey .sub line, and each band has a colour from the theme tokens', () => {
+    expect(rangeRow({ aggroradius: 60 })).not.toMatch(/class="sub/);
+    expect(code).toMatch(/\.rng b\.rd-clear\{color:var\(--wp-green\)\}/);
+    expect(code).toMatch(/\.rng b\.rd-assist\{color:var\(--wp-orange\)\}/);
+    expect(code).toMatch(/\.rng b\.rd-aggro\{color:var\(--wp-red\)\}/);
+  });
+  it('paintRange sets the class from rangeZone', () => {
+    expect(code).toMatch(/rangeZone\(d, ag == null \? null : Number\(ag\), as == null \? null : Number\(as\)\)/);
+    expect(code).toMatch(/num\.className = cls;/);
   });
 });
 

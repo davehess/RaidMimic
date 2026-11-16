@@ -1,6 +1,6 @@
 // Pure mapping from what /parses/[id] already loads to the props of the "result first" parse layout
-// (components/lab/parse-result-first). No database, no request: the page hands its own data in.
-// The design-lab draft (/lab/parse-result-first) uses the same view type with made-up data.
+// (components/parse-result). No database, no request: the page hands its own data in.
+// (The beta-only design-lab draft uses the same view type with made-up data.)
 
 export type ResultState = 'killed' | 'wipe' | 'unknown' | 'open';
 export type ViewRole = 'tank' | 'heal' | 'damage';

@@ -149,7 +149,7 @@ describe('markers are lettered, not named, on the map', () => {
     expect(svg).not.toMatch(/>\s*\{m\.label\}/);
   });
   it('lists the letters and names under the map', () => {
-    const page = read('web/app/pop/raid/page.tsx');
+    const page = read('web/app/pop/raid/PlanSectionView.tsx');
     expect(page).toMatch(/markerLetter\(j\)\}<\/span> \{m\.label\}/);
   });
 });

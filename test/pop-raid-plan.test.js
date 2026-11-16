@@ -84,7 +84,8 @@ describe('who is on the night', () => {
 });
 
 describe('the page', () => {
-  const page = read('web/app/pop/raid/page.tsx');
+  // The tier split (2026-11-16) moved the per-target section to PlanSectionView.tsx and the layout to TierPage.tsx.
+  const page = read('web/app/pop/raid/page.tsx') + read('web/app/pop/raid/PlanSectionView.tsx') + read('web/app/pop/raid/TierPage.tsx');
   // Who is going and who holds each flag moved to lib/raidPreflags.ts (shared with the /screen Overview).
   const preflags = read('web/lib/raidPreflags.ts');
   it('reads the sign-ups and expands flags with stepsHeld', () => {
@@ -98,7 +99,7 @@ describe('the page', () => {
     expect(preflags).toMatch(/!NOT_GOING\.test\(String\(s\.status \|\| ''\)\) && !NOT_GOING\.test\(String\(s\.class_name \|\| ''\)\)/);
   });
   it('is members only and carries the beta tag', () => {
-    expect(page).toMatch(/redirect\('\/auth\/signin\?next=' \+ encodeURIComponent\(alt === 'a' \? '\/pop\/raid\?v=a' : '\/pop\/raid'\)\)/);
+    expect(page).toMatch(/if \(!user\) redirect\('\/auth\/signin\?next=' \+ encodeURIComponent\('\/pop\/raid'\)\)/);
     expect(page).toMatch(/<NewPageTag/);
     expect(page).toMatch(/dynamic = 'force-dynamic'/);
   });
@@ -114,8 +115,8 @@ describe('the page', () => {
     const alt = { name: 'Nyssara', class: 'Wizard', main_name: 'Zarrin', active: true, rank: 'Raid Pack' };
     expect(pickSignupCharacter([alt, own], 'Bard', ['Raid Pack']).name).toBe('Zarrin');
   });
-  it('links the overview to each target and boss, the bosses to PQDI, and the loot to item cards', () => {
-    expect(page).toMatch(/href=\{`#\$\{bossAnchor\(s\.id, b\.npc\)\}`\}/);
+  it('anchors each boss, links the bosses to PQDI, and the loot to item cards', () => {
+    // The overview list of targets went with the tier split (2026-11-16): the plan sections fold inside their tier.
     expect(page).toMatch(/id=\{bossAnchor\(s\.id, b\.npc\)\}/);
     expect(page).toContain('https://www.pqdi.cc/npc/${b.npc}');
     expect(page).toContain('https://www.pqdi.cc/item/${d.item_id}');
@@ -123,8 +124,8 @@ describe('the page', () => {
     expect(page).toMatch(/<ItemHover card=\{loot\.cards\[d\.item_id\]\}/);
     expect(bossAnchor('innovation', 206053)).toBe('innovation-206053');
   });
-  it('folds the travel notes behind "Click here for more info"', () => {
-    expect(page).toMatch(/<details[^>]*>\s*<summary[^>]*>Click here for more info<\/summary>\s*<List items=\{TRAVEL_BASICS\.points\}/);
+  it('folds the travel notes behind "Travel basics"', () => {
+    expect(page).toMatch(/<summary[^>]*>Travel basics<\/summary>\s*<ul[^>]*>\{TRAVEL_BASICS\.points\.map/);
   });
   // (It used to assert the Brewall layer was never touched; the maps now draw it. The new guarantees, no partial
   // zone_map_lines row and a server-only read, are in test/pop-raid-map.test.js.)

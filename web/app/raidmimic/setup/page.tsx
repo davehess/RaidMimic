@@ -10,6 +10,7 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import NewPageTag from '@/components/NewPageTag';
+import CopyChip from '@/components/CopyChip';
 import { isRaidmimicHost, raidmimicSeo } from '@/lib/raidmimicHost';
 import { EQMIMIC_FEEDBACK_PATH, EQMIMIC_ORIGIN, interestUrl, RIGHTS_NOTICE } from '@/lib/raidmimicLanding';
 import {
@@ -20,7 +21,7 @@ import { REPO_URL } from '@/lib/eqmimicLanding';
 import { legalPaths } from '@/lib/legal';
 import { PRIMARY_BTN } from '../_landing/Parts';
 import SetupSteps from './SetupSteps';
-import { HostBar } from '@/components/RaidmimicFrame';
+import HostFrame from '@/components/RaidmimicFrame';
 import StartFree from '@/components/StartFree';
 import { startFreeVariant } from '@/lib/raidmimicStartFree';
 
@@ -80,9 +81,8 @@ export default function RaidmimicSetupPage({ searchParams }: { searchParams?: { 
   const interest = onHost ? interestUrl(`${EQMIMIC_ORIGIN}/feedback`) : interestUrl(EQMIMIC_FEEDBACK_PATH);
 
   return (
+    <HostFrame onHost={onHost}>
     <div className="mx-auto max-w-3xl pb-12">
-      {/* The Raid Mimic bar only: this page already ends in its own footer (HostFrame.tsx). */}
-      {onHost && <HostBar />}
       <NewPageTag note={BETA_NOTE} href={onHost ? interest : '/feedback'} />
 
       <header className="mb-6">
@@ -122,7 +122,7 @@ export default function RaidmimicSetupPage({ searchParams }: { searchParams?: { 
               <p className="mt-2 max-w-[66ch] text-sm leading-6 text-text">{f.fix}</p>
               {f.code && (
                 <>
-                  <p className="mt-3 text-xs text-dim">{f.code.label}</p>
+                  <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-dim">{f.code.label} <CopyChip text={f.code.text} label="Copy script" /></p>
                   <pre className="mt-1 max-w-full overflow-x-auto rounded border border-border bg-black/30 p-3 text-xs leading-5 text-text">{f.code.text}</pre>
                 </>
               )}
@@ -141,7 +141,9 @@ export default function RaidmimicSetupPage({ searchParams }: { searchParams?: { 
         </p>
       </section>
 
-      <footer className="mt-12 border-t border-border pt-4">
+      {/* On a raidmimic host the shell's footer closes the page (the guild lead, 2026-11-15); the credit stays. */}
+      {onHost && <p className="mt-10 text-xs leading-6 text-dim">{CREDIT}</p>}
+      {!onHost && <footer className="mt-12 border-t border-border pt-4">
         <aside role="note" aria-label="Rights notice" className="mb-4 rounded-md border border-gold/70 bg-panel p-4">
           <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-gold">
             <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-gold" />
@@ -156,7 +158,8 @@ export default function RaidmimicSetupPage({ searchParams }: { searchParams?: { 
           <a href={landing}>Raid Mimic</a> <span aria-hidden>&middot;</span>{' '}
           Licensed AGPL-3.0-or-later.
         </p>
-      </footer>
+      </footer>}
     </div>
+    </HostFrame>
   );
 }

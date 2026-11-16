@@ -5,7 +5,7 @@
 import type { ReactNode } from 'react';
 import NewPageTag from '@/components/NewPageTag';
 import LegalLinks from '@/components/LegalLinks';
-import ShellFrame, { currentShell } from '@/components/RaidmimicShell';
+import ShellFrame from '@/components/RaidmimicShell';
 import { CONTACT_HREF, LEGAL_UPDATED, TERMS_VERSION, legalPaths } from '@/lib/legal';
 import { RIGHTS_NOTICE } from '@/lib/raidmimicLanding';
 
@@ -44,8 +44,7 @@ export function LegalShell({ onHost, title, lead, showVersion = false, updated =
   onHost: boolean; title: string; lead: string; showVersion?: boolean; updated?: string; children: ReactNode;
 }) {
   const p = legalPaths(onHost);
-  // The ?v=b|c shells (beta only) bring their own header and footer; `a` is the page as production has it.
-  const shell = onHost ? currentShell() : 'a';
+  // On a raidmimic host the shell (header, side nav, footer) wraps the page; the Wolf Pack hosts keep this page's own footer.
   const page = (
     <div className="mx-auto max-w-3xl pb-12">
       <NewPageTag note="New page, still being shaped." href={onHost ? CONTACT_HREF : '/feedback'} />
@@ -58,7 +57,7 @@ export function LegalShell({ onHost, title, lead, showVersion = false, updated =
         </p>
       </header>
       {children}
-      {shell === 'a' && <footer className="mt-12 border-t border-border pt-4">
+      {!onHost && <footer className="mt-12 border-t border-border pt-4">
         <aside role="note" aria-label="Rights notice" className="mb-4 rounded-md border border-gold/70 bg-panel p-4">
           <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-gold">
             <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-gold" />
@@ -73,5 +72,5 @@ export function LegalShell({ onHost, title, lead, showVersion = false, updated =
       </footer>}
     </div>
   );
-  return shell === 'a' ? page : <ShellFrame variant={shell}>{page}</ShellFrame>;
+  return onHost ? <ShellFrame>{page}</ShellFrame> : page;
 }

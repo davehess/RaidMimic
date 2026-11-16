@@ -451,7 +451,9 @@ describe('the landing page additions', () => {
     expect(f).toMatch(/<LegalLinks onHost=\{onHost\} \/>/);
     expect(f).toMatch(/export function Footer\(\{ onHost = false \}/);
     const page = code('web/app/raidmimic/page.tsx');
-    expect(page).toMatch(/<Footer onHost=\{onHost\} \/>/);
+    // a Wolf Pack host keeps the page's own footer; a raidmimic host gets the shell's, which carries the same shared links
+    expect(page).toMatch(/\{!onHost && <Footer onHost=\{false\} \/>\}/);
+    expect(code('web/components/RaidmimicShellFooter.tsx')).toMatch(/<LegalLinks onHost \/>/);
     expect(page).toMatch(/<Pricing setup=\{ctx\.setup\} onHost=\{onHost\} \/>/);
     const links = code('web/components/LegalLinks.tsx');
     expect(links).toMatch(/\['Privacy', p\.privacy\], \['Security', p\.security\], \['Terms', p\.terms\], \['Refunds', p\.refunds\], \['Contact', CONTACT_HREF\]/);

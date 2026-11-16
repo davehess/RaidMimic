@@ -188,12 +188,12 @@ describe('the wiring', () => {
 
   it('main.js: the source is saved by its own IPC and used by check, install and the background check', () => {
     const setSrc = sliceBlock(main, "ipcMain.handle('zeal-set-source'", '\n});');
-    expect(setSrc).toMatch(/cfg\.zealSource = zealUpdater\._zealSource\(source\)/);
+    expect(setSrc).toMatch(/cfg\.zealSource = zealUpdater\._zealSource\(source, cfg\.zealWatch\)/);
     expect(setSrc).toMatch(/saveConfig\(cfg\)/);
-    expect(sliceBlock(main, "ipcMain.handle('zeal-check-update'", '\n});')).toMatch(/checkLatest\(cfg\.zealSource\)/);
-    expect(sliceBlock(main, "ipcMain.handle('zeal-install-update'", '\n});')).toMatch(/install\(eqDir, \{ source: cfg\.zealSource \}\)/);
-    expect(sliceBlock(main, 'async function checkZealUpdate(', '\n}')).toMatch(/checkLatest\(cfg\.zealSource\)/);
-    expect(sliceBlock(main, "ipcMain.handle('zeal-status'", '\n});')).toMatch(/source: zealUpdater\._zealSource\(cfg\.zealSource\)/);
+    expect(sliceBlock(main, "ipcMain.handle('zeal-check-update'", '\n});')).toMatch(/checkLatest\(cfg\.zealSource, cfg\.zealWatch\)/);
+    expect(sliceBlock(main, "ipcMain.handle('zeal-install-update'", '\n});')).toMatch(/install\(eqDir, \{ source: cfg\.zealSource, watch: cfg\.zealWatch \}\)/);
+    expect(sliceBlock(main, 'async function checkZealUpdate(', '\n}')).toMatch(/checkLatest\(cfg\.zealSource, cfg\.zealWatch\)/);
+    expect(sliceBlock(main, "ipcMain.handle('zeal-status'", '\n});')).toMatch(/source: zealUpdater\._zealSource\(cfg\.zealSource, cfg\.zealWatch\)/);
   });
 
   it('preload exposes the switch', () => {
@@ -213,7 +213,7 @@ describe('the wiring', () => {
     const render = stripJs(sliceBlock(settings, 'async function _renderZealStatus(){', '\n  }\n'));
     expect(render).toMatch(/zeal15: 'zealSrcZeal15'/);
     expect(render).toMatch(/s\.source === 'wolfpack' \? '' : 'none'/);
-    const js = stripJs(sliceBlock(settings, "document.querySelectorAll('input[name=zealSource]')", 'checkBtn.addEventListener('));
+    const js = stripJs(sliceBlock(settings, "// Delegated, so the watch-list radios", 'checkBtn.addEventListener('));
     expect(js).toMatch(/window\.mimic\.zealSetSource\(r\.value\)/);
     expect(js).toMatch(/checkBtn\.click\(\)/);
   });

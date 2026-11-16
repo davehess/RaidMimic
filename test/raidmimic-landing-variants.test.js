@@ -160,7 +160,7 @@ describe('raid management (the guild side)', () => {
 
 describe('the words stay short', () => {
   it('each feature is one picture and one sentence, with a picture path in the shared folder', () => {
-    expect(S.FEATURES.map(f => f.id)).toEqual(['canvas', 'studio', 'sync', 'replay', 'zeal']);
+    expect(S.FEATURES.map(f => f.id)).toEqual(['canvas', 'chchain', 'studio', 'sync', 'replay', 'zeal']);   // chchain: the player side (2026-11-16)
     for (const f of S.FEATURES) {
       expect(f.line.split(/[.!?]\s/).length).toBe(1);
       expect(f.line.length).toBeLessThan(70);
@@ -177,16 +177,18 @@ describe('the words stay short', () => {
   });
 });
 
-describe('the wiring: the default page IS the story stage', () => {
+describe('the wiring: the story stage plays on the For guild leaders page only (2026-11-16, card rm-home)', () => {
   const page = code('web/app/raidmimic/page.tsx');
   const stage = code(L + 'StoryStage.tsx');
   const video = code(L + 'StoryVideo.tsx');
   const css = stripCss(read('web/app/globals.css'));
 
-  it('page.tsx renders the stage with no query: no variants, no beta tag, no other layout', () => {
-    expect(page).toMatch(/<StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>/);
+  it('page.tsx draws no stage and no query: the landing is the first screen, the doors and the sections; the video is behind a button on /register', () => {
+    expect(page).not.toMatch(/StoryStage|HomePanelGate/);
     expect(page).not.toMatch(/searchParams|\?v=|pick ===|PathsLayout|ChaptersStage|BetaTag/);
-    expect(page.match(/<StoryStage\b/g)).toHaveLength(1);
+    const reg = code('web/app/raidmimic/register/page.tsx');
+    expect(reg.match(/<HomePanelGate\b/g)).toHaveLength(1);
+    expect(code(L + 'HomePanelGate.tsx')).toMatch(/<StoryStage downloadUrl=\{downloadUrl\} onHost=\{onHost\} \/>/);
   });
   it('the metadata is the page’s own and unchanged', () => {
     expect(page).toMatch(/const TITLE = 'Raid Mimic · free EverQuest raid overlays';/);
@@ -205,7 +207,7 @@ describe('the wiring: the default page IS the story stage', () => {
     expect(S.revealAt(0)).toEqual(NONE);
   });
   it('on a raidmimic host the stage reaches the viewport’s edges through the layout’s padding; on the Wolf Pack hosts it sits under the site header', () => {
-    expect(stage).toMatch(/onHost \? '-mx-3 -mt-3 sm:-mx-4 sm:-mt-4' : 'rm-stage-in-site'/);
+    expect(stage).toMatch(/onHost \? '-mx-3 sm:-mx-4' : 'rm-stage-in-site'/);   // no top bleed: the shell's header sits above it (2026-11-15)
     expect(css).toMatch(/\.rm-stage-in-site \{ --sh: max\(calc\(100svh - 1\.5rem\), 26rem\); \}/);
     // …and that padding is what the bare layout gives (p-3 sm:p-4), so the two numbers cannot drift unseen
     expect(code('web/app/layout.tsx')).toMatch(/mx-auto p-3 sm:p-4/);

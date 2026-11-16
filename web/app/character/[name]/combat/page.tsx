@@ -1,9 +1,9 @@
 // /character/[name]/combat — a character's combat in detail: swings avoided, damage trends, per-ability hit
 // sizes, Harm Touch and the monk weave.
 //
-// New page, so it goes live with the [beta] tag (DECISIONS §135). Visibility is OWNER-ONLY for now (stat scope
-// PRIVATE: a member's own avoidance and hit sizes) — COMBAT_VISIBILITY in lib/characterCombat.ts flips it to
-// GUILD once the guild lead picks. The data is the `character_combat_trends` RPC, which filters by
+// Visibility: every signed-in guild member sees any character's page (the guild lead, 2026-11-15, "every member"), like the
+// parses. A character with exclude_from_stats is hidden from other members; its owner and officers still see it
+// (combatAccess in lib/characterCombat.ts). The data is the `character_combat_trends` RPC, which filters by
 // my_guild_ids() (auth.uid), so it is called with the signed-in member's own cookie client, never the admin one.
 
 import Link from 'next/link';
@@ -12,12 +12,13 @@ import { redirect, notFound } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase';
 import { supabaseServer } from '@/lib/supabase-server';
 import { requireMember } from '@/lib/member';
+import { isOfficer } from '@/lib/officer';
 import { ownerOfCharacter } from '@/lib/namePronunciation';
 import { characterMeta } from '@/lib/pageMeta';
 import { GUILD_TAG } from '@/lib/guild';
 import { fmtDmg, fmtDuration, cleanBossName } from '@/lib/format';
 import {
-  COMBAT_VISIBILITY, cleanFights, parseDays, aggregateNights, summarizeTaken, dpsSpread, abilityTable,
+  combatAccess, cleanFights, parseDays, aggregateNights, summarizeTaken, dpsSpread, abilityTable,
   abilityShareByNight, harmTouch, summarizeWeave, weaveByNight, type CombatFight,
 } from '@/lib/characterCombat';
 
@@ -148,21 +149,22 @@ export default async function CharacterCombatPage({
   await requireMember(user.id);
 
   const owner = await ownerOfCharacter(user.id, decoded).catch(() => ({ ok: false as const, error: 'lookup failed' }));
-  if (COMBAT_VISIBILITY === 'OWNER' && !owner.ok) {
+  const display = owner.ok ? owner.displayName : decoded;
+  const days = parseDays(sp.days);
+
+  const { data: charRow } = await supabaseAdmin().from('characters').select('class, exclude_from_stats').eq('guild_id', GUILD_TAG).ilike('name', display).maybeSingle();
+  const access = combatAccess({ isOwner: owner.ok, isOfficer: await isOfficer(user.id), excluded: !!charRow?.exclude_from_stats });
+  if (access !== 'show') {
     return (
       <Shell name={decoded}>
         <section className="bg-panel border border-border rounded-lg p-6">
           <h2 className="text-xl text-gold">🔒 Private<Beta /></h2>
-          <p className="text-sm text-dim mt-2">Only {decoded}&apos;s player can see this page for now.</p>
+          <p className="text-sm text-dim mt-2">{access === 'hidden' ? `${decoded}'s player keeps this page to themselves.` : `Only ${decoded}'s player can see this page for now.`}</p>
         </section>
       </Shell>
     );
   }
 
-  const display = owner.ok ? owner.displayName : decoded;
-  const days = parseDays(sp.days);
-
-  const { data: charRow } = await supabaseAdmin().from('characters').select('class').eq('guild_id', GUILD_TAG).ilike('name', display).maybeSingle();
   const isMonk = /monk/i.test(String(charRow?.class ?? ''));
 
   // The member's own client: the RPC reads auth.uid() through my_guild_ids().

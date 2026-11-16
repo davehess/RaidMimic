@@ -38,7 +38,49 @@ const ZEAL_SOURCES = {
   test:     { api: 'https://api.github.com/repos/davehess/Zeal/releases/tags/test-all-build' },
   wolfpack: { api: 'https://api.github.com/repos/davehess/Zeal/releases/tags/wolfpack-beta' },
 };
-function _zealSource(name) { return Object.prototype.hasOwnProperty.call(ZEAL_SOURCES, name) ? name : 'official'; }
+// The watch list (the guild lead, 2026-11-15, "Watch list" pick): saved sources beyond the built-in ones. Each is
+// { id, label, repo: 'owner/name', mode: 'newest' | 'pinned' | 'pre', pin }. A source named 'w:<id>' picks from
+// the saved list; an unknown id (a removed entry) reads as 'official', same as any unknown name.
+const WATCH_MODES = ['newest', 'pinned', 'pre'];
+const _REPO_RE = /^[A-Za-z0-9_.-]{1,64}\/[A-Za-z0-9_.-]{1,100}$/;
+function cleanWatch(list) {
+  const seen = new Set(), out = [];
+  for (const w of Array.isArray(list) ? list : []) {
+    if (!w || typeof w !== 'object') continue;
+    const id = String(w.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+    const repo = String(w.repo || '').trim();
+    if (!id || seen.has(id) || !_REPO_RE.test(repo)) continue;
+    const mode = WATCH_MODES.includes(w.mode) ? w.mode : 'newest';
+    const pin = String(w.pin || '').trim().slice(0, 80);
+    if (mode === 'pinned' && !pin) continue;               // a pin with no tag names nothing
+    seen.add(id);
+    out.push({ id, label: String(w.label || repo).trim().slice(0, 60) || repo, repo, mode, pin });
+  }
+  return out.slice(0, 12);
+}
+function _zealSource(name, watch) {
+  if (Object.prototype.hasOwnProperty.call(ZEAL_SOURCES, name)) return name;
+  const m = /^w:(.+)$/.exec(String(name || ''));
+  if (m && cleanWatch(watch).some(w => w.id === m[1])) return name;
+  return 'official';
+}
+
+// Which release a watch-list entry takes, from a GitHub releases list. Pure (no network):
+//   newest — the newest FINAL release (what /releases/latest returns)
+//   pre    — the newest release of any kind, pre-releases included
+//   pinned — exactly this tag ("v1.5.0" and "1.5.0" are the same pin); null when it is not there
+// Drafts never count. "Newest" is by publish time, so a list that arrives in any order picks the same release.
+function pickRelease(releases, { mode, pin } = {}) {
+  const live = (Array.isArray(releases) ? releases : []).filter(r => r && !r.draft);
+  const t = r => Date.parse(r.published_at || r.created_at || '') || 0;
+  const byNew = live.map((r, i) => ({ r, i })).sort((a, b) => (t(b.r) - t(a.r)) || (a.i - b.i)).map(x => x.r);
+  if (mode === 'pre') return byNew[0] || null;
+  if (mode === 'pinned') {
+    const want = String(pin || '').trim().replace(/^v/i, '').toLowerCase();
+    return want ? (live.find(r => String(r.tag_name || '').replace(/^v/i, '').toLowerCase() === want) || null) : null;
+  }
+  return byNew.find(r => !r.prerelease) || null;
+}
 
 // The test release keeps one tag, so a build is named by its commit instead:
 // "testall-<7 hex>", the label Zeal's own options window shows for it. The
@@ -72,6 +114,9 @@ function _destFor(eqDir, entryName) {
   const base = parts[parts.length - 1];
   const uiIdx = parts.findIndex(p => p.toLowerCase() === 'uifiles');
   if (uiIdx >= 0 && uiIdx < parts.length - 1) {
+    // uifiles/default is the stock UI EverQuest itself ships. A Zeal zip must never overwrite it (the guild
+    // lead, 2026-11-15, "defaultfix: Yes"): a changed stock skin is what a member's game falls back to.
+    if (parts[uiIdx + 1].toLowerCase() === 'default' && uiIdx + 1 < parts.length - 1) return null;
     return path.join(eqDir, 'uifiles', ...parts.slice(uiIdx + 1));
   }
   if (base.toLowerCase() === 'zeal.asi' && uiIdx < 0) {
@@ -84,11 +129,16 @@ function _destFor(eqDir, entryName) {
 
 // Fetch the latest release metadata from `source` ('official' | 'zeal15' | 'test' | 'wolfpack'). Picks the
 // zeal_v*.zip asset (falls back to any .zip). Network-only, no disk writes.
-async function checkLatest(source) {
-  const src = _zealSource(source);
-  const def = ZEAL_SOURCES[src];
+async function checkLatest(source, watch) {
+  const src = _zealSource(source, watch);
+  const w = src.startsWith('w:') ? cleanWatch(watch).find(x => 'w:' + x.id === src) : null;
+  const def = w ? null : ZEAL_SOURCES[src];
   let rel;
-  if (def.list) {
+  if (w) {
+    const list = await httpsGet('https://api.github.com/repos/' + w.repo + '/releases?per_page=30', { json: true });
+    rel = pickRelease(list, w);
+    if (!rel) throw new Error(w.mode === 'pinned' ? 'no release tagged ' + w.pin + ' in ' + w.repo : 'no matching release in ' + w.repo);
+  } else if (def.list) {
     const list = await httpsGet(def.list, { json: true });
     rel = (Array.isArray(list) ? list : []).find(r => r && !r.draft && def.tag.test(String(r.tag_name || '')));
     if (!rel) throw new Error('there is no Zeal 1.5 release yet');
@@ -99,7 +149,7 @@ async function checkLatest(source) {
   const zip = assets.find(a => /^zeal_v.*\.zip$/i.test(a.name))
            || assets.find(a => /\.zip$/i.test(a.name));
   if (!zip || !zip.browser_download_url) {
-    throw new Error(src === 'test' ? 'the Zeal test build has no .zip yet'
+    throw new Error(w ? w.repo + ' has no .zip on that release' : src === 'test' ? 'the Zeal test build has no .zip yet'
       : src === 'wolfpack' ? 'the Wolf Pack Zeal build has no .zip yet'
       : src === 'zeal15' ? 'the Zeal 1.5 release has no .zip yet'
       : 'latest Zeal release has no .zip asset');
@@ -131,13 +181,13 @@ function localStatus(eqDir, installedTag) {
 // up every replaced file. Returns { ok, tag, written:[], backedUp:[] }.
 // `release` may be passed in (from a prior checkLatest) to avoid a second fetch;
 // otherwise `source` picks where to fetch from.
-async function install(eqDir, { release, source } = {}) {
+async function install(eqDir, { release, source, watch } = {}) {
   const dir = String(eqDir || '').trim();
   if (!dir) throw new Error('no EverQuest folder set');
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
     throw new Error('EverQuest folder not found: ' + dir);
   }
-  const rel = release || await checkLatest(source);
+  const rel = release || await checkLatest(source, watch);
   const buf = await httpsGet(rel.assetUrl, { json: false });
   const entries = unzip(buf);
   const written = [], backedUp = [];
@@ -156,4 +206,4 @@ async function install(eqDir, { release, source } = {}) {
   return { ok: true, tag: rel.tag, name: rel.name, written, backedUp };
 }
 
-module.exports = { checkLatest, localStatus, install, _destFor, ZEAL_SOURCES, _zealSource, _testBuildTag, _wolfpackBuildTag };
+module.exports = { pickRelease, cleanWatch, WATCH_MODES, checkLatest, localStatus, install, _destFor, ZEAL_SOURCES, _zealSource, _testBuildTag, _wolfpackBuildTag };
