@@ -89,7 +89,9 @@ counts, so floors):
 
 **The standard** (the same in every direction offered): type scale 11 / 13 / 15 / 20 (phone) – 24 (desktop); spacing
 4/8/12/16/24/32; radius 4 (controls), 8 (panels), 999 (pills); two new tokens `--wp-raised #21262d` and `--wp-bone #f2ede1`;
-one page header (eyebrow, title, one line, actions); one card, one table (11px uppercase headers, 13px cells, tabular
+one page header (eyebrow, title, one line, actions) under a site header that carries the **Mimic logo**
+(`web/public/mimic-logo.png`, the raidmimic.com header's; the guild lead, 2026-11-16: "Should be using the mimic logo
+though"); one card, one table (11px uppercase headers, 13px cells, tabular
 numbers right-aligned), three buttons (primary, default, ghost; 44px tap height on a phone). Layout differs by device: a side
 rail and real tables on desktop; a pill row, tables as stacked cards and full-width primary buttons on a phone. Overlays keep
 their mid-raid density but take the same font and tokens. **Open: the font voice** (Decision Desk card `ui-standard`: A
