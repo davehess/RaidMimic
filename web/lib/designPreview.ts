@@ -14,19 +14,26 @@ export type DsValue = (typeof DS_VALUES)[number];
 /** A month, like the admin sidebar preview: long enough to survive a week away, short enough not to outlive the pick. */
 export const DS_MAX_AGE = 60 * 60 * 24 * 30;
 
+/** The picked voice (the guild lead, Desk card ui-standard, 2026-11-16: B). It is beta's DEFAULT: a page with no cookie
+ *  shows it, so no page can sit in the old look because a cookie was missing ("the design jumps from page to page").
+ *  `?ds=off` stores "off" and shows today's look as the before. */
+export const DS_DEFAULT: DsValue = 'b';
+
 /** For pages built statically (force-static: /privacy and friends), where the layout cannot read the request: a few bytes
- *  that put the cookie's voice on <html> before the body paints. The layout renders it on the beta build only. */
+ *  that put the cookie's voice (or the default) on <html> before the body paints. The layout renders it on beta only. */
 export const DS_BOOT_SCRIPT =
-  "try{var m=document.cookie.match(/(?:^|; )wp_ds=([abc])(?:;|$)/);if(m)document.documentElement.setAttribute('data-ds',m[1])}catch(e){}";
+  `try{var m=document.cookie.match(/(?:^|; )wp_ds=([abc]|off)(?:;|$)/);var v=m?m[1]:'${DS_DEFAULT}';if(v!=='off')document.documentElement.setAttribute('data-ds',v)}catch(e){}`;
 
 export const isDs =(v: string | null | undefined): v is DsValue => !!v && (DS_VALUES as readonly string[]).includes(v);
 
-/** What a request means: which look is on for THIS request (null = today's), and what the response does to the cookie. */
+/** What a request means: which look is on for THIS request (null = today's), and what the response stores in the cookie
+ *  ('set' stores `on`, 'off' stores "off"). On beta, no cookie means the default. */
 export function dsChoice(
   param: string | null | undefined, cookie: string | undefined, isBeta: boolean,
-): { on: DsValue | null; action: 'set' | 'clear' | 'keep' } {
+): { on: DsValue | null; action: 'set' | 'off' | 'keep' } {
   if (!isBeta) return { on: null, action: 'keep' };
   if (isDs(param)) return { on: param, action: 'set' };
-  if (param === 'off') return { on: null, action: 'clear' };
-  return { on: isDs(cookie) ? cookie : null, action: 'keep' };
+  if (param === 'off') return { on: null, action: 'off' };
+  if (cookie === 'off') return { on: null, action: 'keep' };
+  return { on: isDs(cookie) ? cookie : DS_DEFAULT, action: 'keep' };
 }

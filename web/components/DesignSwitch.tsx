@@ -17,9 +17,8 @@ export default function DesignSwitch({ current }: { current: DsValue | null }) {
   const [open, setOpen] = useState(false);
   const pick = (k: DsValue | 'off') => {
     try {
-      document.cookie = k === 'off'
-        ? `${DS_COOKIE}=; path=/; max-age=0; samesite=lax`
-        : `${DS_COOKIE}=${k}; path=/; max-age=${DS_MAX_AGE}; samesite=lax`;
+      // "off" is stored, not cleared: no cookie means the picked default (DS_DEFAULT).
+      document.cookie = `${DS_COOKIE}=${k}; path=/; max-age=${DS_MAX_AGE}; samesite=lax`;
     } catch { /* cookies blocked: nothing to switch */ }
     window.location.reload();
   };
