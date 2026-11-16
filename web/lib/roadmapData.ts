@@ -37,6 +37,17 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'poair-ring-details-2026-11-16',
+    title: 'Plane of Air ring details corrected',
+    version: 'Web 2.2.6',
+    date: '2026-11-16',
+    headline: 'The Plane of Air event pages now give the right retry times and say which mobs you can skip.',
+    features: [],
+    fixes: [
+      'Plane of Air rings: 18 minutes is the most time between island kills, and a failed attempt returns the island 15 minutes after it runs out. The pages also list what can be skipped, the marker rule, Xegony\'s key and credit rules.',
+    ],
+  },
+  {
     key: 'combat-page-and-inventory-start-2026-11-16',
     title: 'Combat for everyone, inventory can start a character',
     version: 'Web 2.2.5',

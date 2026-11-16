@@ -876,7 +876,10 @@ export const EVENTS: PopEvent[] = [
    "The ordinary defender of that wave in the room joins in as well.",
    "If you stop fighting after more than 2 minutes, Xegony goes back to her spot and all the adds come back.",
    "The room's other mobs are the prismatic guardians, the High Councilman of the Queen and Muzlakh the Chosen.",
-   "Hail the Essence of Air after she dies to be given an Amorphous Cloud of Air, if you have neither it nor a Quintessence of Elements."
+   "Hail the Essence of Air after she dies to be given an Amorphous Cloud of Air, if you have neither it nor a Quintessence of Elements.",
+   "The key is not used up. The first click puts it on your key ring, and after that the key ring alone works. A click covers your raid, or your group if you are not in a raid, for 5 minutes.",
+   "Credit goes to the raid or group of whoever killed her, as it stood when she died, and to anyone who joins that raid or group later. Hail the Essence of Air within 20 minutes; it gives out 72 claims.",
+   "If the killing blow is not from a player or a player's pet, nobody gets credit."
   ],
   "npcs": [
    {
@@ -948,9 +951,12 @@ export const EVENTS: PopEvent[] = [
    }
   ],
   "cites": [
-   "poair/encounters/Xegony.lua:1-142",
-   "poair/Essence_of_Air.lua:1-45",
-   "poair/player.lua:88-110"
+   "poair/encounters/Xegony.lua:1-141",
+   "poair/Essence_of_Air.lua:1-47",
+   "poair/player.lua:1-28",
+   "poair/player.lua:88-116",
+   "lua_modules/projection_eligibility.lua:35-92",
+   "lua_modules/projection_eligibility.lua:128-154"
   ]
  },
  {
@@ -1074,12 +1080,16 @@ export const EVENTS: PopEvent[] = [
   "kindWhy": "One of four ring events on the Plane of Air. Each ends with an Avatar that drops a Mystical Essence, a part of the Wind Etched Key for Xegony's door. How the key is made is not in the scripts.",
   "groupLimit": "No cap in the script. In the shared copy of the zone the ring only starts while the server's raid window is open. Guild instances have no such limit.",
   "start": "Kill every native stormrider on the island: Stormrider Lightningclaws, Mischievous Stormriders and Fearsome Stormriders, 27 spawn points in all. When the last one is dead, the event begins.",
-  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours. After a failed or reset attempt the island is back in 18 minutes. The Avatar leaves after 2 hours 30 minutes out of combat. Guild instances retry after 15 minutes.",
+  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours. The most time allowed between island kills is 18 minutes, then the island repops. In a guild instance, a failed attempt brings the island back 15 minutes after the attempt runs out; the shared zone has no failed-attempt path. The Avatar leaves after 2 hours 30 minutes out of combat, and the clock stops while it is fighting.",
   "mechanics": [
    "Eight Menacing Stormriders appear and wake at 1, 1, 2, 2, 3, 3, 4 and 4 minutes. The Stormrider Priest of Destruction appears at /loc -677, -259.",
    "When the Priest dies, the riders vanish and four traps are placed at random in the area. Stepping into combat with a trap brings a Sporadic Stormrider.",
    "When the Sporadic Stormriders are dead, one real Pherlondien Clawpike appears among fake bosses. If something is missing, a Loathesome Stormclaw appears instead.",
-   "When the boss dies, the Avatar of Wind appears at /loc 484, -1591 and drops the Mystical Essence of Wind every time."
+   "When the boss dies, the Avatar of Wind appears at /loc 484, -1591 and drops the Mystical Essence of Wind every time.",
+   "Only the Priest has to die before the traps; the eight Menacing Stormriders can be skipped. Four of the five Clawpikes are fakes and need no kill.",
+   "Stormriders of the same three kinds that stand off the island do not count toward clearing it and can be skipped.",
+   "If the ring's marker NPC is dead, a weak stand-in boss appears instead and gives no Avatar. The marker comes back 66 hours after the Avatar appears (not in the script).",
+   "The Avatar of Wind goes back to its spot and heals when a fight ends."
   ],
   "npcs": [
    {
@@ -1121,7 +1131,11 @@ export const EVENTS: PopEvent[] = [
    "poair/encounters/Wind.lua:98-214",
    "poair/encounters/Wind.lua:215-250",
    "poair/encounters/Wind.lua:300-318",
-   "lua_modules/air_ring_recovery.lua:1-30"
+   "lua_modules/air_ring_recovery.lua:231-267",
+   "lua_modules/air_ring_recovery.lua:357-368",
+   "lua_modules/air_ring_recovery.lua:394-395",
+   "poair/encounters/Wind.lua:163-177",
+   "poair/encounters/Wind.lua:249-268"
   ]
  },
  {
@@ -1133,11 +1147,15 @@ export const EVENTS: PopEvent[] = [
   "kindWhy": "One of four ring events on the Plane of Air. Each ends with an Avatar that drops a Mystical Essence, a part of the Wind Etched Key for Xegony's door. How the key is made is not in the scripts.",
   "groupLimit": "No cap in the script. In the shared copy of the zone the ring only starts while the server's raid window is open. Guild instances have no such limit.",
   "start": "Kill the 21 island elementals, Confused Air Elementals and Swirling Elemental Forces. Each kill counts toward the event.",
-  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours. After a failed or reset attempt the island is back in 18 minutes. The Avatar leaves after 2 hours 30 minutes out of combat. Guild instances retry after 15 minutes.",
+  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours. The most time allowed between island kills is 18 minutes, then the island repops. In a guild instance, a failed attempt brings the island back 15 minutes after the attempt runs out; the shared zone has no failed-attempt path. The Avatar leaves after 2 hours 30 minutes out of combat, and the clock stops while it is fighting.",
   "mechanics": [
    "Kills 5, 10, 15 and 21 each bring an Elemental Champion, at /loc -1274, -491, /loc -1208, -434, /loc -1283, -395 and /loc -1341, -452. At kill 21 all the champions can be attacked.",
    "When all the champions are dead, the Elemental Masterpiece appears at /loc -1284, -445. An Elemental Anomaly can stand in for it.",
-   "When the Masterpiece dies, the Avatar of Smoke appears at /loc -680, 1396 and drops the Mystical Essence of Smoke every time."
+   "When the Masterpiece dies, the Avatar of Smoke appears at /loc -680, 1396 and drops the Mystical Essence of Smoke every time.",
+   "The champions appear while the island is still being cleared, at kills 5, 10, 15 and 21, and cannot be attacked until kill 21.",
+   "The 19 Swirling Elemental Forces that stand off the island do not count and can be skipped.",
+   "If the ring's marker NPC is dead, a weak stand-in boss appears instead and gives no Avatar. The marker comes back 66 hours after the Avatar appears (not in the script).",
+   "The Avatar of Smoke does not go home and heal when a fight ends, so a wipe does not reset its health."
   ],
   "npcs": [
    {
@@ -1182,7 +1200,13 @@ export const EVENTS: PopEvent[] = [
    "poair/encounters/Smoke.lua:1-40",
    "poair/encounters/Smoke.lua:100-160",
    "poair/encounters/Smoke.lua:185-200",
-   "poair/encounters/Smoke.lua:260-271"
+   "poair/encounters/Smoke.lua:260-271",
+   "poair/encounters/Smoke.lua:16-21",
+   "poair/encounters/Smoke.lua:108-133",
+   "poair/encounters/Smoke.lua:144-154",
+   "poair/encounters/Smoke.lua:165-180",
+   "poair/encounters/Smoke.lua:195-206",
+   "lua_modules/air_ring_recovery.lua:231-267"
   ]
  },
  {
@@ -1194,12 +1218,15 @@ export const EVENTS: PopEvent[] = [
   "kindWhy": "One of four ring events on the Plane of Air. Each ends with an Avatar that drops a Mystical Essence, a part of the Wind Etched Key for Xegony's door. How the key is made is not in the scripts.",
   "groupLimit": "No cap in the script. In the shared copy of the zone the ring only starts while the server's raid window is open. Guild instances have no such limit.",
   "start": "Kill the island phoenixes: Wind Phoenixes, Servitors of Xegony, Phoenix Breezewings, Phoenix Searedwings and Calebgrothiel. When the island is clear, the event begins.",
-  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours. After a failed or reset attempt the island is back in 18 minutes. The Avatar leaves after 2 hours 30 minutes out of combat. Guild instances retry after 15 minutes.",
+  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours. The most time allowed between island kills is 18 minutes, then the island repops. In a guild instance, a failed attempt brings the island back 15 minutes after the attempt runs out; the shared zone has no failed-attempt path. The Avatar leaves after 2 hours 30 minutes out of combat, and the clock stops while it is fighting.",
   "mechanics": [
    "Stage 1: four Phoenix Firesurgers appear. When all are dead, stage 2 brings four Phoenix Windsurgers.",
    "When the Windsurgers are dead, Melernil Faal`Armanna appears at /loc -718, 326. A Firewing Imitor can stand in for her.",
    "Killing a wizard Wind Phoenix brings two Ardent Phoenixes of Xegony.",
-   "When the boss dies, the Avatar of Mist appears at /loc -570, -1573 and drops the Mystical Essence of Mist every time."
+   "When the boss dies, the Avatar of Mist appears at /loc -570, -1573 and drops the Mystical Essence of Mist every time.",
+   "Servitors of Xegony and Wind Phoenixes that stand off the island do not count toward clearing it and can be skipped.",
+   "If the ring's marker NPC is dead, a weak stand-in boss appears instead and gives no Avatar. The marker comes back 66 hours after the Avatar appears (not in the script).",
+   "The Avatar of Mist goes back to its spot and heals when a fight ends."
   ],
   "npcs": [
    {
@@ -1241,7 +1268,12 @@ export const EVENTS: PopEvent[] = [
   "cites": [
    "poair/encounters/Mist.lua:1-35",
    "poair/encounters/Mist.lua:98-165",
-   "poair/encounters/Mist.lua:235-243"
+   "poair/encounters/Mist.lua:235-243",
+   "poair/encounters/Mist.lua:137-141",
+   "poair/encounters/Mist.lua:172-191",
+   "poair/encounters/Mist.lua:221-226",
+   "lua_modules/air_ring_recovery.lua:231-267",
+   "lua_modules/air_ring_recovery.lua:365-368"
   ]
  },
  {
@@ -1253,12 +1285,15 @@ export const EVENTS: PopEvent[] = [
   "kindWhy": "One of four ring events on the Plane of Air. Each ends with an Avatar that drops a Mystical Essence, a part of the Wind Etched Key for Xegony's door. How the key is made is not in the scripts.",
   "groupLimit": "No cap in the script. In the shared copy of the zone the ring only starts while the server's raid window is open. Guild instances have no such limit.",
   "start": "Kill the 35 island spiders and windwalkers: Crystalline Windwalkers, Pristine Recluses, Vorladien Webspinners and Lossenmachar. When the island is clear, the event begins.",
-  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours, and stage 2 has its own 1 hour limit. After a failed or reset attempt the island is back in 18 minutes. The Avatar leaves after 2 hours 30 minutes out of combat. Guild instances retry after 15 minutes.",
+  "timers": "After a win the island is back in 66 hours. The attempt lasts 3 hours, and stage 2 has its own 1 hour limit. The most time allowed between island kills is 18 minutes, then the island repops. In a guild instance, a failed attempt brings the island back 15 minutes after the attempt runs out; the shared zone has no failed-attempt path. The Avatar leaves after 2 hours 30 minutes out of combat, and the clock stops while it is fighting.",
   "mechanics": [
    "Sigismond Windwalker grows bigger as the island is cleared: every 3 kills, and the most at the last.",
    "Stage 2 has three waves of Vorladien Archwalkers with Vorladien Spawn adds, and Erratic Arachnid spawn points switched on.",
    "After the third wave Sigismond can be attacked. An Ominous Recluse can stand in for him at /loc 889, -400.",
-   "When the boss dies, the Avatar of Dust appears at /loc 527, 1671 and drops the Mystical Essence of Dust every time."
+   "When the boss dies, the Avatar of Dust appears at /loc 527, 1671 and drops the Mystical Essence of Dust every time.",
+   "The Erratic Arachnids come back 1 second after they die while the waves run, walk to the engaged boss, and vanish when the ring is won or reset. They never need killing.",
+   "If the ring's marker NPC is dead, a weak stand-in boss appears instead and gives no Avatar. The marker comes back 66 hours after the Avatar appears (not in the script).",
+   "The Avatar of Dust goes back to its spot and heals when a fight ends."
   ],
   "npcs": [
    {
@@ -1296,7 +1331,13 @@ export const EVENTS: PopEvent[] = [
   "cites": [
    "poair/encounters/Dust.lua:1-40",
    "poair/encounters/Dust.lua:145-215",
-   "poair/encounters/Dust.lua:255-270"
+   "poair/encounters/Dust.lua:255-270",
+   "poair/encounters/Dust.lua:129-139",
+   "poair/encounters/Dust.lua:187-196",
+   "poair/encounters/Dust.lua:263-282",
+   "poair/encounters/Dust.lua:321-322",
+   "lua_modules/air_ring_recovery.lua:136-149",
+   "lua_modules/air_ring_recovery.lua:231-267"
   ]
  },
  {
