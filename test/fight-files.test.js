@@ -344,7 +344,7 @@ function runLive(mode, url, store, dbRows = []) {
     select: async (t, q) => { reads.push(['select', t, q]); return dbRows; },
   };
   const rq = (p) => (String(p).endsWith('supabase') ? supabase : String(p).endsWith('ttlCache') ? ttlCache
-    : String(p).endsWith('fightFiles') ? { getStore: () => store } : {});
+    : String(p).endsWith('fightFiles') ? { getStore: () => store } : String(p).endsWith('gzipReply') ? requireBot('./utils/gzipReply') : {});
   // eslint-disable-next-line no-new-func
   const fn = new Function('mimicLink', 'require', 'process', '_corroboratedDamage', '_snapshotStoreMode',
     liveSrc + '\nreturn _handleAgentLiveDamage;')(
