@@ -58406,14 +58406,20 @@ function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
     const mod = u.protocol === 'https:' ? https : http;
     const req = mod.request({
       method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search,
-      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` },
+      // Accept-Encoding: the bot gzips this reply when asked (bot 4.1.3, utils/gzipReply.js; the guild lead's
+      // hosting-sizes "gzip-now" pick). An older bot ignores the header and answers plain, which the end handler reads too.
+      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}`, 'Accept-Encoding': 'gzip' },
       timeout: 8000,
     }, (res) => {
-      let body = '';
-      res.on('data', c => body += c);
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
       res.on('end', () => {
         _buffQueueInflight.delete(key);
-        try { const j = JSON.parse(body); _buffQueueCache.set(key, { at: Date.now(), payload: j }); _noteRaidSplit(j); }
+        try {
+          let buf = Buffer.concat(chunks);
+          if (/gzip/i.test(String(res.headers['content-encoding'] || ''))) buf = zlib.gunzipSync(buf);
+          const j = JSON.parse(buf.toString('utf8')); _buffQueueCache.set(key, { at: Date.now(), payload: j }); _noteRaidSplit(j);
+        }
         catch { _buffQueueCache.set(key, { at: Date.now(), payload: { buff_queue: [], debuff_queue: [] } }); }
       });
     });
