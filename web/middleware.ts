@@ -22,7 +22,7 @@ import { isEqmimicHost, eqmimicLandingTarget } from './lib/eqmimicHost';
 import { isRaidmimicAsset, isRaidmimicHost, isRaidmimicOpenPath, raidmimicLandingTarget } from './lib/raidmimicHost';
 import { otherGuildHostSlug, otherGuildHostRedirect } from './lib/guildHost';
 import { isLockedOut } from './lib/lockout';
-import { DS_COOKIE, DS_MAX_AGE, dsChoice } from './lib/designPreview';
+import { DS_COOKIE, DS_HEADER, DS_MAX_AGE, dsChoice } from './lib/designPreview';
 import { ADMIN_SHELL_COOKIE, ADMIN_SHELL_MAX_AGE, adminShellChoice, isAdminPath } from './lib/adminShell';
 
 // Routes we never log: API/RSC payloads, auth callbacks, admin pages
@@ -176,6 +176,9 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     : null;
   if (ds?.action === 'set' && ds.on) request.cookies.set(DS_COOKIE, ds.on);
   if (ds?.action === 'clear') request.cookies.delete(DS_COOKIE);
+  // The layout reads the decision from this header (it must not call cookies()); never trust one a client sent.
+  request.headers.delete(DS_HEADER);
+  if (ds?.on) request.headers.set(DS_HEADER, ds.on);
 
   let response = NextResponse.next({ request });
 

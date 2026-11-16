@@ -15,9 +15,9 @@ import { isEqmimicHost } from '@/lib/eqmimicHost';
 import { isRaidmimicHost } from '@/lib/raidmimicHost';
 import { GUILD_TAG } from '@/lib/guild';
 import { loadGuildTheme, themeToCssVarMap } from '@/lib/guildTheme';
-import { headers, cookies } from 'next/headers';
+import { headers } from 'next/headers';
 import DesignSwitch from '@/components/DesignSwitch';
-import { DS_COOKIE, dsChoice } from '@/lib/designPreview';
+import { DS_BOOT_SCRIPT, DS_HEADER, dsChoice } from '@/lib/designPreview';
 
 // b.wolfpack.quest. Set at BUILD time from the branch (see next.config.js), so
 // this is a constant in the bundle rather than a per-request check.
@@ -75,8 +75,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // shell sets NO max width: each page sets its own (the form is narrow, the landing page is wide).
   // raidmimic.com and its sister hosts (2026-10-18) get the same bare shell: one public page, no sign-in.
   // The design-system preview (2026-11-16, lib/designPreview.ts): the wp_ds cookie, honoured on the beta build only.
-  // This layout is already per-request (headers() above and the session below), so reading a cookie adds no cost.
-  const ds = dsChoice(null, cookies().get(DS_COOKIE)?.value, IS_BETA).on;
+  // The middleware decides (from ?ds= or the wp_ds cookie) and passes it on the x-wp-ds header; dsChoice re-checks it
+  // against the beta flag, so production ignores it whatever arrives.
+  const ds = dsChoice(null, headers().get(DS_HEADER) ?? undefined, IS_BETA).on;
 
   if (isEqmimicHost(headers().get('host')) || isRaidmimicHost(headers().get('host'))) {
     return (
@@ -119,8 +120,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       data-theme={themed ? 'guild' : undefined}
       data-ds={ds ?? undefined}
       style={themed ? (themeVars as React.CSSProperties) : undefined}
+      // The beta preview script below may set data-ds on a statically built page before React hydrates.
+      suppressHydrationWarning={IS_BETA}
     >
       <body className="font-mono">
+        {/* Static pages cannot read the request, so on beta a few bytes set the preview voice from the cookie. */}
+        {IS_BETA && <script dangerouslySetInnerHTML={{ __html: DS_BOOT_SCRIPT }} />}
         {/* Direction contract — audited at the finish review. Kept in the
             emitted markup so it survives the production build and can be
             grepped out of it. */}

@@ -46,10 +46,15 @@ describe('the switch is beta-only', () => {
   });
   it('layout and middleware both pass the beta flag; the chip renders only when it is set', () => {
     const layout = stripJs(readSource(web('app', 'layout.tsx')));
-    expect(layout).toMatch(/dsChoice\(null,\s*cookies\(\)\.get\(DS_COOKIE\)\?\.value,\s*IS_BETA\)/);
+    // The layout takes the middleware's decision from a request header (it must not call cookies(): guild-theme test).
+    expect(layout).toMatch(/dsChoice\(null,\s*headers\(\)\.get\(DS_HEADER\) \?\? undefined,\s*IS_BETA\)/);
+    expect(layout).not.toMatch(/cookies\(\)/);
     expect(layout).toMatch(/\{IS_BETA && <DesignSwitch/);
     expect(layout).toMatch(/data-ds=\{ds \?\? undefined\}/);
     const mw = stripJs(readSource(web('middleware.ts')));
+    // A client cannot inject the header: the middleware drops any incoming one before setting its own.
+    expect(mw.indexOf('request.headers.delete(DS_HEADER)')).toBeGreaterThan(-1);
+    expect(mw.indexOf('request.headers.delete(DS_HEADER)')).toBeLessThan(mw.indexOf('request.headers.set(DS_HEADER, ds.on)'));
     expect(mw).toMatch(/dsChoice\([\s\S]*?process\.env\.NEXT_PUBLIC_IS_BETA === '1'\)/);
     expect(DS_COOKIE).toBe('wp_ds');
   });
