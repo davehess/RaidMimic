@@ -54538,6 +54538,11 @@ const MOB_PACK_DIR           = path.join(__dirname, 'mobinfo-cache');
 const MOB_PACK_INDEX         = path.join(MOB_PACK_DIR, 'index.json');
 const MOB_PACK_TICK_MS       = 20 * 1000;
 const MOB_PACK_REVALIDATE_MS = 24 * 60 * 60 * 1000;
+// The mob-info row shape this agent reads, matching the bot's _MOB_PACK_VERSION (12 = aggro and assist radius, bot
+// 4.1.1). A pack saved under an older shape is checked again at once instead of waiting out the day: Target Info hid
+// the radii on a zone fetched a few hours before the bot started sending them (the guild lead, 2026-11-16, Plane of
+// Air). The check is the usual etag request, so an unchanged pack costs a 304. Bump it with the bot's version.
+const MOB_PACK_SHAPE = 12;
 const MOB_PACK_UNVISITED_MS  = 90 * 24 * 60 * 60 * 1000;
 const MOB_PACK_MAX_BYTES     = 80 * 1024 * 1024;
 let _mobPackIndex = null;               // zone id (string) → { etag, fetchedAt, visitedAt, bytes, pinned, retryAt }
@@ -54587,7 +54592,7 @@ function _mobPackLookup(name, zoneId) {
 }
 function _mobPackDue(e, now) {
   if (e.retryAt && now < e.retryAt) return false;
-  return !e.bytes || !e.fetchedAt || (now - e.fetchedAt) >= MOB_PACK_REVALIDATE_MS;
+  return !e.bytes || !e.fetchedAt || e.shape !== MOB_PACK_SHAPE || (now - e.fetchedAt) >= MOB_PACK_REVALIDATE_MS;
 }
 function _mobPackGet(query, etag, done) {
   const opts = _uploadOpts;
@@ -54629,7 +54634,7 @@ function _mobPackFetch(zoneId) {
           // 202: the bot is building it; anything else, back off longer.
           e.retryAt = now + (status === 202 ? 2 * 60 * 1000 : 30 * 60 * 1000);
         } else if (status === 304) {
-          e.fetchedAt = now; e.retryAt = 0;
+          e.fetchedAt = now; e.retryAt = 0; e.shape = MOB_PACK_SHAPE;
         } else {
           const body = JSON.parse(buf.toString('utf8'));
           if (!body || !body.mobs || typeof body.mobs !== 'object') throw new Error('no mobs');
@@ -54638,7 +54643,7 @@ function _mobPackFetch(zoneId) {
           fs.writeFileSync(file + '.tmp', buf);
           fs.renameSync(file + '.tmp', file);
           _mobPackMobs.set(k, body.mobs);
-          Object.assign(e, { etag, fetchedAt: now, bytes: buf.length, retryAt: 0 });
+          Object.assign(e, { etag, fetchedAt: now, bytes: buf.length, retryAt: 0, shape: MOB_PACK_SHAPE });
         }
       } catch (e2) {
         e.retryAt = now + 30 * 60 * 1000;
