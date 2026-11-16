@@ -212,6 +212,7 @@ jobs:
           test -f out/inventory/index.html || { echo "::error::web/local did not export out/inventory/index.html"; exit 1; }
           test -f out/replay/index.html || { echo "::error::web/local did not export out/replay/index.html"; exit 1; }
           test -f out/parses/index.html || { echo "::error::web/local did not export out/parses/index.html"; exit 1; }
+          test -f out/flags/index.html || { echo "::error::web/local did not export out/flags/index.html"; exit 1; }
 
       # ── Code signing (Azure Artifact Signing) — OFF until the account exists ──
       # docs/code-signing.md "Turning it on". The signing itself happens INSIDE the build:

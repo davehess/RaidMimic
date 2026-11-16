@@ -42,6 +42,7 @@ function load(over = {}) {
     stats: { characterPrefsCheckedAt: Date.now(), characterPrefs: {}, watchedLogs: [] },
     _raidHold: false, _uploadOpts: {}, _scannedFiles: {}, _saveUploadedStateSoon: () => {},
     uploadPopFlags: (events, opts) => { uploads.push({ events, opts }); return Promise.resolve(); },
+    _localPopFlagsNote: () => {},   // the local PoP flags page's store (test/local-pop-flags.test.js)
     _optinState: { characterModes: {} }, modeStopsLog: () => false, _offGuildServerChar: () => false, _isGuestChar: () => false,
     _zealState: {}, _liveFightActive: () => false, _uploadQueue: [], AGENT_VERSION: '9.9.9',
     _rebuildCandidates: () => [], _getApiBase: () => 'http://bot.test/api/agent', _getAgentToken: () => 'tok',

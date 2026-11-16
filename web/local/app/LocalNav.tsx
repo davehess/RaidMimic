@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 const PAGES: { href: string; label: string; icon: string; coming?: boolean }[] = [
   { href: '/me/',        label: '/me', icon: '👤' },
   { href: '/inventory/', label: 'Inventory', icon: '🎒' },
+  { href: '/flags/',     label: 'PoP flags', icon: '🗺️' },
   { href: '/parses/',    label: 'My parses', icon: '📈' },
   { href: '/replay/',    label: 'My replay', icon: '🎬' },
 ];
