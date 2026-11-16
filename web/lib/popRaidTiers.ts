@@ -5,6 +5,7 @@
 
 import { POP_ZONES, TIER_LABELS, TIER_COLORS, type PopNode } from './popFlags';
 import { gateReport } from './popGateStatus';
+import { ENTRY_ZONES, doorLine, type DoorLine } from './popRaidEntry';
 
 export type TierRaider = { name: string };
 export type MissingBucket = { label: string; names: string[] };
@@ -12,6 +13,7 @@ export type ZoneView = {
   key: string; name: string; short: string; total: number; inCount: number;
   missing: MissingBucket[];     // pieces missing or pending, most names first
   notRecorded: string[];        // nothing missing for them, but some piece is unknown
+  door: DoorLine | null;        // the 85% door line, for Air, Water, Fire, Earth and Time only
 };
 export type TierView = { tier: number; name: string; color: string; zones: ZoneView[] };
 
@@ -39,7 +41,8 @@ export function zoneView(zone: PopNode, raiders: TierRaider[], held: Map<string,
   }
   const missing = [...buckets].map(([label, names]) => ({ label, names }))
     .sort((a, b) => b.names.length - a.names.length || a.label.localeCompare(b.label));
-  return { key: zone.key, name: zone.name, short: zone.short, total: raiders.length, inCount, missing, notRecorded };
+  const door = ENTRY_ZONES[zone.key] ? doorLine(raiders.length, inCount, notRecorded.length) : null;
+  return { key: zone.key, name: zone.name, short: zone.short, total: raiders.length, inCount, missing, notRecorded, door };
 }
 
 /** Tiers 5 down to 1; tier 1 has no gates so its zone list is empty. */

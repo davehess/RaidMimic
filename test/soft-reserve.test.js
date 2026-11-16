@@ -209,7 +209,7 @@ describe('the page', () => {
   });
   it('is a [beta] page and links in from the raid night plan and Your flags', () => {
     expect(src('web/app/raid/sr/page.tsx')).toMatch(/<NewPageTag/);
-    expect(src('web/app/pop/raid/page.tsx')).toMatch(/href="\/raid\/sr"/);
+    expect(src('web/app/pop/raid/TierPage.tsx')).toMatch(/href="\/raid\/sr"/);
     expect(src('web/app/pop/raid/me/page.tsx')).toMatch(/href="\/raid\/sr"/);
   });
   it('the loader limits names to the viewer\'s surface', () => {

@@ -30,39 +30,29 @@ export function entryCheck(size: number, flagged: number): EntryCheck {
   };
 }
 
-/** The zones with this door: short name -> server zone id, display name and the flag step the page checks. */
-export const ENTRY_ZONES: Record<string, { id: number; name: string; flag: string }> = {
-  poair: { id: 215, name: 'Plane of Air', flag: 'zebuxoruk_2' },
-  powater: { id: 216, name: 'Plane of Water', flag: 'zebuxoruk_2' },
-  pofire: { id: 217, name: 'Plane of Fire', flag: 'pofire_2' },
-  poeartha: { id: 218, name: 'Plane of Earth', flag: 'zebuxoruk_2' },
-  potimea: { id: 219, name: 'Plane of Time', flag: 'time_1' },
+/** The planes with this door, by chart key (web/lib/popFlags.ts POP_ZONES): server zone id and name. */
+export const ENTRY_ZONES: Record<string, { id: number; name: string }> = {
+  air: { id: 215, name: 'Plane of Air' },
+  water: { id: 216, name: 'Plane of Water' },
+  fire: { id: 217, name: 'Plane of Fire' },
+  earth: { id: 218, name: 'Plane of Earth' },
+  time: { id: 219, name: 'Plane of Time' },
 };
 
-/** The one line a zone shows: "Plane of Air: 37 of 42 flagged (88%) · passes · room for 1 more unflagged". */
-export function entryLine(name: string, c: EntryCheck): string {
-  const head = `${name}: ${c.flagged} of ${c.size} flagged (${c.flaggedPct}%)`;
-  if (c.pass) {
-    return `${head} · passes · ${c.roomUnflagged === 0 ? 'no room for another unflagged' : `room for ${c.roomUnflagged} more unflagged`}`;
-  }
-  return `${head} · fails: ${c.swapOut} too many unflagged`;
-}
+export type DoorLine = { tone: 'pass' | 'fail' | 'depends'; text: string };
 
-export type EntryZoneView = { id: string; name: string; check: EntryCheck; line: string; unflagged: string[] };
-
-/** One view per plan section whose zone has this door. Sections of any other zone are skipped. */
-export function entryViews(
-  sections: { id: string; zone: string }[],
-  raiders: { name: string }[],
-  has: (name: string, key: string) => boolean,
-): EntryZoneView[] {
-  const out: EntryZoneView[] = [];
-  for (const s of sections) {
-    const z = ENTRY_ZONES[s.zone];
-    if (!z) continue;
-    const unflagged = raiders.filter(r => !has(r.name, z.flag)).map(r => r.name);
-    const check = entryCheck(raiders.length, raiders.length - unflagged.length);
-    out.push({ id: s.id, name: z.name, check, line: entryLine(z.name, check), unflagged });
+/**
+ * The door line under a plane on /pop/raid (the guild lead, 2026-11-16: bring it back inside the tiers, with the same
+ * "not recorded" rule). `flagged` are the raiders known to hold the gate; `notRecorded` could go either way, so the
+ * line only says passes or fails when the answer holds whichever way they turn out.
+ */
+export function doorLine(size: number, flagged: number, notRecorded: number): DoorLine {
+  const sure = entryCheck(size, flagged);
+  const head = `85% door: ${sure.flagged}/${sure.size} flagged`;
+  if (sure.pass) {
+    return { tone: 'pass', text: `${head} · passes${sure.roomUnflagged ? ` · room for ${sure.roomUnflagged} more unflagged` : ''}` };
   }
-  return out;
+  const best = entryCheck(size, flagged + notRecorded);
+  if (!best.pass) return { tone: 'fail', text: `${head} · fails: ${best.swapOut} too many unflagged` };
+  return { tone: 'depends', text: `${head} · passes if ${sure.swapOut} of the ${notRecorded} not recorded are flagged` };
 }

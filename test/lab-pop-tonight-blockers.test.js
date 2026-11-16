@@ -63,11 +63,6 @@ describe('wording and redirect', () => {
     expect(read(files[0])).toMatch(/Everyone has every preflag for tonight/);
     expect(read(files[0])).toMatch(/\} missing</);
   });
-  it('the signed-out redirect keeps ?v=a', () => {
-    const page = read('../web/app/pop/raid/page.tsx');
-    expect(page).toMatch(/const alt = sp\?\.v === 'a' \|\| sp\?\.v === 'b' \|\| sp\?\.v === 'c' \? sp\.v : undefined/);
-    expect(page).toMatch(/signin\?next=' \+ encodeURIComponent\('\/pop\/raid' \+ \(alt \? `\?v=\$\{alt\}`/);
-  });
 });
 
 describe('the draft', () => {

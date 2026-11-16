@@ -19,6 +19,11 @@ function ZoneLine({ z }: { z: ZoneView }) {
       <span className={z.inCount === z.total ? 'text-green' : 'text-dim'}>{z.inCount}/{z.total} in</span>
       {z.missing.map(m => <Bucket key={m.label} label={m.label} names={m.names} tone="text-red" />)}
       {z.notRecorded.length > 0 && <Bucket label="not recorded" names={z.notRecorded} tone="text-dim" />}
+      {z.door && (
+        <span className={`basis-full font-mono text-[11px] ${z.door.tone === 'pass' ? 'text-green' : z.door.tone === 'fail' ? 'text-red' : 'text-orange'}`}>
+          {z.door.text}
+        </span>
+      )}
     </li>
   );
 }

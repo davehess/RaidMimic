@@ -198,7 +198,8 @@ describe('which characters are listed', () => {
 describe('the page and its wiring (stripped source)', () => {
   const page = read('web/app/pop/raid/me/page.tsx');
   const tools = read('web/app/pop/raid/me/MeTools.tsx');
-  const raidPage = read('web/app/pop/raid/page.tsx');
+  // The raid plan's header lives in TierPage.tsx since the tier split (2026-11-16).
+  const raidPage = read('web/app/pop/raid/page.tsx') + read('web/app/pop/raid/TierPage.tsx');
   const load = read('web/lib/raidMeLoad.ts');
 
   it('is members only, dynamic, and carries the beta tag', () => {

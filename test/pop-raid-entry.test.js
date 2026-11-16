@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { entryCheck, entryLine, entryViews, ENTRY_ZONES } from '../web/lib/popRaidEntry.ts';
+import { entryCheck, doorLine, ENTRY_ZONES } from '../web/lib/popRaidEntry.ts';
 
 describe('entryCheck', () => {
   it('max unflagged per raid size: 42->6, 48->7, 54->8, 60->9, 72->10', () => {
@@ -26,18 +26,20 @@ describe('entryCheck', () => {
   });
 });
 
-describe('entryLine / entryViews', () => {
-  it('writes both shapes', () => {
-    expect(entryLine('Plane of Air', entryCheck(42, 37))).toBe('Plane of Air: 37 of 42 flagged (88%) · passes · room for 1 more unflagged');
-    expect(entryLine('Plane of Air', entryCheck(42, 34))).toBe('Plane of Air: 34 of 42 flagged (80%) · fails: 2 too many unflagged');
+describe('doorLine: the 85% line under a plane, with "not recorded" (2026-11-16)', () => {
+  it('passes on known flags alone, with the room left', () => {
+    expect(doorLine(42, 37, 3)).toEqual({ tone: 'pass', text: '85% door: 37/42 flagged · passes · room for 1 more unflagged' });
+    expect(doorLine(20, 17, 0).text).toBe('85% door: 17/20 flagged · passes');
   });
-  it('only plan zones with this door get a view, with the unflagged names', () => {
-    const raiders = ['Aldenmar', 'Brackwyn', 'Corvale'].map(name => ({ name }));
-    const has = (n) => n !== 'Corvale';
-    const v = entryViews([{ id: 'a', zone: 'podisease' }, { id: 'b', zone: 'poair' }], raiders, has);
-    expect(v).toHaveLength(1);
-    expect(v[0].unflagged).toEqual(['Corvale']);
-    expect(v[0].check.pass).toBe(false);
+  it('fails only when it fails even if every not-recorded raider is flagged', () => {
+    expect(doorLine(42, 30, 3)).toEqual({ tone: 'fail', text: '85% door: 30/42 flagged · fails: 3 too many unflagged' });
+  });
+  it('says how many of the not recorded it hangs on', () => {
+    // 21 known of 40, 15 not recorded: 34 needed, so 13 of the 15 must turn out flagged.
+    expect(doorLine(40, 21, 15)).toEqual({ tone: 'depends', text: '85% door: 21/40 flagged · passes if 13 of the 15 not recorded are flagged' });
+  });
+  it('covers Air, Water, Fire, Earth and Time by chart key', () => {
+    expect(Object.keys(ENTRY_ZONES).sort()).toEqual(['air', 'earth', 'fire', 'time', 'water']);
     expect(Object.values(ENTRY_ZONES).map(z => z.id).sort()).toEqual([215, 216, 217, 218, 219]);
   });
 });

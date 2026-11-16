@@ -1,10 +1,10 @@
 // /pop/raid split into tiers, highest first (the guild lead, 2026-11-16: "split into tiers, starting from the highest
-// tier and moving down ... collapse everything and have them be expandable or click into it on a sidebar").
-// Two variants, picked on beta: ?v=b folds one <details> per tier; ?v=c is a tier list beside one tier at a time
-// (plain links, ?v=c&tier=N, no client JS). Tonight's plan sections ride inside their tier, folded.
+// tier and moving down ... collapse everything and have them be expandable"; the folded layout was picked on the
+// Decision Desk the same day, over a tier sidebar). One closed <details> per tier with its planes' counts on the
+// summary line; tonight's plan sections ride inside their tier, folded.
 import Link from 'next/link';
 import NewPageTag from '@/components/NewPageTag';
-import { PLAN, RAID_DATE_LINE, type PlanSection } from '@/lib/raidPlan';
+import { PLAN, RAID_DATE_LINE, TRAVEL_BASICS, type PlanSection } from '@/lib/raidPlan';
 import type { Raider } from '@/lib/raidPreflags';
 import { tierViews, tierSummary, type TierView } from '@/lib/popRaidTiers';
 import { POP_ZONE_BY_KEY } from '@/lib/popFlags';
@@ -22,10 +22,7 @@ function chartKey(zone: string): string | null {
 }
 export const tierOfPlan = (s: PlanSection): number => POP_ZONE_BY_KEY[chartKey(s.zone) ?? '']?.tier ?? 1;
 
-const SHORT: Record<number, string> = { 5: 'Time', 4: 'Elemental', 3: 'Tier 3', 2: 'Tier 2', 1: 'Tier 1' };
-
 type Props = {
-  variant: 'b' | 'c'; selected: number;
   raiders: Raider[]; held: Map<string, Set<string>>; fullRead: Set<string>; note: string; error: string | null;
   walls: (Walls | null)[]; routes: DrawnRoute[]; loot: Loot; wish: WishView | null;
   missing: (key: string) => string[];
@@ -40,8 +37,6 @@ export default function TierPage(p: Props) {
         raiders={p.raiders} error={p.error} missing={p.missing} />
     </details>
   ));
-  const block = (t: TierView) => <TierBlocks tier={t}>{plan(t.tier)}</TierBlocks>;
-  const current = tiers.find(t => t.tier === p.selected) ?? tiers[0];
 
   return (
     <div className="mx-auto max-w-6xl py-2">
@@ -55,14 +50,14 @@ export default function TierPage(p: Props) {
       </p>
       <details className="mt-2 text-xs">
         <summary className="cursor-pointer text-gold hover:underline">Travel basics</summary>
-        <p className="mt-1 text-dim">Everything starts in Tranquility. First time into a zone? Zone into the live one through its standard portal first.</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-text">{TRAVEL_BASICS.points.map((t, i) => <li key={i}>{t}</li>)}</ul>
       </details>
 
       {p.error ? (
         <p className="mt-4 text-xs text-red">Could not read the raiders: {p.error}</p>
       ) : p.raiders.length === 0 ? (
         <p className="mt-4 text-xs text-dim">No raiders found.</p>
-      ) : p.variant === 'b' ? (
+      ) : (
         <div className="mt-4 space-y-2">
           {tiers.map(t => (
             <details key={t.tier} className="rounded-lg border border-border border-l-4 bg-panel p-3" style={{ borderLeftColor: t.color }}>
@@ -70,26 +65,9 @@ export default function TierPage(p: Props) {
                 <span className="font-semibold text-text">{t.name}</span>
                 {tierSummary(t) && <span className="text-xs text-dim"> · {tierSummary(t)}</span>}
               </summary>
-              <div className="mt-2">{block(t)}</div>
+              <div className="mt-2"><TierBlocks tier={t}>{plan(t.tier)}</TierBlocks></div>
             </details>
           ))}
-        </div>
-      ) : (
-        <div className="mt-4 grid gap-4 md:grid-cols-[11rem_1fr]">
-          <nav aria-label="Tiers" className="flex flex-wrap gap-1.5 md:flex-col md:flex-nowrap">
-            {tiers.map(t => (
-              <Link key={t.tier} href={`/pop/raid?v=c&tier=${t.tier}`} aria-current={t.tier === current.tier ? 'page' : undefined}
-                className={`rounded border border-l-4 px-2 py-1 text-xs hover:text-gold ${t.tier === current.tier ? 'border-gold/60 bg-panel text-gold' : 'border-border text-text'}`}
-                style={{ borderLeftColor: t.color }}>
-                {SHORT[t.tier]}
-              </Link>
-            ))}
-          </nav>
-          <section className="min-w-0 rounded-lg border border-border border-l-4 bg-panel p-3" style={{ borderLeftColor: current.color }}>
-            <h2 className="text-sm font-semibold text-text">{current.name}</h2>
-            {tierSummary(current) && <p className="mt-0.5 text-xs text-dim">{tierSummary(current)}</p>}
-            <div className="mt-2">{block(current)}</div>
-          </section>
         </div>
       )}
 
