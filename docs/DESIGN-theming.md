@@ -94,6 +94,15 @@ one page header (eyebrow, title, one line, actions) under a site header that car
 though"); one card, one table (11px uppercase headers, 13px cells, tabular
 numbers right-aligned), three buttons (primary, default, ghost; 44px tap height on a phone). Layout differs by device: a side
 rail and real tables on desktop; a pill row, tables as stacked cards and full-width primary buttons on a phone. Overlays keep
-their mid-raid density but take the same font and tokens. **Open: the font voice** (Decision Desk card `ui-standard`: A
-monospace everywhere, recommended; B sans with mono numbers; C serif page titles), with follow-ups on the landing serif,
-phone tables and roll-out order. Samples were rendered from a static mock (not committed).
+their mid-raid density but take the same font and tokens. Samples were rendered from a static mock (not committed).
+
+**Round 2, after a second-opinion design review (2026-11-16).** The review found the font was not the main problem: wasted
+width, partial progress drawn like zero, cards labelled for one character but listing another, a cramped two-column "Can
+enter", two navs that overlap, too many accents, and grey text below WCAG AA. Every round-2 layout therefore has: sans text
+with `font-variant-numeric: tabular-nums` for numbers (voice B, now the recommendation; monospace stays in overlays until one
+is tested in a raid); one nav (the top bar); one accent (`--wp-accent`) plus status colours, with **gold = partial** and zero
+faint; a progress bar on the flag count; level as its own sortable column; the selected row highlighted and every card about
+that row only; "Can enter" as one column of ✓/✗ with the requirement only when missing; secondary text at ≥ 4.5:1 (e.g.
+`#9aa4ad` on the panel, 6.8:1). **Open (Desk card `ui-standard`): the layout pattern**: D1 dense table with inline detail,
+D2 two panes (list + always-open detail; recommended, since it fits every list page), D3 PoP tier ladder (recommended as a tab
+inside D2's detail), plus follow-ups on the voice, overlays, zero-cell contrast, the landing serif, phone tables and order.
