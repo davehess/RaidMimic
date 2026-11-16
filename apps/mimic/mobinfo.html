@@ -242,8 +242,13 @@
   /* Area Rampage while the target is inside its reach (paintRange adds .hot): the same solid red as Summon */
   .spec .chip.warn.hot{background:var(--wp-red);color:var(--wp-bg);border-color:var(--wp-red);font-weight:700;text-shadow:none}
   /* distance + aggro + assist radii row on the Stats tab */
-  .rng{display:flex;flex-wrap:wrap;gap:2px 10px;font-variant-numeric:tabular-nums}
-  .rng b{color:var(--wp-text);font-weight:600}
+  /* Body-size, not the small grey .sub (the guild lead, 2026-11-16: it was easy to miss). The distance number is
+     coloured by where you stand: green clear of the assist radius, orange inside it, red inside the aggro radius. */
+  .rng{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:5px;font-size:12px;color:var(--wp-text);font-variant-numeric:tabular-nums}
+  .rng b{color:var(--wp-text);font-weight:700}
+  .rng b.rd-clear{color:var(--wp-green)}
+  .rng b.rd-assist{color:var(--wp-orange)}
+  .rng b.rd-aggro{color:var(--wp-red)}
   .spec .chip.imm{background:#1d2a3d;color:#9ecbff;border-color:#2a3d57}
   /* sight chips — "invis will not hide you". Amber rather than the red warn
      tone: it defeats a PLAN (a pull, a corpse run), it is not something the mob
@@ -699,6 +704,19 @@
   function aeHot(dist, range){
     return dist != null && range != null && isFinite(dist) && isFinite(range) && range > 0 && dist <= range;
   }
+  // Which band the live distance sits in (the guild lead, 2026-11-16, Decision Desk pick A "Bigger, coloured line",
+  // follow-up "Yes" for orange): 'aggro' (red) inside the aggro radius, 'assist' (orange) inside the assist radius,
+  // 'clear' (green) outside both. A radius that is unknown is never compared against; unknown distance, or neither
+  // radius known, is '' (no colour). Inclusive like aeHot.
+  function rangeZone(dist, aggro, assist){
+    if (dist == null || !isFinite(dist)) return '';
+    var a = aggro != null && isFinite(aggro) && aggro > 0 ? aggro : null;
+    var s = assist != null && isFinite(assist) && assist > 0 ? assist : null;
+    if (a == null && s == null) return '';
+    if (a != null && dist <= a) return 'aggro';
+    if (s != null && dist <= s) return 'assist';
+    return 'clear';
+  }
   function fmtR(n){ return String(Math.round(n * 10) / 10); }
   // The Area Rampage chip: the reach in its text, and the number the painter compares the live distance with.
   function aeChip(mob){
@@ -710,12 +728,14 @@
   // The row under the resists: a placeholder for the live distance (painted by paintRange, never part of the
   // string compared between polls) and the two radii, which only change when the target does.
   function rangeRow(mob){
-    var rad = mobRadii(mob), parts = '<span id="wpDistWrap" hidden>Distance <b id="wpDist"></b></span>';
+    var rad = mobRadii(mob);
+    // The radii ride on the number as data-* (fixed per target, so the string stays byte-stable); paintRange reads them.
+    var parts = '<span id="wpDistWrap" hidden>Distance <b id="wpDist"'+(rad ? ' data-wp-aggro="'+rad.aggro+'"'+(rad.assist != null ? ' data-wp-assist="'+rad.assist+'"' : '') : '')+'></b></span>';
     if (rad) {
       parts += ' <span title="How close you can stand before it aggros: the catalog radius, or 70 when the catalog has none (the server\'s own default).">Aggro <b>'+fmtR(rad.aggro)+'</b></span>';
       if (rad.assist != null) parts += ' <span title="Social radius: another mob in a fight calls this one, and it comes when it stands within this distance of the caller (the aggro radius when the catalog has none).">Assist <b>'+fmtR(rad.assist)+'</b></span>';
     }
-    return '<div class="sub rng" data-wp-sect="range">'+parts+'</div>';
+    return '<div class="rng" data-wp-sect="range">'+parts+'</div>';
   }
   // ── end range block
   // The order the chips are drawn in (FB-104: Summon sat last because the catalog lists codes numerically and a
@@ -2040,6 +2060,10 @@
         var t = d == null ? '' : String(Math.round(d));
         if (num.textContent !== t) num.textContent = t;
         wrap.hidden = d == null;
+        var ag = num.getAttribute('data-wp-aggro'), as = num.getAttribute('data-wp-assist');
+        var zone = rangeZone(d, ag == null ? null : Number(ag), as == null ? null : Number(as));
+        var cls = zone ? 'rd-' + zone : '';
+        if (num.className !== cls) num.className = cls;
       }
       var ae = bodyEl.querySelector('[data-wp-ae]');
       if (ae) {
