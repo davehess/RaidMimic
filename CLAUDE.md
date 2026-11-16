@@ -308,6 +308,32 @@ name; for an entity, `<name> · <kind>`) and a **one-sentence description** of w
   dynamic route without `generateMetadata`, a route that still resolves to the site card, a pinned root OG field, or a
   card read that selects a private column. A new route's sample value goes in its `SAMPLE` map if it needs one.
 
+### Working rule — one look, real samples, look before "done" (the guild lead, 2026-11-16)
+*"too many pages use different fonts, layouts, etc. There's no uniformity. It should be the same, fit into the same crisp
+package, work on both mobile and desktop, but with different layouts."* An outside design review the same day became the
+work list (`docs/REVIEW-design-2026-11-16.md`, §603); the standard is `docs/DESIGN-theming.md` §8 and the picks are on the
+Decision Desk (`ui-standard`: voice B = sans text + `tabular-nums` numbers, layout D2 = list + detail panes, stacked cards on
+a phone; overlays stay monospace until one is tested in a raid). Status and next steps: `docs/HANDOFF-2026-11-16-design.md`.
+- **Every colour, size and spacing value comes from `web/app/tokens.css`** (and the `web/components/ui` parts). No new hex,
+  no new `text-[Npx]`. Colour carries meaning only: accent = primary action + current nav; green/red/gold/orange = status
+  (gold = partial or DKP). Grey text meets WCAG AA (≥ 4.5:1). Nothing under 11px.
+- **Screenshot before and after every UI change and look at both.** "Done" is the rendered page meeting its acceptance
+  line, not green tests. The local Mimic pages drew grey for weeks because nobody looked (*"Where is the color on these
+  local pages?"*).
+- **Samples and mocks use real data or real mechanics.** *"These examples are crappy. Nagafen isn't killable every day, let
+  alone three days in a row. Use real timers."* A fake row that breaks game rules reads as not knowing the game.
+- **Fewest words; no paragraph in place of a fix.** *"Least wordy as possible."* If a control needs explaining, change it.
+- **One of each thing.** *"we have a my parses section, so why do we need a second one?"* Before adding a page or tab, check
+  nothing else already does the job.
+- **Never present a conclusion the data cannot support.** *"That's very inaccurate"* — a list of raiders "missing" a flag
+  was built from records that stop short. Say what the data does not show instead.
+- **Obvious fixes go straight to beta to click through; taste goes to the Desk as rendered options** (*"For obvious elements
+  please roll it out onto beta so I can click through. For taste and design preferences please render several options"*).
+  The guild lead answers on the Desk and says "updated" in chat: read the Desk's `picks` collection then.
+- Smaller standing calls from the same day: "On this PC" pages open in the same window, with ↗ for a new one; the Mimic logo
+  heads Raid Mimic surfaces and the whole wolf heads wolfpack.quest (`wq-brand`); every overlay should resize its text and
+  its whole window the way the Canvas does (open, Desk note on `ui-standard`).
+
 ### Working rule — every bot error line is a bug (the guild lead, 2026-10-25)
 *"let's start watching these errors and resolving them cleanly instead."* Railway shows every stderr line
 (`console.error` AND `console.warn`) as an error, so an error line is either **fixed at its cause** or, when it
