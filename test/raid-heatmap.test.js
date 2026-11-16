@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addDays, weekdayOf, windowStart, monthKey, monthTitle, groupByMonth, nightLabel,
-  buildNights, nightNames, fillColor, attendedAlpha, pct,
+  buildNights, nightNames, nightTitles, fillColor, attendedAlpha, pct,
   isOfficialRaid, dateFromName, raidNightKey,
   FILL_RED, FILL_ORANGE, FILL_GREEN, ATTENDED, DEFAULT_FULL_RAID,
 } from '../web/lib/raidHeatmap.ts';
@@ -205,5 +205,22 @@ describe('pct', () => {
   it('rounds and survives an empty denominator', () => {
     expect(pct(41, 52)).toBe(79);
     expect(pct(0, 0)).toBe(0);
+  });
+});
+
+// The design review (2026-11-16): the date read three times on an attendance chip, because officers type it into the
+// raid name. These are the shapes the real raid names had that week.
+describe('nightTitles: raid names without the typed date', () => {
+  const night = (...names) => ({ date: '2026-11-15', raids: names.map((name, i) => ({ raid_id: i, ts: '', name })), tickIds: [], attendees: [] });
+  it('drops the date wherever it sits, and the separator next to it', () => {
+    expect(nightTitles(night('11/15 Plane of Air'))).toEqual(['Plane of Air']);
+    expect(nightTitles(night('PoW 11/8'))).toEqual(['PoW']);
+    expect(nightTitles(night('Bonus DKP Plane of Air 11-11-26'))).toEqual(['Bonus DKP Plane of Air']);
+    expect(nightTitles(night('11/4 - TT/Torment/SolRo'))).toEqual(['TT/Torment/SolRo']);
+    expect(nightTitles(night('10-21-2026 Progression Raid - Tactics'))).toEqual(['Progression Raid - Tactics']);
+    expect(nightTitles(night('2026-08-05 - VT'))).toEqual(['VT']);
+  });
+  it('keeps undated names, drops date-only ones and repeats', () => {
+    expect(nightTitles(night('Sol Ro Tower Bonus DKP', '11-11-26', '11/11 Sol Ro Tower Bonus DKP'))).toEqual(['Sol Ro Tower Bonus DKP']);
   });
 });

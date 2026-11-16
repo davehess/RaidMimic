@@ -34,7 +34,7 @@ import { selectAll } from '@/lib/selectAll';
 import { dayKey, dayLabel, RAID_TZ } from '@/lib/format';
 import { zonedDayRangeUtc } from '@/lib/raidReview';
 import {
-  windowStart, buildNights, nightNames, nightLabel, monthKey,
+  windowStart, buildNights, nightTitles, nightLabel, monthKey,
   fillColor, pct, DEFAULT_FULL_RAID, FILL_RED, FILL_ORANGE, FILL_GREEN,
   type Night, type NightRaid, type NightTick,
 } from '@/lib/raidHeatmap';
@@ -128,14 +128,14 @@ export default async function RaidHistoryPage({ searchParams }: { searchParams: 
       date: n.date,
       color: fillColor(raiders / full),
       sub: String(raiders),
-      lines: [nightLabel(n.date), ...nightNames(n), `${raiders} / ${full} raiders · ${pct(raiders, full)}%`],
+      lines: [nightLabel(n.date), ...nightTitles(n), `${raiders} / ${full} raiders · ${pct(raiders, full)}%`],
       href: `/raid/review/${n.date}`,
     };
   });
   const strips: StripNight[] = held.map(n => ({
     date: n.date,
     color: fillColor(n.attendees.length / full),
-    name: nightNames(n).join(' · ') || '(unnamed)',
+    name: nightTitles(n).join(' · ') || '(unnamed)',
     figure: String(n.attendees.length),
     href: `/raid/review/${n.date}`,
   }));
@@ -231,7 +231,7 @@ export default async function RaidHistoryPage({ searchParams }: { searchParams: 
             <tbody>
               {held.map(n => {
                 const raiders = n.attendees.length;
-                const names = nightNames(n);
+                const names = nightTitles(n);
                 return (
                   <tr key={n.date} className="border-b border-border/40 hover:bg-[#1c2128]">
                     <td className="px-4 py-2 whitespace-nowrap">

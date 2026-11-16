@@ -46,7 +46,7 @@ import MeCharacterCards, { type MeCard } from './MeCharacterCards';
 import { dayKey, RAID_TZ } from '@/lib/format';
 import { zonedDayRangeUtc } from '@/lib/raidReview';
 import {
-  windowStart, buildNights, nightNames, nightLabel,
+  windowStart, buildNights, nightTitles, nightLabel,
   attendedAlpha, ATTENDED, type NightRaid, type NightTick,
 } from '@/lib/raidHeatmap';
 import { type NightChip } from '@/components/RaidHeatmap';
@@ -569,8 +569,8 @@ async function loadFamilyAttendance(names: string[]): Promise<FamilyAttendance |
     if (n.date >= since30) { held30 += 1; if (got > 0) attended30 += 1; }
     const status = got > 0 ? `You were in ${got} of ${n.tickIds.length} ticks` : 'Missed';
     const look = { date: n.date, color: ATTENDED, alpha: got > 0 ? attendedAlpha(got, n.tickIds.length) : undefined, outline: got === 0, href: `/raid/review/${n.date}` };
-    chips.push({ ...look, lines: [nightLabel(n.date), ...nightNames(n), status] });
-    strips.push({ ...look, name: nightNames(n).join(' · ') || '(unnamed)', figure: got > 0 ? `${got}/${n.tickIds.length}` : 'missed' });
+    chips.push({ ...look, lines: [nightLabel(n.date), ...nightTitles(n), status] });
+    strips.push({ ...look, name: nightTitles(n).join(' · ') || '(unnamed)', figure: got > 0 ? `${got}/${n.tickIds.length}` : 'missed' });
   }
   chips.sort((a, b) => a.date.localeCompare(b.date));
   return { chips, strips, held60, attended60, held30, attended30 };
@@ -837,6 +837,10 @@ export default async function MePage({ searchParams }: { searchParams?: Promise<
     bannerSub = lastFight
       ? `Streaming in the last 10 minutes · last fight uploaded ${relTime(lastFight)}.`
       : 'Streaming in the last 10 minutes · no fight uploaded yet this session.';
+    // The cards below show only the front characters; say where the other connected ones are (design review,
+    // 2026-11-16: the headline count did not match the list).
+    const liveBelow = live.filter(r => !isFront(r.name)).length;
+    if (liveBelow > 0 && liveCount > 1) bannerSub += ` ${liveBelow} of them ${liveBelow === 1 ? 'is' : 'are'} under "more characters" below.`;
   } else if (recentCount > 0) {
     bannerColor = 'orange';
     bannerHeadline = 'Mimic was connected earlier today but isn\'t right now.';

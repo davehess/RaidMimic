@@ -34,7 +34,7 @@ import TabbedResult from '@/components/parse-result/TabbedResult';
 export const dynamic = 'force-dynamic';
 
 type NpcRef     = { id: number; name: string; zone_short: string | null; hp: number | null };
-type ZoneRow    = { short_name: string; long_name: string };
+type ZoneRow    = { short_name: string; long_name: string; zone_id: number | null };
 type PlayerRow  = {
   character_name: string;
   total_damage: number;
@@ -259,7 +259,7 @@ async function load(id: string) {
 
     const { data: zoneRows } = await sb
       .from('eqemu_zone')
-      .select('short_name, long_name');
+      .select('short_name, long_name, zone_id');
     const zones = new Map<string, ZoneRow>(
       (zoneRows ?? []).map((z: ZoneRow) => [z.short_name, z]),
     );
@@ -505,7 +505,11 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
 
   const bossName = cleanBossName(enc.eqemu_npc_types?.name);
   const bossId   = enc.npc_id;
-  const zoneShort = enc.zone_short || enc.eqemu_npc_types?.zone_short || bossLocalZone;
+  // Same chain as the /parses list (resolveZone there), so the two pages name the same zone: the denormalized columns
+  // are NULL for fresh kills, and the NPC id carries the zone (npc_id = zone_id*1000 + n). bosses_local stays last.
+  const npcZoneId = enc.eqemu_npc_types?.id != null ? Math.floor(enc.eqemu_npc_types.id / 1000) : null;
+  const derivedZone = npcZoneId != null ? [...zones.values()].find(z => z.zone_id === npcZoneId)?.short_name ?? null : null;
+  const zoneShort = enc.zone_short || enc.eqemu_npc_types?.zone_short || derivedZone || bossLocalZone;
   const zoneLong = zoneShort ? zones.get(zoneShort)?.long_name || zoneShort : 'Unknown zone';
 
   const players = [...(enc.encounter_players ?? [])]
