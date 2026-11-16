@@ -1,0 +1,109 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PoP flags - A Terminal</title><style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#c9d1d9;--dim:#6e7681;--accent:#1f6feb;--blue:#58a6ff;--purple:#a371f7;
+  --green:#56d364;--red:#f85149;--gold:#d29922;--orange:#ffa657;--raised:#21262d;--bone:#f2ede1;
+  --f-body:"Cascadia Code", Consolas, ui-monospace, monospace;--f-num:"Cascadia Code", Consolas, ui-monospace, monospace;--f-title:"Cascadia Code", Consolas, ui-monospace, monospace;
+}
+*{box-sizing:border-box;margin:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:400 13px/1.45 var(--f-body);min-height:100vh}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.dim{color:var(--dim)}.green{color:var(--green)}
+a{color:var(--blue);text-decoration:none}
+/* header */
+.hdr{height:48px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:24px;padding:0 24px}
+.word{font-size:15px;font-weight:700;color:var(--text);letter-spacing:.01em;display:flex;align-items:center;gap:8px}
+.word img{width:28px;height:28px;border-radius:6px;display:block}
+.nav{display:flex;gap:4px;flex:1}
+.nav a{color:var(--dim);padding:4px 12px;border-radius:4px;font-size:13px}
+.nav a.on{color:var(--text);background:var(--raised)}
+.acct{display:flex;align-items:center;gap:8px;background:var(--raised);border:1px solid var(--border);border-radius:999px;padding:3px 12px 3px 4px;font-size:13px;height:32px}
+.acct b{width:24px;height:24px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;display:grid;place-items:center}
+.menu{display:none}
+/* layout */
+.wrap{max-width:1100px;margin:0 auto;padding:32px 24px;display:grid;grid-template-columns:160px 1fr;gap:32px}
+.rail{display:flex;flex-direction:column;gap:4px;align-self:start}
+.rail a{color:var(--dim);padding:8px 12px;border-radius:4px;border-left:2px solid transparent;font-size:13px}
+.rail a.on{color:var(--text);background:var(--panel);border-left-color:var(--accent)}
+.main{min-width:0}
+.tb{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:4px}
+h1{font:700 24px/1.2 var(--f-title);color:var(--gold);letter-spacing:0;margin-bottom:4px}
+.desc{color:var(--dim)}
+.acts{display:flex;gap:8px;flex-shrink:0}
+.btn{font:600 13px/1 var(--f-body);height:32px;padding:0 16px;border-radius:4px;border:1px solid var(--border);background:var(--raised);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--blue)}
+.seg{display:inline-flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--border);border-radius:999px;margin-bottom:16px;max-width:100%;overflow-x:auto}
+.seg span{padding:4px 16px;border-radius:999px;color:var(--dim);white-space:nowrap;font-size:13px}
+.seg span.on{background:var(--accent);color:#fff}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.card h2{font:600 15px/1.3 var(--f-body);color:var(--text);margin-bottom:12px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.two .card{margin-bottom:0}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:500;text-align:left;padding:0 8px 8px}
+td{padding:8px;border-top:1px solid var(--border)}
+th.r,td.r{text-align:right}
+td.name{font-weight:600;color:var(--text)}
+.done{color:var(--green)}.part{color:var(--text)}.zero{color:var(--dim)}
+.tbl-m{display:none}
+ul.bul{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
+ul.bul li{padding-left:16px;position:relative}
+ul.bul li:before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:999px;background:var(--gold)}
+ul.zl{list-style:none;padding:0;display:grid;grid-template-columns:1fr 1fr;column-gap:24px}
+ul.zl li{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--border)}
+ul.zl li span:last-child{white-space:nowrap}
+.chip{display:inline-block;font:600 11px/1 var(--f-num);padding:4px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+.chip.g{background:rgba(86,211,100,.15);color:var(--green)}.chip.r{background:rgba(248,81,73,.15);color:var(--red)}
+.chip.y{background:rgba(210,153,34,.15);color:var(--gold)}.chip.o{background:rgba(255,166,87,.15);color:var(--orange)}
+.cardhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.cardhd h2{margin:0}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.pills{display:none}
+/* phone */
+@media (max-width:760px){
+  .hdr{padding:0 16px;gap:8px;justify-content:space-between}
+  .nav,.acct .t{display:none}
+  .acct{padding:3px;width:32px;justify-content:center}
+  .hdr .right{display:flex;gap:8px}
+  .menu{display:inline-flex;height:44px;min-width:44px;border:1px solid var(--border);background:var(--raised);color:var(--text);border-radius:4px;align-items:center;justify-content:center;font-size:15px}
+  .hdr{height:56px}
+  .wrap{display:block;padding:16px}
+  .rail{display:none}
+  .pills{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 16px;padding:0 16px;-webkit-overflow-scrolling:touch}
+  .pills a{flex:none;min-height:44px;display:inline-flex;align-items:center;padding:0 16px;border-radius:999px;background:var(--raised);color:var(--dim);border:1px solid var(--border)}
+  .pills a.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .tb{flex-direction:column;align-items:stretch;gap:16px;margin-bottom:16px}
+  h1{font-size:20px}
+  .acts{flex-direction:column-reverse}
+  .btn{min-height:44px;height:44px}
+  .seg{display:flex;margin-bottom:12px}
+  .seg span{padding:12px 16px;flex:none}
+  .card{padding:12px;margin-bottom:12px}
+  .two{grid-template-columns:1fr;gap:12px}
+  .tbl-d{display:none}.tbl-m{display:flex;flex-direction:column;gap:8px}
+  .mrow{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px}
+  .mhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px}
+  .mgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+  .mgrid .lbl{font-size:11px;letter-spacing:0;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:clip}
+  ul.zl{grid-template-columns:1fr;}
+}
+</style></head><body>
+<header class="hdr"><div class="word"><img src="mimic-logo.png" alt="">Raid Mimic</div>
+<nav class="nav"><a>Timers</a><a>Parses</a><a>Raid</a><a class="on">Characters</a><a>Mimic</a></nav>
+<div class="right" style="display:flex;gap:8px;align-items:center"><div class="acct"><b>GL</b><span class="t">Guild lead</span></div><button class="menu" aria-label="Menu">&#9776;</button></div></header>
+<div class="wrap">
+<aside class="rail"><a>Overview</a><a class="on">Characters</a><a>Flags</a><a>Settings</a></aside>
+<main class="main">
+<div class="pills"><a>Overview</a><a>Characters</a><a class="on">Flags</a><a>Settings</a><a>History</a></div>
+<div class="tb"><div><div class="eyebrow">On this PC</div><h1>PoP flags</h1><p class="desc">Planes of Power progress read from your characters' logs.</p></div>
+<div class="acts"><button class="btn">Reload</button><button class="btn pri">Capture</button></div></div>
+<div class="seg"><span class="on">Overall</span><span>Storms</span><span>Valor</span><span>Air</span><span>Time</span></div>
+<div class="card"><div class="cardhd"><h2>Characters</h2><span class="chip g">5 found</span></div>
+<table class="tbl-d"><thead><tr><th>Character</th><th class="r">Flags</th><th class="r">Storms 3/3</th><th class="r">Valor 3/3</th><th class="r">Sol Ro 6/6</th><th class="r">Air 5/5</th><th class="r">Time 5/5</th></tr></thead><tbody><tr><td class="name">Aldenmar <span class="dim">(53)</span></td><td class="r num">19/22</td><td class="r"><span class="num done">3/3</span></td><td class="r"><span class="num done">3/3</span></td><td class="r"><span class="num done">6/6</span></td><td class="r"><span class="num done">5/5</span></td><td class="r"><span class="num part">2/5</span></td></tr><tr><td class="name">Brackwyn <span class="dim">(47)</span></td><td class="r num">14/22</td><td class="r"><span class="num done">3/3</span></td><td class="r"><span class="num done">3/3</span></td><td class="r"><span class="num done">6/6</span></td><td class="r"><span class="num part">2/5</span></td><td class="r"><span class="num zero">0/5</span></td></tr><tr><td class="name">Corvale <span class="dim">(32)</span></td><td class="r num">4/22</td><td class="r"><span class="num done">3/3</span></td><td class="r"><span class="num part">1/3</span></td><td class="r"><span class="num zero">0/6</span></td><td class="r"><span class="num zero">0/5</span></td><td class="r"><span class="num zero">0/5</span></td></tr><tr><td class="name">Rethlan <span class="dim">(24)</span></td><td class="r num">2/22</td><td class="r"><span class="num part">2/3</span></td><td class="r"><span class="num zero">0/3</span></td><td class="r"><span class="num zero">0/6</span></td><td class="r"><span class="num zero">0/5</span></td><td class="r"><span class="num zero">0/5</span></td></tr><tr><td class="name">Nyssara <span class="dim">(12)</span></td><td class="r num">0/22</td><td class="r"><span class="num zero">0/3</span></td><td class="r"><span class="num zero">0/3</span></td><td class="r"><span class="num zero">0/6</span></td><td class="r"><span class="num zero">0/5</span></td><td class="r"><span class="num zero">0/5</span></td></tr></tbody></table>
+<div class="tbl-m"><div class="mrow"><div class="mhead"><span class="name">Aldenmar <span class="dim">(53)</span></span><span class="num dim">19/22 flags</span></div><div class="mgrid"><div><div class="lbl">Storms</div><span class="num done">3/3</span></div><div><div class="lbl">Valor</div><span class="num done">3/3</span></div><div><div class="lbl">Sol Ro</div><span class="num done">6/6</span></div><div><div class="lbl">Air</div><span class="num done">5/5</span></div><div><div class="lbl">Time</div><span class="num part">2/5</span></div></div></div><div class="mrow"><div class="mhead"><span class="name">Brackwyn <span class="dim">(47)</span></span><span class="num dim">14/22 flags</span></div><div class="mgrid"><div><div class="lbl">Storms</div><span class="num done">3/3</span></div><div><div class="lbl">Valor</div><span class="num done">3/3</span></div><div><div class="lbl">Sol Ro</div><span class="num done">6/6</span></div><div><div class="lbl">Air</div><span class="num part">2/5</span></div><div><div class="lbl">Time</div><span class="num zero">0/5</span></div></div></div><div class="mrow"><div class="mhead"><span class="name">Corvale <span class="dim">(32)</span></span><span class="num dim">4/22 flags</span></div><div class="mgrid"><div><div class="lbl">Storms</div><span class="num done">3/3</span></div><div><div class="lbl">Valor</div><span class="num part">1/3</span></div><div><div class="lbl">Sol Ro</div><span class="num zero">0/6</span></div><div><div class="lbl">Air</div><span class="num zero">0/5</span></div><div><div class="lbl">Time</div><span class="num zero">0/5</span></div></div></div><div class="mrow"><div class="mhead"><span class="name">Rethlan <span class="dim">(24)</span></span><span class="num dim">2/22 flags</span></div><div class="mgrid"><div><div class="lbl">Storms</div><span class="num part">2/3</span></div><div><div class="lbl">Valor</div><span class="num zero">0/3</span></div><div><div class="lbl">Sol Ro</div><span class="num zero">0/6</span></div><div><div class="lbl">Air</div><span class="num zero">0/5</span></div><div><div class="lbl">Time</div><span class="num zero">0/5</span></div></div></div><div class="mrow"><div class="mhead"><span class="name">Nyssara <span class="dim">(12)</span></span><span class="num dim">0/22 flags</span></div><div class="mgrid"><div><div class="lbl">Storms</div><span class="num zero">0/3</span></div><div><div class="lbl">Valor</div><span class="num zero">0/3</span></div><div><div class="lbl">Sol Ro</div><span class="num zero">0/6</span></div><div><div class="lbl">Air</div><span class="num zero">0/5</span></div><div><div class="lbl">Time</div><span class="num zero">0/5</span></div></div></div></div></div>
+<div class="two">
+<div class="card"><div class="cardhd"><h2>Needs next</h2><span class="chip o">Aldenmar</span></div><ul class="bul"><li>Time: 3 more flags to finish the line</li><li>Talk to the Keeper in the Plane of Time hall</li><li>Rethlan still needs Storms 1/3</li></ul></div>
+<div class="card"><div class="cardhd"><h2>Can enter</h2><span class="chip y">Aldenmar</span></div><ul class="zl"><li><span>Plane of Valor</span><span class="green">yes</span></li><li><span>Plane of Torment</span><span class="green">yes</span></li><li><span>Plane of Tactics</span><span class="dim">missing Valor 3/3</span></li><li><span>Solusek Ro Hall</span><span class="green">yes</span></li><li><span>Plane of Air</span><span class="dim">missing Storms 3/3</span></li><li><span>Plane of Earth</span><span class="dim">missing Air 5/5</span></li><li><span>Plane of Time</span><span class="dim">missing Air 5/5</span></li><li><span>Bastion of Thunder</span><span class="green">yes</span></li></ul></div>
+</div>
+</main></div></body></html>

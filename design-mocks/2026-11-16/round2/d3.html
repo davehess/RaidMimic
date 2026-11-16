@@ -1,0 +1,88 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PoP flags - d3 Tier ladder</title><style>
+:root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#c9d1d9;--mute:#9aa4ad;--faint:#6b7580;--accent:#1f6feb;--blue:#58a6ff;--green:#56d364;--red:#f85149;--gold:#d29922;--raised:#21262d;--sel:#17253a;
+--f:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box;margin:0}html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:400 14px/1.45 var(--f);font-variant-numeric:tabular-nums;min-height:100vh;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.hdr{border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:24px;padding:0 24px;min-height:52px;flex-wrap:wrap}
+.word{font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px;height:52px}
+.word img{width:28px;height:28px;border-radius:6px}
+.nav{display:flex;gap:4px;flex:1;overflow-x:auto}
+.nav a{color:var(--mute);padding:6px 12px;border-radius:4px;white-space:nowrap}
+.nav a.on{color:var(--text);background:var(--raised)}
+.acct{display:flex;align-items:center;gap:8px;background:var(--raised);border:1px solid var(--border);border-radius:999px;padding:3px 12px 3px 4px;height:32px;font-size:13px}
+.acct b{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;display:grid;place-items:center}
+.page{max-width:1400px;margin:0 auto;padding:24px}
+.tb{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+h1{font-size:24px;font-weight:650;line-height:1.2;color:var(--text);margin-bottom:4px}
+.desc{color:var(--mute)}
+.acts{display:flex;gap:8px}
+.btn{font:600 14px/1 var(--f);min-height:36px;padding:0 16px;border-radius:6px;border:1px solid var(--border);background:var(--raised);color:var(--text);cursor:pointer}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:600;color:var(--mute);text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+.r{text-align:right}
+th .car{color:var(--blue);margin-left:4px}
+tr.row{cursor:pointer}tr.row:hover td{background:#1b2129}
+tr.sel td{background:var(--sel)}tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.name{font-weight:600}
+.c{font-weight:600}.c.done,.done{color:var(--green)}.c.part{color:var(--gold)}.c.zero{color:var(--faint);font-weight:400}
+.fl{display:inline-flex;align-items:center;gap:10px}.fl .n{min-width:44px;font-weight:600}
+.n.done{color:var(--green)}
+.bar{display:inline-block;width:72px;height:6px;border-radius:3px;background:#2b323b;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green);border-radius:3px}
+.sec h3{font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.needs{list-style:none;padding:0;display:grid;gap:4px}
+.needs a{display:block;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg)}
+.needs a:hover{background:var(--raised);text-decoration:none}
+.needs a:after{content:" \2192"}
+.needs b{color:var(--text);font-weight:600}
+.enter{list-style:none;padding:0;display:grid;gap:2px}
+.enter li{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)}
+.enter li:last-child{border:0}
+.enter .z{min-width:84px;font-weight:600}
+.chip{width:24px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:13px;font-weight:700;flex:none}
+.chip.y{background:rgba(86,211,100,.16);color:var(--green)}
+.chip.x{background:rgba(248,81,73,.16);color:#ff7b72}
+.req{color:#ff7b72;font-size:13px}
+.det{display:grid;gap:24px}
+.cards{display:none}
+.ccard{padding:14px;border-bottom:1px solid var(--border)}
+.ccard.sel{background:var(--sel);box-shadow:inset 3px 0 0 var(--accent)}
+.ccard .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ccard .lv{color:var(--mute);margin-left:8px;font-weight:400}
+.ccard .mini{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.ccard .mini div{font-size:12px;color:var(--mute)}.ccard .mini .c{display:block;font-size:14px}
+.ccard .det{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+
+.lay{display:grid;grid-template-columns:260px 1fr;gap:24px;align-items:start}
+.sw{padding:6px}.sw .it{color:var(--text);display:block;padding:10px 12px;border-radius:6px;border-left:3px solid transparent}
+.sw .it.sel{background:var(--sel);border-left-color:var(--accent)}
+.sw .t{display:flex;justify-content:space-between;margin-bottom:6px}.sw .fl{width:100%}.sw .bar{flex:1;width:auto}
+.chips{display:none}
+.lad{padding:20px 24px}
+.lh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}.lh h2{font-size:20px;font-weight:650}.lh span{color:var(--mute)}
+.tier{display:grid;grid-template-columns:96px 1fr;gap:16px;position:relative;padding-bottom:30px}
+.tier:last-child{padding-bottom:0}
+.tier:not(:last-child):after{content:"";position:absolute;left:104px;top:34px;bottom:-2px;width:0;border-left:2px solid #3a424c;display:none}
+.tl{color:var(--mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding-top:12px}
+.nodes{display:flex;gap:16px;flex-wrap:wrap;position:relative}
+.tier:not(:last-child) .nodes:after{content:"";position:absolute;left:28px;top:100%;height:30px;border-left:2px solid #3a424c}
+.tier:not(:last-child) .nodes{margin-bottom:0}
+.node{flex:1 1 0;min-width:130px;max-width:200px;border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px}
+.done .dot{background:var(--green);color:#0d1117}.part .dot{border:2px solid var(--gold);color:var(--gold)}.locked .dot{border:2px dashed #4b535d;color:var(--faint)}
+.nm{font-weight:600}.locked .nm{color:var(--faint)}
+.part{border-color:rgba(210,153,34,.5)}
+.call{font-size:13px;line-height:1.35}
+.locknote{color:#ff7b72;font-size:13px}
+@media(max-width:860px){.lay{display:block}.sw{display:none}.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:12px}
+.chip2{color:var(--text);flex:none;padding:8px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);display:flex;gap:8px;align-items:center;min-height:40px}.chip2.sel{border-color:var(--accent);background:var(--sel)}.chip2 .n{color:var(--mute);font-size:13px}
+.page{padding:16px}.hdr{padding:0 16px;gap:8px}.nav{order:3;flex-basis:100%}.word{height:48px}.acts{width:100%}.acts .btn{flex:1}.tb{align-items:stretch}
+.lad{padding:16px}.tier{grid-template-columns:1fr;gap:6px;padding-bottom:26px}.tl{padding-top:0}.nodes{gap:10px}.node{flex:none;width:calc(50% - 5px);max-width:none;min-width:0}.tier:not(:last-child) .nodes:after{left:18px;height:26px}}</style></head><body>
+<header class="hdr"><div class="word"><img src="mimic-logo.png" alt="">Raid Mimic</div><nav class="nav"><a>Timers</a><a>Parses</a><a>Raid</a><a class="on">Characters</a><a>Mimic</a></nav><div class="acct"><b>A</b>Aldenmar</div></header>
+<div class="page"><div class="tb"><div><h1>Planes of Power flags</h1><div class="desc">Progress across your characters, from the last snapshot.</div></div><div class="acts"><button class="btn">Reload</button><button class="btn pri">Capture snapshot</button></div></div><div class="lay"><aside class="card sw"><a class="it sel" href="#"><div class="t"><span class="name">Aldenmar</span><span class="lv" style="color:var(--mute)">Lvl 65</span></div><span class="fl" style="display:flex"><b class="n " style="min-width:44px">19/22</b><span class="bar"><i class="" style="width:86.36363636363636%"></i></span></span></a><a class="it " href="#"><div class="t"><span class="name">Brackwyn</span><span class="lv" style="color:var(--mute)">Lvl 65</span></div><span class="fl" style="display:flex"><b class="n " style="min-width:44px">14/22</b><span class="bar"><i class="" style="width:63.63636363636363%"></i></span></span></a><a class="it " href="#"><div class="t"><span class="name">Corvale</span><span class="lv" style="color:var(--mute)">Lvl 62</span></div><span class="fl" style="display:flex"><b class="n " style="min-width:44px">4/22</b><span class="bar"><i class="" style="width:18.181818181818183%"></i></span></span></a><a class="it " href="#"><div class="t"><span class="name">Rethlan</span><span class="lv" style="color:var(--mute)">Lvl 60</span></div><span class="fl" style="display:flex"><b class="n " style="min-width:44px">2/22</b><span class="bar"><i class="" style="width:9.090909090909092%"></i></span></span></a><a class="it " href="#"><div class="t"><span class="name">Nyssara</span><span class="lv" style="color:var(--mute)">Lvl 58</span></div><span class="fl" style="display:flex"><b class="n " style="min-width:44px">0/22</b><span class="bar"><i class="" style="width:0%"></i></span></span></a></aside>
+<div><div class="chips"><a class="chip2 sel"><span class="name">Aldenmar</span><span class="n">19/22</span></a><a class="chip2 "><span class="name">Brackwyn</span><span class="n">14/22</span></a><a class="chip2 "><span class="name">Corvale</span><span class="n">4/22</span></a><a class="chip2 "><span class="name">Rethlan</span><span class="n">2/22</span></a><a class="chip2 "><span class="name">Nyssara</span><span class="n">0/22</span></a></div>
+<div class="card lad"><div class="lh"><h2>Aldenmar</h2><span>Level 65 · 19 of 22 flags</span></div><div class="tier"><div class="tl">Tier 1</div><div class="nodes"><div class="node done"><div class="dot">✓</div><div class="nm">Justice</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Innovation</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Disease</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Nightmare</div></div></div></div><div class="tier"><div class="tl">Tier 2</div><div class="nodes"><div class="node done"><div class="dot">3/3</div><div class="nm">Storms</div></div><div class="node done"><div class="dot">3/3</div><div class="nm">Valor</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Decay</div></div><div class="node done"><div class="dot">✓</div><div class="nm">T. Thule</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Torment</div></div></div></div><div class="tier"><div class="tl">Tier 3</div><div class="nodes"><div class="node done"><div class="dot">✓</div><div class="nm">Thunder</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Honor</div></div><div class="node done"><div class="dot">✓</div><div class="nm">Tactics</div></div><div class="node done"><div class="dot">6/6</div><div class="nm">Sol Ro</div></div></div></div><div class="tier"><div class="tl">Elemental</div><div class="nodes"><div class="node locked"><div class="dot"></div><div class="nm">Earth</div><div class="locknote">needs Arbitor</div></div><div class="node part"><a id="air"></a><div class="dot">3/5</div><div class="nm">Air</div><a class="call" href="#">Kill the four Avatars (2 left) →</a></div><div class="node done"><div class="dot">✓</div><div class="nm">Water</div></div><div class="node part"><a id="fire"></a><div class="dot">•</div><div class="nm">Fire</div><a class="call" href="#">Kill Fennin Ro →</a></div></div></div><div class="tier"><div class="tl">Time</div><div class="nodes"><div class="node part"><a id="time"></a><div class="dot">4/5</div><div class="nm">Time</div><a class="call" href="#">Hail the Keeper in the Plane of Time hall →</a></div></div></div></div></div></div></div></body></html>
