@@ -143,6 +143,11 @@ different failure for a raid night) and current egress against the 250 GB. The
 Management API exposes neither. Do not quote an egress figure until someone does.
 
 ## 3. Decisions already made that the wizard must carry
+- **2026-11-16 — the Discord consent screen names the auth address, so brand it** (DECISIONS §601): Discord shows the
+  Supabase project's callback host on its sign-in screen. Ours is a free vanity subdomain (`raidmimic.supabase.co`, set with
+  the Supabase CLI on a paid plan); the paid alternative is a custom domain (`auth.<domain>`, $10/month on Supabase, outside
+  the spend cap). A wizard should offer both and add the new callback to the Discord app's redirects BEFORE activating, or
+  every sign-in fails. Keep the client on the project URL: changing it renames the auth cookies and signs everyone out.
 - **2026-11-15 — the live party view runs on its own small service, in memory only** (`DESIGN-raidmimic-relay.md`): a Node
   WebSocket relay on its own Railway project (not the bot's), holding the Supabase ANON key only and asking two `SECURITY DEFINER`
   RPCs who a session token belongs to. It stores nothing, so a self-hosted guild runs it for the price of one small container;
