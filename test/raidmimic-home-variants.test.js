@@ -19,19 +19,8 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const code = (rel) => stripJs(read(rel));
 const D = 'web/components/lab/rm-home/';
 
-describe('the default render is unchanged', () => {
-  const page = code('web/app/raidmimic/page.tsx');
-  it('page.tsx still builds the same page and reads no query', () => {
-    expect(page).toMatch(/const page = \(\s*<div id="raidmimic-home">/);
-    expect(page).toMatch(/\{!signedIn && onHost && <HostBar \/>\}\s*<FeatureBlocks \/>/);
-    expect(page).not.toMatch(/searchParams/);
-  });
-  it('returns that page alone unless this is a beta build, and wraps it (never replaces it) on beta', () => {
-    expect(page).toMatch(/if \(process\.env\.NEXT_PUBLIC_IS_BETA !== '1'\) return page;/);
-    expect(page).toMatch(/<RmHomeSwitch a=\{<VariantA \{\.\.\.vp\} \/>\} b=\{<VariantB \{\.\.\.vp\} \/>\} c=\{<VariantC \{\.\.\.vp\} \/>\}>\{page\}<\/RmHomeSwitch>/);
-  });
-});
-
+// The player home was picked and graduated (web 2.2.8, 2026-11-16), so the live page no longer wraps itself in the
+// switch; the lab components keep their own rules below.
 describe('each ?v= picks its component', () => {
   const sw = code(`${D}RmHomeSwitch.tsx`);
   it('reads ?v= on the client and falls back to the children for anything but a, b, c', () => {
@@ -51,13 +40,6 @@ describe('each ?v= picks its component', () => {
     expect(v).toMatch(/export function VariantC[\s\S]*?<DraftStrip current="c" \/>/);
     expect(code(`${D}parts.tsx`)).toMatch(/option \{current\.toUpperCase\(\)\}/);
     expect(code(`${D}parts.tsx`)).toMatch(/\[draft\]/);
-  });
-});
-
-describe('the middleware keeps ?v= on the beta host only', () => {
-  const mw = code('web/middleware.ts');
-  it('guards on the beta host, the landing path and a known variant', () => {
-    expect(mw).toMatch(/isRaidmimicBetaHost\(request\.headers\.get\('host'\)\) && to\.pathname === RAIDMIMIC_LANDING_PATH && isHomeVariant\(draft\)\) url\.search = `\?v=\$\{draft\}`/);
   });
 });
 

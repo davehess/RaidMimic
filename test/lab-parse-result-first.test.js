@@ -118,19 +118,10 @@ describe('review fixes', () => {
     expect(shared).toContain('Detail is kept for 7 days. This fight is older.');
     expect(shared).toContain('No kill seen');
   });
-  it('the real page reads ended_at, and the signed-out redirect keeps ?v=a', () => {
+  it('the real page reads ended_at', () => {
+    // The result-first layout graduated to the default (web 2.2.7, 2026-11-16); the ?v=a staging is gone.
     const page = stripJs(fs.readFileSync(path.join(ROOT, 'web/app/parses/[id]/page.tsx'), 'utf8'));
     expect(page).toMatch(/id, started_at, ended_at, duration_sec/);
     expect(page).toMatch(/endedAt: enc\.ended_at/);
-    expect(page).toMatch(/view === 'a' \? encodeURIComponent\(`\/parses\/\$\{id\}\?v=a`\)/);
-  });
-});
-
-describe('the staged page', () => {
-  const src = stripJs(fs.readFileSync(path.join(ROOT, 'web/app/parses/[id]/page.tsx'), 'utf8'));
-  it('reads ?v=a, the default render is still the one below it, and the draft names the path', () => {
-    expect(src).toMatch(/if \(view === 'a'\)/);
-    expect(src.indexOf("view === 'a'")).toBeLessThan(src.indexOf('Damage breakdown'));
-    expect(draft.staged).toMatch(/^\/parses\/.*\?v=a$/);
   });
 });
