@@ -2922,6 +2922,11 @@ roster fallback; flags = `pop_flags` + site ticks + `/who` sightings through `st
 a map per zone. All content is data in `web/lib/raidPlan.ts` (dated for one night; edit it for the next).
 `web/app/pop/raid/ZoneSvg.tsx` draws walls + route + markers + patrol; `walls.ts` reads `zone_map_lines.segs`
 only (never Brewall). `test/pop-raid-plan.test.js`.
+**By tier since web 2.2.10 (2026-11-16):** `TierPage.tsx` folds one section per tier, highest first; `TierBlocks.tsx`
+draws a line per gated plane from `web/lib/popRaidTiers.ts` (`gateReport` per raider: in / missing piece / "not
+recorded" when there is no `loadFullReads` recital or #popflags read in 14 days) plus the 85% door line
+(`popRaidEntry.ts` `doorLine`) for Air, Water, Fire, Earth and Time. The plan sections are `PlanSectionView.tsx`,
+folded inside their tier. `test/pop-raid-tiers.test.js`, `test/pop-raid-entry.test.js`.
 
 ### Your flags for tonight (`/pop/raid/me`, [beta], web 2.1.44)
 A member's own link for the next raid night: the character their sign-up brings (BRINGING card, gold), every other

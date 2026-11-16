@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'pop-raid-tiers-2026-11-16',
+    title: 'The raid night plan, by tier',
+    version: 'Web 2.2.10',
+    date: '2026-11-16',
+    headline: 'The raid night plan now starts at the highest tier and works down, one folded section per tier, saying who is in each plane and who is missing what.',
+    features: [
+      { name: 'One line per plane', blurb: 'How many raiders can get in, then what the others are missing, with the names one click away and a button to copy them.' },
+      { name: '"Not recorded" is not "missing"', blurb: 'Someone with no full flag read in the last two weeks shows as not recorded, so an out-of-date record no longer lists them as unflagged.' },
+      { name: 'The 85% door', blurb: 'Under Air, Water, Fire, Earth and Time: how many are flagged and whether the raid can bring the rest in.' },
+      { name: 'Tonight\'s plan inside its tier', blurb: 'Each target\'s map, route, fights and loot fold under the tier it belongs to.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'raidmimic-player-first-landing-2026-11-16',
     title: 'Raid Mimic\'s front page, players first',
     version: 'Web 2.2.8',
