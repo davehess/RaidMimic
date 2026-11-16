@@ -3930,7 +3930,9 @@ async function checkQuakeAlert(readyClient) {
 // ── Nightly parse consolidation ────────────────────────────────────────────────
 async function consolidateNightlyParses(client) {
   const { loadParses, saveParses, logParseToDiscord } = require('./commands/parse');
-  const { groupKillsBySession, mergeKillGroup }        = require('./commands/parsestats');
+  // The two helpers live in commands/parse.js; commands/parsestats.js only imports them, and requiring them from there
+  // gave undefined, so the midnight consolidation threw every night ("groupKillsBySession is not a function").
+  const { groupKillsBySession, mergeKillGroup }        = require('./commands/parse');
 
   const allParses = loadParses();
   const now       = Date.now();
@@ -14156,7 +14158,7 @@ async function _preRaidHealthCheck() {
 
   // Postgres/PostgREST via the service-role client the bot actually uses.
   const dbStart = Date.now();
-  const dbRows = await supabase.select('eqemu_zone', 'select=id&limit=1').catch(() => null);
+  const dbRows = await supabase.select('eqemu_zone', 'select=short_name&limit=1').catch(() => null);   // the table has no id column
   const dbMs = Date.now() - dbStart;
   const dbOk = Array.isArray(dbRows);
   const dbLine = `${mark(dbOk, dbMs)} DB ${dbMs}ms`;
