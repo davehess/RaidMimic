@@ -97,6 +97,9 @@ writes.
 
 ## Identity & auth
 
+- **Upload sign-ins at rest (bot 4.1.5, 2026-11-16, §573/§597).** `utils/mimicLink.js` `hashToken` / `_lookupSessionToken`:
+  a Mimic session token is looked up by `mimic_sessions.token_hash` (sha256), plaintext fallback while
+  `SESSION_PLAINTEXT_FALLBACK` is on; `isIdleExpired` refuses a member session unused for `SESSION_IDLE_DAYS` (90).
 - **Free flag syncing for players outside Wolf Pack (bot 4.0.50, 2026-11-02, §526/§527; slice 1).** `utils/mimicLink.js`:
   `FREE_ROUTES` / `PAID_HUB_ROUTES` (`hubFreeRouteAllowed`, `hubPlanPaid`: paid = `hub_guilds.plan = 'managed'`), 403
   `plan_required` before a body is read; a player link (`{player:true}`, hub `'~player'`, `_hubPlayerOf`) mints `scope:
@@ -104,6 +107,30 @@ writes.
   `handleRequest`) writes `hub_flags` and `hub_characters` (migration `20261102210000_hub_sync.sql`, RLS on, no policies);
   dispatched from `_handleAgentPopFlags` before any Wolf Pack write. `web/lib/mimicLinkHub.ts` lets any raidmimic.com player
   claim a player code. `test/hub-sync.test.js`, `test/mimic-link-hub.test.js`.
+- **What Raid Mimic costs to run, `https://raidmimic.com/costs` (web 2.1.147, `[beta]`).** Public page: what is free, what hosted replays will cost, the monthly bill and a Ko-fi link. Every figure and its source note is in `web/lib/runningCosts.ts` (update it there, then move `measuredAt`); page `web/app/costs/page.tsx`; open path `RAIDMIMIC_COSTS_PATH` in `web/lib/raidmimicHost.ts`; footer link in `web/app/raidmimic/_landing/Parts.tsx`. Authority for the numbers: `docs/COSTS.md`. `test/running-costs.test.js`.
+- **My raids, `https://raidmimic.com/raids` (web 2.1.146, `[beta]`).** A player's own guild list (`hub_player_guilds`, up to 10: a registered
+  `hub_guilds` row or a typed name, raid days/start/length/zone, or "use the guild's schedule" from `guild_settings`), the next 14 days of raids
+  with a target (the player's own pick in `hub_player_targets`, or one the guild posted in `flag_events`, which wins) and each linked character's
+  ready / needs / not sure (`flagEventNeeds.ts` over `popGateStatus.ts`), and `?view=calendar`. Schedule maths is `guildSettings.ts windowsAround`;
+  rules in `web/lib/myRaids.ts`, player-scoped writes in `myRaidsWrite.ts`, forms in `web/app/raids/`. `test/my-raids.test.js`.
+- **My characters, `https://raidmimic.com/characters` (web 2.1.144 on `main`, `[beta]`; DECISIONS §545).** Three ways in, one path:
+  drop Zeal's `<Name>-PoPFlags.txt` files (`LoadBlock.tsx` → `importCharacters`; one compact line since web 2.2.2: files, "or", name + paste, how-to folded), or paste the `#popflags` lines, a file's text
+  or the Seer's words with a name (`LoadBlock.tsx` → `importPaste`; `pasteToFile` in `web/lib/hubImport.ts`: 64 KB / 800 line caps
+  and the NUL check BEFORE parsing, header name must match the field, only catalog keys stored, unrecognised lines only counted).
+  Both go through `importExports` (50-character and 50-file caps, `hubClaim.ts`, dedupe; `normalizeText` first: curly quotes, NBSP, dashes, zero-width) and the two-layer limiter: in-memory 10 per 10 min, then
+  `hub_import_attempts` (20 an hour per player, `web/lib/hubImportLimit.ts`, fails OPEN; migration `20261115120000`, pruned at 1 day
+  by the bot's midnight chain). Each card shows Needs next, a "Can enter" zone list (`zoneEntry` in `hubCharactersView.ts`, from
+  `zoneAccess` / `missingFor` over `heldClosure`), the flags it has, and "Remove this character" (`removeCharacter`). Above the cards, the demo's `GateTable` draws the flag matrix from the
+  player's real flags (`matrixRows`: most flags first, ties by name; `?gate=` picks the gate). Since web 2.2.2 it opens on
+  **Overall** (`overallRows` / `wantsOverall`, GateTable's optional `overall` prop: done/total per gate, each count opens that gate).
+  Flags are stored and read only under the session player's id (`test/hub-characters-poisoning.test.js`); names two players hold
+  show to officers at `https://wolfpack.quest/admin/hub-conflicts` (`web/lib/hubConflicts.ts`, read-only). The signed-out
+  landing carries a "Track your PoP flags" button. `test/hub-characters-import.test.js`, `test/hub-characters-paste.test.js`.
+  **Character page, `https://raidmimic.com/characters/<name>` (web 2.2.2; the guild lead, 2026-11-15).** One of the signed-in player's own characters (any
+  other name is a 404): the flag summary (`FlagsBody`, shared with the card) plus gear and bags from an uploaded Zeal `<Name>-Inventory.txt` or `<Name>Quarmy.txt`
+  (`web/lib/hubInventory.ts` readers, `hubInventoryDb.ts` reads/writes, table `hub_inventory`, migration `20261115230000`; Quarmy keeps worn + bags only). Needs the
+  character's flags loaded first. The self-delete function covers it in `20261115230100` (hand paste). Mimic uploads a hub player's PoP flags only; its
+  automatic inventory/Quarmy upload is Wolf Pack members' only, which the page says. `test/hub-inventory.test.js`.
 - **Flag events board, `/pop/flag-events` (web 2.1.99 on `main`, `[beta]`, 2026-11-02; DECISIONS §522 pick A).** Officers post
   a target (catalog `web/lib/flagTargets.ts`, 12 targets, each a set of gate pieces from `popGatePieces.ts`; the demo shares it)
   and an Eastern date/time, an optional note and an optional Raid-Helper event (`actions.ts`: session + `isOfficer` re-checked,
@@ -135,6 +162,12 @@ writes.
   Set up, For guild leaders; the landing page's `Footer` with privacy, terms, refunds, contact) and `/setup` takes the bar
   (it has its own footer); on a Wolf Pack host the frame renders nothing. The bar is sticky and one line (web 2.1.98), and
   the landing page carries it under its stage on a raidmimic host. `test/raidmimic-frame.test.js`.
+  **Since web 2.2.4 the frame is Wolf Pack's layout** (DECISIONS §592, Desk rm-shell B): `HostFrame` renders
+  `RaidmimicShell.tsx` on every raidmimic page, the landing and `/setup` included: a full-width sticky header
+  (`RaidmimicHeader.tsx`: logo, Download / Beta / Linux chips from `web/lib/raidmimicShell.ts`, the `raidmimicNav.ts`
+  sections as dropdowns, sign-in), a side nav of the section's pages (`RaidmimicSideShell.tsx`, PopShell's pattern; pages in
+  no section get About: costs, privacy, security, terms, refunds) and `RaidmimicShellFooter.tsx`. `LegalShell` wraps itself
+  in it. `test/raidmimic-shell.test.js`.
   `/guilds` (`web/app/guilds/`): the Wolf Pack card for members, one card per `hub_*` membership, join by invite code
   (rate-limited; uses, expiry and suspension honoured; `JoinForm.tsx`, `actions.ts`), "Find my guilds" (a second consent,
   `identify guilds`: matches the Discord server list against `hub_guilds.discord_guild_id`, joins `open_join` guilds, lists closed
@@ -406,6 +439,10 @@ boundaries, `#if 0` C++ — the index above stays the map of intent. The
   roster sync overwrote anything stored. The spells page then had no class and no spell list.
 - **Where (bot):** `mergeKnownClassRace` / `isUnknownClassRace` in `utils/openDkpSync.js`, applied in `syncCharacters` after the
   duplicate-name collapse and before the upsert (one paged read of the guild's name/class/race; fail-open).
+- **Character combat page** (web 2.1.143, bot 4.0.83, 2026-11-14, DECISIONS §585): `web/app/character/[name]/combat/page.tsx`,
+  owner-only (`COMBAT_VISIBILITY` in `web/lib/characterCombat.ts`), reads `character_combat_trends(name, days)` as the signed-in
+  member. Incoming swings per fight: `encounter_combat_rollup.taken`, written by `upsertCombatTaken` (utils/supabase.js) from the
+  uploader's own defender row. Per-ability highs / lows (`max`/`min`/`h` in `by_skill`), Harm Touch and `weave` come from the agent.
 - **Where (web):** `web/app/character/[name]/spells/ClassSetter.tsx` (officers only), `setCharacterClass` in the same folder's
   `actions.ts`, lists and validation in `web/lib/characterClass.ts`. Visible at `https://wolfpack.quest/character/<name>/spells`.
 - **Not done:** OpenDKP is not edited; its "edit character" request has not been captured. Test: `test/character-class-set.test.js`.
@@ -1515,6 +1552,7 @@ Tests: `test/feedback-log-slice.test.js` (agent + card), `test/feedback-ingest.t
   `index.js`, every 10 min, watermark `guild_interest_notified_at` in `bot_kv`; sanitizer + card in `utils/guildInterestNotice.js`, test `test/guild-interest-notice.test.js`).
 - **Legal pages:** `web/app/raidmimic/{privacy,terms,refunds}/page.tsx` + `_legal/LegalParts.tsx`, words and version in `web/lib/legal.ts`, `AgreeLine.tsx`,
   `LegalLinks.tsx`, `recordTermsAcceptance` (`web/lib/termsAcceptance.ts`, called from both sign-in callbacks). Test: `test/legal-pages.test.js`.
+- **Security page:** `web/app/raidmimic/security/page.tsx` (`https://raidmimic.com/security`), words in `LEGAL_META.security` and its date in `SECURITY_UPDATED` (`web/lib/legal.ts`), the `/security` rewrite in `web/lib/raidmimicHost.ts`, the footer link in `LegalLinks.tsx`. Public: protections only, each claim cited in a comment. Test: `test/raidmimic-security-page.test.js`.
 - **Your data:** `web/app/me/data/` (`YourData.tsx`, `DeleteAccount.tsx`, `actions.ts`, `export/route.ts`), `web/app/guilds/data/export/route.ts`, `web/lib/selfData.ts` +
   `selfDataRoute.ts`, RPCs `member_self_delete` / `member_self_unlink_batch`. Test: `test/self-serve-data.test.js`.
 - **Officer surfaces:** the departed-member pop-up (`web/components/DepartedMemberNotice.tsx` + `DepartedMemberPopup.tsx`, `web/lib/departedMembers*.ts`, on `/` and `/admin`;
@@ -3347,6 +3385,13 @@ Records only opted-in members (`/bristlebane optin|optout|forget|status`) as `<n
 `/data/consent.json`. Ogg conversion is still a README TODO. Tests: `test/bristlebane.test.js`,
 `test/raid-live.test.js`.
 
+### Raid Mimic party relay — live party view (relay 1.0.0, not deployed)
+`apps/raidmimic-relay/` (`index.js` = sockets, `lib.js` = validation, tier rule, per-player MAX merge, `Party`, session cache).
+WebSocket `/v1/party`; the first message carries a Mimic session token, resolved through the anon-key RPC
+`relay_resolve_session` (migration `20261115150000_raidmimic_relay.sql`; the relay never holds the service-role key). Parties live
+in memory only. Free: 6 members, roster/HP + trigger fires; trial/pro: 72 members, every stream, 10-minute history. Design:
+`docs/DESIGN-raidmimic-relay.md`. Test: `test/raidmimic-relay.test.js`. No Mimic client yet.
+
 ### Raid-night appearance (bot 3.1.208, §166)
 `utils/raidAppearance.js` `noteMinute()` is called by `raidTrack._writeMinute` after a minute row lands:
 `snapshotNight()` on a night's first minute, each raider's first minute and hourly → `raid_night_appearance`
@@ -3716,8 +3761,15 @@ resolution, drag/snap editor, writes back with `.bak` or defers until logout
 Nothing under it reads the database (`test/lab-drafts.test.js`). A draft's recommended version is staged on the real
 page behind a query; the audit and the backlog are in `docs/DESIGN-site-refinement.md`.
 **Fitting a layout to another screen size** (stable in Mimic 3.0.10; beta `ad460c48` + review fixes `8a705746`,
-2026-11-14, FB-132, DECISIONS §580, §581; `_uiSameMachine` keeps this PC's own backups unfitted, `perCharFlag` reads
-the backup's own per-character-keys switch): ONE rule,
+2026-11-14, FB-132, DECISIONS §580, §581; review fixes on beta in Mimic 3.1.0, `2aec33aa`, §583, §584.
+`_uiSameMachine` recognises this PC's own backups, local or cloud (once the bot's download returns `machine_name`,
+held until 3.1.0 is stable), and `fitOpts(…, sameMachine, sourceRes)` passes `keep`: a window with a place at this
+size is left exactly as it is, one without is fitted from the played-at block. `fitZealBars` fits zeal.ini's
+[RaidBars]/[AssistBar] pixels. Keys: `perCharFlag` reads the backup's own per-character-keys switch; onto a
+shared-keys PC the card's "Give each character its own keys on this PC" runs `splitKeysWrites` (pseudo-part
+`keysplit`, queued first) and then per-character keys, or a picker writes one character's `[KeyMaps_<Char>]` as
+`[KeyMaps]` (`keysDecision` in bring-setup.js). UI Studio reloads on `ui-studio-restored` from `_uiWriteRestore`):
+ONE rule,
 `apps/mimic/uiFit.js` (`fitRect`, `fitAxis`, `isOffScreen`, `isChatSection`), used by UI Studio's Load + Rescale
 (`_renderLoadedBundle`, as a `<script>`) and by the bring-in (`uiRestorePlan.fitLayout`, by `require`). A window keeps
 its place in the free space, MainChat / Chat N are resized by the screen ratio, every other window keeps its size, a

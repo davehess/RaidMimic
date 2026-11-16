@@ -155,15 +155,16 @@ export default async function LeaderboardsPage(
             double a row. <Link href={`/leaderboards?w=${w.key}&legacy=1`} className="text-blue hover:underline">Show them anyway</Link>.</>
           )}
         </p>
-        <table className="w-full text-xs">
+        <div className="overflow-auto max-h-[80vh]">
+          <table className="w-full text-xs">
           <thead className="text-dim text-left">
             <tr className="border-b border-border">
-              <th className="py-1 pr-2 w-8">#</th>
-              <th className="py-1 pr-2">Character</th>
-              <th className="py-1 pr-2">Boss</th>
-              <th className="py-1 pr-2 text-right">Damage</th>
-              <th className="py-1 pr-2 text-right">DPS</th>
-              <th className="py-1 pr-2 text-right">Duration</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 w-8">#</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2">Character</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2">Boss</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">Damage</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">DPS</th>
+              <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">Duration</th>
             </tr>
           </thead>
           <tbody>
@@ -192,6 +193,7 @@ export default async function LeaderboardsPage(
             )}
           </tbody>
         </table>
+        </div>
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

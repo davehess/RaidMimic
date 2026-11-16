@@ -308,3 +308,19 @@ describe('the family table is the default and names drill down', () => {
     expect(panel).toMatch(/charHref=\{name => href\('gate-a', name\)\}/);
   });
 });
+
+// Tapping a ✕ on the gate table shows the steps behind it (the guild lead, 2026-11-15).
+describe('a piece that is not done carries its steps', () => {
+  const justice = ALL_PIECES.find((p) => p.key === 'mavuin_hail');
+  it('lists the chain up to the proving step, the ones already held marked done', () => {
+    const s = pieceStatus(justice, new Set(['mavuin_1']), true);
+    expect(s.state).toBe('missing');
+    expect(s.steps.map((x) => x.label)).toEqual([
+      'Hail Mavuin, take his case', 'Win a trial for the Tribunal', 'Say "Mavuin" to the Tribunal, then hail Mavuin',
+    ]);
+    expect(s.steps.map((x) => x.done)).toEqual([true, false, false]);
+  });
+  it('a done piece carries none', () => {
+    expect(pieceStatus(justice, new Set(['mavuin_3']), true).steps).toBeUndefined();
+  });
+});

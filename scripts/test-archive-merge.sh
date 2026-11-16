@@ -224,6 +224,21 @@ for t in raid_mob_sightings raid_mob_hp raid_casts raid_zone_changes raid_pet_ow
   check "$t keeps a row production pruned" "$(q "select count(*) from $t")" 2
 done
 
+# "Delete everything" reaches the archive (DECISIONS §593): production deleted person A's page view and listed A in
+# self_delete_forget; the archive, which never drops a row the snapshot lacks, must drop A's row and keep B's.
+run -q -c "alter table public.page_views add column user_id uuid; alter table snap.page_views add column user_id uuid;
+  insert into public.page_views (id, path, user_id) overriding system value values
+    (3, '/a', '00000000-0000-0000-0000-00000000000a'), (4, '/b', '00000000-0000-0000-0000-00000000000b');
+  insert into snap.page_views values (4, '/b', '00000000-0000-0000-0000-00000000000b');
+  create table snap.self_delete_forget (user_id uuid primary key, discord_id text not null, forgotten_at timestamptz default now());
+  insert into snap.self_delete_forget (user_id, discord_id) values ('00000000-0000-0000-0000-00000000000a', '111');"
+if ! run -q -v ON_ERROR_STOP=1 -f scripts/lib/archive-merge.sql >"$OUT" 2>&1; then
+  echo "  FAIL merge with a forget list errored:"; sed -n '1,12p' "$OUT" | sed 's/^/       /'; fail=1
+fi
+check "a deleted person's page view leaves the archive" "$(q 'select count(*) from page_views where id=3')" 0
+check "everyone else's page views stay"                 "$(q 'select count(*) from page_views where id=4')" 1
+check "the forget is logged"                            "$(q "select count(*) from archive_meta.merge_log where mode='forget' and table_name='page_views'")" 1
+
 # LAST, because it leaves the database unmergeable: an allowlisted ARCHIVE table
 # the snapshot lacks must STOP the run, never be skipped. That silent skip is how
 # `encounters` went unmerged from 2026-09-06 — its restore failed on a default in

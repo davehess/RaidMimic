@@ -44,9 +44,9 @@ describe('mob-info slow_mitigation', () => {
   });
   it('asks the catalog for the column', async () => {
     const { queries } = await ask({ ...base, slow_mitigation: 80 });
-    expect(queries[0]).toMatch(/,slow_mitigation&limit=200/);
+    expect(queries[0]).toMatch(/,slow_mitigation,aggroradius,assistradius&limit=200/);
   });
   it('the zone pack shape moved so cached packs rebuild', () => {
-    expect(stripJs(SRC)).toMatch(/const _MOB_PACK_VERSION = 11;/);
+    expect(stripJs(SRC)).toMatch(/const _MOB_PACK_VERSION = 12;/);
   });
 });

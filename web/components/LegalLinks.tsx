@@ -5,7 +5,7 @@ import { CONTACT_HREF, legalPaths } from '@/lib/legal';
 
 export default function LegalLinks({ onHost }: { onHost: boolean }) {
   const p = legalPaths(onHost);
-  const links: [string, string][] = [['Privacy', p.privacy], ['Terms', p.terms], ['Refunds', p.refunds], ['Contact', CONTACT_HREF]];
+  const links: [string, string][] = [['Privacy', p.privacy], ['Security', p.security], ['Terms', p.terms], ['Refunds', p.refunds], ['Contact', CONTACT_HREF]];
   return (
     <span data-legal-links>
       {links.map(([label, href], i) => (

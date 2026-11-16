@@ -862,6 +862,11 @@ async function recordParse({
     try { await upsertCombatRollup(encounterId, agentVersion, rollupByChar, scoped); }
     catch (err) { console.warn('[supabase] combat rollup upsert failed:', err?.message); }
   }
+  // The uploader's own incoming swings (after the outgoing rollup, so a missing row is created by one writer at a time).
+  if (contributorCharacter && Array.isArray(parsed?.defenders)) {
+    try { await upsertCombatTaken(encounterId, contributorCharacter, parsed.defenders, scoped); }
+    catch (err) { console.warn('[supabase] combat taken upsert failed:', err?.message); }
+  }
 
   // Stamp the boss self-heal total on the encounter row. Max-keep: read the
   // current value, only PATCH if the incoming total is strictly higher. This
@@ -939,6 +944,43 @@ async function upsertCombatRollup(encounterId, agentVersion, rollupByChar, scope
   // rows are sent, and opposite orders were the 40P01 deadlocks in the postgres log (4 in 24 h, 2026-10-20).
   rows.sort((a, b) => (a.character_name < b.character_name ? -1 : a.character_name > b.character_name ? 1 : 0));
   await _asGuild(scoped, () => upsert('encounter_combat_rollup', rows, 'encounter_id,character_name'));
+  // The weave tally (agent 4.0.86+) comes only on the uploader's own bucket. It goes in a write of its own, so another
+  // uploader's copy of the same fight, which has no weave for this character, never blanks it.
+  const weaves = Object.entries(rollupByChar)
+    .filter(([, b]) => b && b.weave && typeof b.weave === 'object')
+    .map(([characterName, b]) => ({
+      guild_id: scoped ? scoped.guildId : _guildId(), encounter_id: encounterId, character_name: characterName, weave: b.weave,
+    }))
+    .sort((a, b) => (a.character_name < b.character_name ? -1 : a.character_name > b.character_name ? 1 : 0));
+  if (weaves.length) await _asGuild(scoped, () => upsert('encounter_combat_rollup', weaves, 'encounter_id,character_name'));
+}
+
+// The character's OWN incoming swings for one fight, onto their encounter_combat_rollup row (column `taken`).
+// Only the defender row named for the uploading character is stored: the other rows are what that uploader happened to
+// see (partial, NPCs included). A taken-only row is safe to upsert: merge-duplicates updates just the columns sent, so
+// by_skill and the totals the outgoing rollup wrote stay as they are, and a character with no outgoing row gets one
+// from the column defaults. A re-upload keeps whichever version has more total swings (hits + every avoid).
+const _TAKEN_KEYS = ['hits', 'damageTaken', 'misses', 'dodges', 'parries', 'ripostes', 'blocks', 'invulns', 'rampageHits', 'rampageDmg'];
+function _takenSwings(t) {
+  return ['hits', 'misses', 'dodges', 'parries', 'ripostes', 'blocks', 'invulns']
+    .reduce((s, k) => s + (Number(t?.[k]) || 0), 0);
+}
+async function upsertCombatTaken(encounterId, characterName, defenders, scoped = null) {
+  if (!isEnabled() || !encounterId || !characterName || !Array.isArray(defenders)) return false;
+  const me = String(characterName).toLowerCase();
+  const row = defenders.find(d => d && typeof d.name === 'string' && d.name.toLowerCase() === me);
+  if (!row) return false;
+  const taken = {};
+  for (const k of _TAKEN_KEYS) taken[k] = Number(row[k]) || 0;
+  if (Number(row.maxHit) > 0) taken.maxHit = Number(row.maxHit);
+  const guildId = scoped ? scoped.guildId : _guildId();
+  const cur = await _asGuild(scoped, () => select('encounter_combat_rollup',
+    `encounter_id=eq.${encounterId}&character_name=eq.${encodeURIComponent(characterName)}&select=taken&limit=1`));
+  if (Array.isArray(cur) && cur[0]?.taken && _takenSwings(cur[0].taken) >= _takenSwings(taken)) return false;
+  await _asGuild(scoped, () => upsert('encounter_combat_rollup',
+    [{ guild_id: guildId, encounter_id: encounterId, character_name: characterName, taken }],
+    'encounter_id,character_name'));
+  return true;
 }
 
 // Fetch the completeness summary for an encounter.
@@ -1092,6 +1134,7 @@ module.exports = {
   recordContribution,
   recordParse,
   upsertCombatRollup,
+  upsertCombatTaken,
   getEncounterCompleteness,
   getEncounterContributions,
   getEncounterPlayers,

@@ -29,6 +29,36 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.5': [
+    'Mimic sign-ins are stored scrambled on our side, and a guild member\'s sign-in that has not been used for 90 days stops working: sign in again in Mimic.',
+  ],
+  '4.1.4': [
+    'Fixed: the nightly parse tidy-up after midnight runs again, and the raid review keeps its trash tally without errors.',
+  ],
+  '4.1.3': [
+    'Internal: the bot compresses its three busiest replies (the agent poll, the buff queue, live damage) for clients that ask, cutting its data out.',
+  ],
+  '4.1.2': [
+    '"Delete everything" on your data page now also removes your party trial date and reaches our nightly archive, so nothing of yours is left behind.',
+  ],
+  '4.1.1': [
+    'Mob Info (newest Mimic beta): the target\'s aggro and assist radius, with your distance to it and the area rampage reach, red when you are inside it.',
+  ],
+  '4.1.0': [
+    'Raid Mimic opens to every player: track your PoP flags and raids on raidmimic.com, and share live overlay numbers and timers with your group or raid through the new party service. Nothing changes for Wolf Pack raid nights.',
+  ],
+  '4.0.86': [
+    'Mimic timers: the bot now hands Mimic the items that lengthen spell durations, so your own buff, debuff and charm timers can count your worn focus (with the newest Mimic beta).',
+  ],
+  '4.0.85': [
+    'Behind the scenes: the nightly cleanup also clears Raid Mimic\'s hourly import log.',
+  ],
+  '4.0.84': [
+    'Behind the scenes: a monk\'s weave count for each fight is kept, for the new Combat page (needs the newest Mimic beta).',
+  ],
+  '4.0.83': [
+    'Behind the scenes: each character\'s own incoming-fight numbers (hits taken, dodges, parries and so on) are now kept per fight instead of for a week, so the character page can chart them over time.',
+  ],
   '4.0.82': [
     'Behind the scenes: a UI backup is now accepted only under a plain character name. Nothing changes for normal backups.',
   ],

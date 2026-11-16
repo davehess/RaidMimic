@@ -88,7 +88,7 @@ export default function RegisterForm({ downloadHref, setupHref }: { downloadHref
       <section role="status" className="rounded-md border border-green/50 bg-panel p-5 sm:p-6">
         <h2 className="text-xl text-text">You are on the list.</h2>
         <p className="mt-2 max-w-[60ch] text-sm leading-6 text-text">
-          Thanks. Nothing is charged and nothing is sent to your guild. While you wait, you can try Mimic on your own PC today.
+          Nothing is charged and nothing is sent to your guild.
         </p>
         <p className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
           <a href={downloadHref} target="_blank" rel="noreferrer" className={PRIMARY}>Download Mimic</a>
@@ -161,7 +161,7 @@ export default function RegisterForm({ downloadHref, setupHref }: { downloadHref
             {RAID_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
-        <p className="mt-1 text-xs text-dim">An end earlier than the start just means the raid runs past midnight.</p>
+        <p className="mt-1 text-xs text-dim">An earlier end means past midnight.</p>
       </div>
 
       <fieldset className="mt-5 min-w-0 border-0 p-0">

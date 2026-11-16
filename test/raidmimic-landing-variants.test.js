@@ -3,7 +3,7 @@
 // the logos as we go into the video. Skip/hide at the bottom."; the `?v=` previews were deleted). What this pins:
 //   - the cue list: revealAt maps a time to what is on screen (icon, menu, marks, end), skip/reduced motion shows all,
 //   - the marks: which feature marks are visible at time t, in story order, each waiting for its own cue,
-//   - the money: the individual price is null and says "price at launch"; the guild price is $25, monthly,
+//   - the money: there is one paid plan (no individual tier); the guild price is $25, monthly,
 //   - the honesty: unbuilt things are chipped "coming", no invented figure beyond the one decided price,
 //   - the wiring: the default render IS the story stage; the first screen is the video alone (full viewport, nothing drawn
 //     until a cue), whole picture (object-contain) with edges faded into the page colour, slow mark fades, Skip and Hide at the
@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, stripJs, stripCss } from './_source-slice.js';
+import * as F from '../web/lib/raidmimicStartFree.ts';
 import * as S from '../web/lib/raidmimicStory.ts';
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -106,32 +107,32 @@ describe('the marks (logos that fade in as the story goes on)', () => {
 });
 
 describe('the money', () => {
-  it('the individual price is not decided: null, and it says so', () => {
-    expect(S.INDIVIDUAL_PRICE).toBeNull();
+  it('priceLabel: a null price says "price at launch"', () => {
     expect(S.priceLabel(null)).toBe('price at launch');
-    expect(S.priceLabel(S.INDIVIDUAL_PRICE)).toBe('price at launch');
   });
   it('a number formats as dollars a month; the guild price is $25', () => {
     expect(S.priceLabel(7)).toBe('$7 / month');
     expect(S.GUILD_PRICE).toBe(25);
     const t = S.TIERS();
-    expect(t.map(x => x.id)).toEqual(['free', 'guild', 'individual']);
+    expect(t.map(x => x.id)).toEqual(['free', 'guild']);
     expect(t.find(x => x.id === 'guild').price).toBe('$25 / month');
     expect(t.find(x => x.id === 'guild').note).toMatch(/Monthly only\. First month free\./);
-    expect(t.find(x => x.id === 'individual').price).toBe('price at launch');
     expect(t.find(x => x.id === 'free').price).toBe('$0');
   });
-  it('the individual tile follows the constant (a decided price would show up without another edit)', () => {
-    expect(S.TIERS(9).find(x => x.id === 'individual').price).toBe('$9 / month');
+  it('there is no individual tier or price (DECISIONS §552), and no live pricing copy sells storage or "costs us money"', () => {
+    expect(S.INDIVIDUAL_PRICE).toBeUndefined();
+    expect(S.TIERS().some(x => x.id === 'individual' || /individual/i.test(x.name))).toBe(false);
+    const live = JSON.stringify([S.STORY_TEXT, F.START_FREE, F.FREE_ROWS, F.PAID_ROWS]);
+    expect(live).not.toMatch(/costs? us money|cost money|Pro · Individual|or for you/i);
+    expect(JSON.stringify([S.STORY_WORDS.pricingLead, S.TIERS(), F.START_FREE, F.PAID_ROWS])).not.toMatch(/storage/i);
   });
   it('invents no other figure: the only dollar amounts in the words are $0 and the guild $25', () => {
     const t = JSON.stringify(S.STORY_TEXT);
     expect([...t.matchAll(/\$\d+(?:\.\d+)?/g)].map(m => m[0]).sort()).toEqual(['$0', '$25']);
     expect(t).not.toMatch(/testimonial|customers|\d+ guilds|trusted by/i);
   });
-  it('anything unbuilt is chipped “coming”: the individual tier, other guilds, cloud backup', () => {
+  it('anything unbuilt is chipped “coming”: other guilds, cloud backup', () => {
     const t = S.TIERS();
-    expect(t.find(x => x.id === 'individual').coming).toMatch(/coming/i);
     expect(t.find(x => x.id === 'guild').coming).toMatch(/other guilds is coming/i);
     expect(S.featureById('sync').chip).toMatch(/coming/i);
     // Free flag and kill syncing (pick A, 2026-11-02) is listed in Free, and chipped coming until it works outside Wolf Pack.
@@ -159,7 +160,7 @@ describe('raid management (the guild side)', () => {
 
 describe('the words stay short', () => {
   it('each feature is one picture and one sentence, with a picture path in the shared folder', () => {
-    expect(S.FEATURES.map(f => f.id)).toEqual(['canvas', 'studio', 'sync', 'replay', 'zeal']);
+    expect(S.FEATURES.map(f => f.id)).toEqual(['canvas', 'chchain', 'studio', 'sync', 'replay', 'zeal']);   // chchain: the player side (2026-11-16)
     for (const f of S.FEATURES) {
       expect(f.line.split(/[.!?]\s/).length).toBe(1);
       expect(f.line.length).toBeLessThan(70);
@@ -169,23 +170,25 @@ describe('the words stay short', () => {
   });
   it('names the sign-up exactly as the guild lead asked, and no real-looking people', () => {
     expect(S.STORY_WORDS.signUp).toBe('Sign up with Discord');
-    expect(S.STORY_WORDS.startFree).toBe('Start free · Pro for your guild or for you');
+    expect(S.STORY_WORDS.startFree).toBe('Start free · Pro for your guild');
     expect(S.STORY_WORDS.skip).toBe('Skip');
     expect(S.STORY_WORDS.hide).toBe('Hide');
     expect(JSON.stringify(S.STORY_TEXT)).not.toMatch(/bard|Hitya/i);   // the bard has no mana: the cleric example replaces it
   });
 });
 
-describe('the wiring: the default page IS the story stage', () => {
+describe('the wiring: the story stage plays on the For guild leaders page only (2026-11-16, card rm-home)', () => {
   const page = code('web/app/raidmimic/page.tsx');
   const stage = code(L + 'StoryStage.tsx');
   const video = code(L + 'StoryVideo.tsx');
   const css = stripCss(read('web/app/globals.css'));
 
-  it('page.tsx renders the stage with no query: no variants, no beta tag, no other layout', () => {
-    expect(page).toMatch(/<StoryStage downloadUrl=\{DOWNLOAD_URL\} onHost=\{onHost\} \/>/);
+  it('page.tsx draws no stage and no query: the landing is the first screen, the doors and the sections; the video is behind a button on /register', () => {
+    expect(page).not.toMatch(/StoryStage|HomePanelGate/);
     expect(page).not.toMatch(/searchParams|\?v=|pick ===|PathsLayout|ChaptersStage|BetaTag/);
-    expect(page.match(/<StoryStage\b/g)).toHaveLength(1);
+    const reg = code('web/app/raidmimic/register/page.tsx');
+    expect(reg.match(/<HomePanelGate\b/g)).toHaveLength(1);
+    expect(code(L + 'HomePanelGate.tsx')).toMatch(/<StoryStage downloadUrl=\{downloadUrl\} onHost=\{onHost\} \/>/);
   });
   it('the metadata is the page’s own and unchanged', () => {
     expect(page).toMatch(/const TITLE = 'Raid Mimic · free EverQuest raid overlays';/);
@@ -204,7 +207,7 @@ describe('the wiring: the default page IS the story stage', () => {
     expect(S.revealAt(0)).toEqual(NONE);
   });
   it('on a raidmimic host the stage reaches the viewport’s edges through the layout’s padding; on the Wolf Pack hosts it sits under the site header', () => {
-    expect(stage).toMatch(/onHost \? '-mx-3 -mt-3 sm:-mx-4 sm:-mt-4' : 'rm-stage-in-site'/);
+    expect(stage).toMatch(/onHost \? '-mx-3 sm:-mx-4' : 'rm-stage-in-site'/);   // no top bleed: the shell's header sits above it (2026-11-15)
     expect(css).toMatch(/\.rm-stage-in-site \{ --sh: max\(calc\(100svh - 1\.5rem\), 26rem\); \}/);
     // …and that padding is what the bare layout gives (p-3 sm:p-4), so the two numbers cannot drift unseen
     expect(code('web/app/layout.tsx')).toMatch(/mx-auto p-3 sm:p-4/);

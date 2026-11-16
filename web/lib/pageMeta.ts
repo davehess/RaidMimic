@@ -82,14 +82,17 @@ const STATIC_META: Record<string, PageMeta> = {
   '/raidmimic/demo/capture': { title: '[beta] Demo guild · Record flags for someone else', description: 'How a raid leader records flags for a character that is not theirs, and how the owner signs in to confirm or correct them. Invented guild.' },
   '/raidmimic/demo/events': { title: '[beta] Demo guild · Flag events', description: 'Option A for coordinating flag events: a leader posts an event and sees which raiders still need it and who signed. Invented guild.' },
   '/raidmimic/demo/events/needs': { title: '[beta] Demo guild · Flag needs board', description: 'Option B for coordinating flag events: every flag target ranked by how many raiders still need it, with a schedule button. Invented guild.' },
-  '/raidmimic/demo/raid': { title: '[beta] Demo guild · Tonight’s raid', description: 'A demo raid night: who signed and which flags each raider still needs before the pull, so the leader can fix it first. Invented guild.' },
+  '/raidmimic/demo/raid': { title: '[beta] Demo guild · Next raid', description: 'A demo raid: who signed and which flags each raider still needs before the pull, so the leader can fix it first. Invented guild.' },
   // The pre-launch legal pages (2026-11-01). Their words live in lib/legal.ts so the tab and the card cannot disagree.
   '/raidmimic/privacy': { ...LEGAL_META.privacy },
+  '/raidmimic/security': { ...LEGAL_META.security },
   '/raidmimic/terms':   { ...LEGAL_META.terms },
   '/raidmimic/refunds': { ...LEGAL_META.refunds },
   '/terms':        { ...LEGAL_META.terms },
   '/guilds':       { title: '[beta] Your guilds', description: 'The guilds you are in on Raid Mimic, with a way to join one by invite code, find the ones you already belong to, or start your own.' },
-  '/characters':   { title: '[beta] My characters', description: 'Load your characters on Raid Mimic from the PoPFlags file Zeal saves when you camp, and see each one’s Planes of Power flag progress and what it needs next.' },
+  '/characters':   { title: 'My characters', description: 'Load your characters on Raid Mimic from the PoPFlags file Zeal saves when you camp, and see each one’s Planes of Power flag progress and what it needs next.' },
+  '/raids':        { title: '[beta] My raids', description: 'Your upcoming raids on Raid Mimic: the days each of your guilds raids, the target for each night, and which of your characters is ready or still needs a flag for it.' },
+  '/costs':        { title: '[beta] What Raid Mimic costs to run', description: 'What it costs to run Raid Mimic each month, what is free and why, what we will charge for (hosted replays and a Discord bot), and how to chip in on Ko-fi.' },
   '/guilds/new':   { title: '[beta] Start a guild', description: 'Start a guild on Raid Mimic: name it, pick its address and optionally link its Discord server, then invite your raiders with codes.' },
   '/feedback':     { title: 'Feedback', description: 'Bugs, ideas, kudos — straight to the officer inbox.' },
   '/roadmap':      { title: 'Roadmap', description: 'What’s shipped and what’s next for the Wolf Pack platform.' },
@@ -146,6 +149,7 @@ export const ADMIN_TITLES: Record<string, string> = {
   '/admin/encounters':         'Encounter repair',
   '/admin/extra-spells':       'Extra PoP spells',
   '/admin/flag-lab':           '[beta] Flag lab',
+  '/admin/hub-conflicts':      'Contested names',
   '/admin/feedback':           'Feedback',
   '/admin/feedback/anonymous': 'Anonymous feedback',
   '/admin/interest':           '[beta] Guild interest',
@@ -230,23 +234,25 @@ export function characterName(raw: string | null | undefined): string | null {
   if (!/^[A-Za-z]{2,24}$/.test(clean)) return null;
   return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
 }
-const CHARACTER_SECTIONS: Record<string, { label: string; blurb: string }> = {
+const CHARACTER_SECTIONS: Record<string, { label: string; blurb: string; beta?: boolean }> = {
   gear:      { label: 'Gear',       blurb: 'what they wear and their raid-kit readiness' },
   inventory: { label: 'Inventory',  blurb: 'what they carry and bank' },
   spells:    { label: 'Spells',     blurb: 'the spells they have and the ones still missing' },
   factions:  { label: 'Factions',   blurb: 'where their faction standing sits' },
   quests:    { label: 'Quests',     blurb: 'how far along their quests are' },
+  combat:    { label: 'Combat',     blurb: 'swings avoided, damage trends and hit sizes', beta: true },
 };
 export function characterMeta(rawName: string, section?: string | null): PageMeta {
   const name = characterName(rawName);
   const sec = section ? CHARACTER_SECTIONS[section] : undefined;
+  const beta = sec?.beta ? '[beta] ' : '';
   if (!name) {
     return sec
-      ? { title: `Character ${sec.label.toLowerCase()}`, description: `A character’s ${sec.label.toLowerCase()} page on WolfPack.quest.` }
+      ? { title: `${beta}Character ${sec.label.toLowerCase()}`, description: `A character’s ${sec.label.toLowerCase()} page on WolfPack.quest.` }
       : { title: 'Character', description: 'A character page on WolfPack.quest: parses, loot, attendance and raid history.' };
   }
   return sec
-    ? { title: `${name} · ${sec.label}`, description: `${name}’s ${sec.label.toLowerCase()} on WolfPack.quest: ${sec.blurb}.` }
+    ? { title: `${beta}${name} · ${sec.label}`, description: `${name}’s ${sec.label.toLowerCase()} on WolfPack.quest: ${sec.blurb}.` }
     : { title: `${name} · Character`, description: `${name} on WolfPack.quest: parses, loot, attendance and raid history.` };
 }
 
@@ -324,6 +330,10 @@ export function metaForPath(rawPath: string): PageMeta {
   if (/^\/bards\/sets\/[^/]+$/.test(path)) return entityMeta('bardset');
   m = path.match(/^\/raid\/review\/([^/]+)$/);
   if (m) return raidReviewMeta(m[1]);
+  // One of a Raid Mimic player's own characters: private to its owner, so the card says only that and never the name.
+  if (/^\/characters\/[^/]+$/.test(path)) {
+    return { title: 'Character · Raid Mimic', description: 'One of your characters on Raid Mimic: its Planes of Power flag progress and what it needs next, plus its gear and bags from an uploaded inventory or Quarmy file. Private to you.' };
+  }
   m = path.match(/^\/character\/([^/]+)(?:\/([^/]+))?/);
   if (m) return characterMeta(m[1], m[2]);
   // One splits page per scripted event: the card names the event (public catalog data) and nothing a run recorded.

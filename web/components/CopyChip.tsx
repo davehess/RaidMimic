@@ -21,8 +21,10 @@ export default function CopyChip({ text, label }: { text: string; label?: string
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
+  // A multi-line text (a script) is named by its label, not spelled out in the tooltip.
+  const what = text.includes('\n') ? (label ?? 'text') : text;
   return (
-    <button type="button" onClick={copy} title={`Copy “${text}”`} aria-label={`Copy ${text}`}
+    <button type="button" onClick={copy} title={`Copy “${what}”`} aria-label={`Copy ${what}`}
             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border bg-bg text-text hover:border-blue font-mono text-[11px] max-w-full">
       <span className="truncate">{label ?? text}</span>
       <span className={copied ? 'text-green' : 'text-dim'} aria-live="polite">{copied ? '✓' : '⧉'}</span>

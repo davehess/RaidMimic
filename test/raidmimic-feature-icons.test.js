@@ -107,9 +107,9 @@ describe('the words', () => {
     expect(F.FEATURES.find(f => f.id === 'loot').line).toMatch(/DKP bids need a guild hub/);
     expect(F.FEATURES.find(f => f.id === 'code').line).toMatch(/No guild account needed/);
   });
-  it('matches the page’s other facts: the code works without a guild, the Guild door lists the CH chain and Command Center', () => {
-    const guild = PL.DOORS.find(d => d.id === 'guild').points.join(' ');
-    expect(guild).toMatch(/CH chain and Command Center/);
+  it('matches the page’s other facts: the code works without a guild, the CH chain is on the Player door (2026-11-16, card rm-home-story) and the Guild door lists the Command Center', () => {
+    expect(PL.DOORS.find(d => d.id === 'player').points.join(' ')).toMatch(/CH chain/);
+    expect(PL.DOORS.find(d => d.id === 'guild').points.join(' ')).toMatch(/Command Center/);
     expect(read('web/lib/raidmimicSetup.ts')).toMatch(/Join a raid with a code/);
     expect(read('web/lib/raidmimicSetup.ts')).toMatch(/No guild account needed/);
   });

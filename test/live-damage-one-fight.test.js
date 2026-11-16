@@ -14,7 +14,8 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { readSource, sliceBlock, BOT_INDEX } from './_source-slice.js';
 
-const ttlCache = createRequire(BOT_INDEX)('./utils/ttlCache');   // the handler's memo + coalescing helper, real
+const ttlCache = createRequire(BOT_INDEX)('./utils/ttlCache');
+const gzipReply = createRequire(BOT_INDEX)('./utils/gzipReply');   // the handler's memo + coalescing helper, real
 const src = readSource(BOT_INDEX);
 const handler = sliceBlock(src, 'async function _handleAgentLiveDamage', '\n}');
 
@@ -37,7 +38,7 @@ function run(url, { rpcFails = false } = {}) {
   const fn = new Function('mimicLink', 'require', 'process', '_corroboratedDamage', '_snapshotStoreMode',
     handler + '\nreturn _handleAgentLiveDamage;')(
     { requireAgentAuth: async () => ({ discord_id: '1' }) },
-    (p) => (String(p).endsWith('supabase') ? supabase : String(p).endsWith('ttlCache') ? ttlCache : {}),
+    (p) => (String(p).endsWith('supabase') ? supabase : String(p).endsWith('ttlCache') ? ttlCache : String(p).endsWith('gzipReply') ? gzipReply : {}),
     { env: {} },
     (v) => Math.max(0, ...(v || [])),
     async () => 0);   // fight files off: the database path under test

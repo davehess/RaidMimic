@@ -400,12 +400,13 @@ export default async function PvpPage({
             as they happen (and from historical log backfill once that runs).
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-auto max-h-[80vh]">
+            <table className="w-full text-sm">
             <thead className="text-dim text-left">
               <tr className="border-b border-border">
-                <th className="py-1 pr-2 w-8">#</th>
-                <th className="py-1 pr-2">Killer</th>
-                <th className="py-1 pr-2 text-right">
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 w-8">#</th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2">Killer</th>
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">
                   <Link href="/pvp?sort=total" className={`hover:text-blue ${sortKey === 'total' ? 'text-text' : ''}`}>
                     Kills {sortKey === 'total' && '▾'}
                   </Link>
@@ -415,14 +416,14 @@ export default async function PvpPage({
                   </Link>
                 </th>
                 <th
-                  className="py-1 pr-2 text-right"
+                  className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right"
                   title="Wayne Gretzky scored 894 goals, but he had 1,963 assists."
                 >
                   <Link href="/pvp?sort=assists" className={`hover:text-blue ${sortKey === 'assists' ? 'text-text' : ''}`}>
                     Assists {sortKey === 'assists' && '▾'}
                   </Link>
                 </th>
-                <th className="py-1 pr-2 text-right">
+                <th className="sticky top-0 z-10 bg-panel py-1 pr-2 text-right">
                   <Link href="/pvp?sort=last" className={`hover:text-blue ${sortKey === 'last' ? 'text-text' : ''}`}>
                     Last kill {sortKey === 'last' && '▾'}
                   </Link>
@@ -458,6 +459,7 @@ export default async function PvpPage({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

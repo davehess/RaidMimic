@@ -11,6 +11,8 @@ import { EQMIMIC_ORIGIN } from '@/lib/raidmimicLanding';
 import { LANDING_PATH_ON_HOST, LANDING_PATH_ON_WOLFPACK, RELEASES_URL } from '@/lib/raidmimicSetup';
 import RegisterForm from './RegisterForm';
 import HostFrame from '@/components/RaidmimicFrame';
+import HomePanelGate from '../_landing/HomePanelGate';
+import { DOWNLOAD_URL, STORY_BUTTON } from '@/lib/raidmimicPlayer';
 
 const TITLE = '[beta] Register your guild';
 const DESCRIPTION =
@@ -35,6 +37,8 @@ export default function RaidmimicRegisterPage() {
 
   return (
     <HostFrame onHost={onHost}>
+    {/* The 80 second story plays here and nowhere else (the guild lead, 2026-11-16, card rm-home). It sits outside the narrow column so the stage can span the page. */}
+    <div className="mx-auto mb-4 max-w-5xl"><HomePanelGate label={STORY_BUTTON} downloadUrl={DOWNLOAD_URL} onHost={onHost} /></div>
     <div className="mx-auto max-w-xl pb-12">
       {/* On a raidmimic host /feedback is not a page, so the tag's link goes to the feedback form on eqmimic.quest. */}
       <NewPageTag note="New page: tell us about your guild." href={onHost ? `${EQMIMIC_ORIGIN}/feedback` : '/feedback'} />
@@ -43,16 +47,15 @@ export default function RaidmimicRegisterPage() {
         <p className="text-xs uppercase tracking-widest text-gold">Raid Mimic</p>
         <h1 className="mt-1 text-3xl leading-tight text-text">Register your guild</h1>
         <p className="mt-3 max-w-[60ch] text-sm leading-6 text-text">
-          Tell us about your raid and we will count your guild in. There is no sign-in and no account, and nothing is sent
-          to your guild. Only the guild name is required.
+          No sign-in. Only the guild name is required.
         </p>
       </header>
 
       <RegisterForm downloadHref={RELEASES_URL} setupHref={setup} />
 
       <p className="mt-6 text-xs leading-6 text-dim">
-        We keep what you type here, and a scrambled one-way form of your network address for one day, used only to limit how
-        often one person can send. Links, email addresses and anything that looks like a password are removed before saving.{' '}
+        We keep what you type, plus a one-way scramble of your network address for one day to limit spam. Links, emails and
+        anything that looks like a password are removed before saving.{' '}
         <a href={landing}>Back to Raid Mimic</a>
       </p>
     </div>

@@ -3615,6 +3615,31 @@ function scheduleMidnightSummary(readyClient) {
         console.warn('[midnight] hub_invite_attempts retention skipped:', err?.message);
       }
 
+      // Import log (hub_import_attempts, the "My characters" hourly cap): only the last hour is ever read.
+      try {
+        const supabase = require('./utils/supabase');
+        if (supabase.isEnabled()) {
+          const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          await supabase.del('hub_import_attempts', `at=lt.${encodeURIComponent(cutoff)}`);
+          console.log('[midnight] swept hub_import_attempts older than 1 day');
+        }
+      } catch (err) {
+        console.warn('[midnight] hub_import_attempts retention skipped:', err?.message);
+      }
+
+      // Forget list (self_delete_forget, DECISIONS §593): the archive merge needs a deleted person's ids only until it
+      // has run; 30 days matches the nightly backups' life, so a missed night still catches up.
+      try {
+        const supabase = require('./utils/supabase');
+        if (supabase.isEnabled()) {
+          const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          await supabase.del('self_delete_forget', `forgotten_at=lt.${encodeURIComponent(cutoff)}`);
+          console.log('[midnight] swept self_delete_forget older than 30 days');
+        }
+      } catch (err) {
+        console.log('[midnight] self_delete_forget retention skipped:', err?.message);
+      }
+
       // ── Retention sweep: raid history (utils/raidHistory.js) ──────────────
       // The six saved streams (mob sightings, mob HP, casts, zone changes, pet owners, trigger fires) keep 60 days in
       // Supabase (the guild lead, 2026-10-29); the Tower archive keeps them longer. Each table's time column leads its
@@ -3905,7 +3930,9 @@ async function checkQuakeAlert(readyClient) {
 // ── Nightly parse consolidation ────────────────────────────────────────────────
 async function consolidateNightlyParses(client) {
   const { loadParses, saveParses, logParseToDiscord } = require('./commands/parse');
-  const { groupKillsBySession, mergeKillGroup }        = require('./commands/parsestats');
+  // The two helpers live in commands/parse.js; commands/parsestats.js only imports them, and requiring them from there
+  // gave undefined, so the midnight consolidation threw every night ("groupKillsBySession is not a function").
+  const { groupKillsBySession, mergeKillGroup }        = require('./commands/parse');
 
   const allParses = loadParses();
   const now       = Date.now();
@@ -11938,6 +11965,7 @@ async function _handleAgentItemClickies(req, res, isPublic) {
     const entries = [];
     let wornDs = [];
     let wornHaste = null;   // null = unread (an older database): the agent then knows it has no gear haste
+    let durationFoci = null;   // null = unread (view not applied yet): the agent then knows its own foci are unknown
     let failed = false;
     try {
       const supabase = require('./utils/supabase');
@@ -11971,6 +11999,11 @@ async function _handleAgentItemClickies(req, res, isPublic) {
       const wornH = await supabase.selectAllPaged('item_worn_haste', 'select=item_id,item_name,haste', 'item_id');
       if (Array.isArray(wornH)) wornHaste = wornH.map(w => ({ id: w.item_id, name: w.item_name, haste: Number(w.haste) || 0 }));
       else console.warn('[item-clickies] worn haste read failed — serving without it');
+      // Items whose FOCUS effect lengthens buffs (SPA 128; view item_duration_focus, 2026-11-15): the agent applies the best worn one
+      // to its own casts (Client::ApplyDurationFocus, zone/spell_effects.cpp:4630, EQMacEmu c2cd265). Same fail-soft as worn_haste.
+      const fociRows = await supabase.selectAllPaged('item_duration_focus', 'select=item_id,spell_id,pct,max_level,type_limit,min_ticks', 'item_id');
+      if (Array.isArray(fociRows)) durationFoci = fociRows.map(f => ({ id: f.item_id, spell: f.spell_id, pct: Number(f.pct) || 0, max_level: f.max_level == null ? null : Number(f.max_level), type_limit: f.type_limit == null ? null : Number(f.type_limit), min_ticks: f.min_ticks == null ? null : Number(f.min_ticks) }));
+      else console.warn('[item-clickies] duration focus read failed — serving without it');
     } catch (err) {
       // Column missing (migration not applied yet) or other transient failure.
       // Nothing from a failed read is cached: the last good catalog keeps serving
@@ -11981,12 +12014,13 @@ async function _handleAgentItemClickies(req, res, isPublic) {
     }
     if (!failed) {
       const body = JSON.stringify({
-        version: 3,                         // 3: + worn_haste · 2: + worn_ds (additive; older agents ignore them)
+        version: 4,                         // 4: + duration_foci · 3: + worn_haste · 2: + worn_ds (additive; older agents ignore them)
         fetched_at: new Date().toISOString(),
         count: entries.length,
         entries,
         worn_ds: wornDs,
         worn_haste: wornHaste,
+        duration_foci: durationFoci,
       });
       const etag = '"' + require('crypto').createHash('sha1').update(body).digest('hex') + '"';
       _itemClickyCache = { fetchedAt: Date.now(), body, etag };
@@ -14124,7 +14158,7 @@ async function _preRaidHealthCheck() {
 
   // Postgres/PostgREST via the service-role client the bot actually uses.
   const dbStart = Date.now();
-  const dbRows = await supabase.select('eqemu_zone', 'select=id&limit=1').catch(() => null);
+  const dbRows = await supabase.select('eqemu_zone', 'select=short_name&limit=1').catch(() => null);   // the table has no id column
   const dbMs = Date.now() - dbStart;
   const dbOk = Array.isArray(dbRows);
   const dbLine = `${mark(dbOk, dbMs)} DB ${dbMs}ms`;
@@ -15516,8 +15550,7 @@ async function _handleAgentLiveDamage(req, res) {
   return { body, keep: true };
   // Bounded at 50 keys — boss names are unbounded over a long uptime.
   }, { shouldCache: (r) => r.keep, max: 50 });
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  return res.end(out.body);
+  return require('./utils/gzipReply').sendJson(req, res, 200, out.body);
 }
 
 // GET /api/agent/my-parses?w=<1d|7d|30d|90d|exp|life>&scope=<bosses|all>&char=<name>&zone=<id>&q=<mob text>
@@ -17253,8 +17286,7 @@ async function _handleAgentRaidBuffQueue(req, res) {
     }
     if (burstSpec) { out[burstSpec.key] = burstQueue; out.burst_label = burstSpec.label; }
     if (raidSplit.multi) out.raids = raidSplit.raids.map(r => _raidGroups.raidSummary(r, r === myRaid));
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(out));
+    return require('./utils/gzipReply').sendJson(req, res, 200, JSON.stringify(out));
   } catch (err) {
     console.warn('[raid-buff-queue] failed:', err && err.message);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -17822,7 +17854,7 @@ async function _buildMobInfo(supabase, { name, norm, caseKey, reqZoneId, reqGend
     // Vius showed as L1/16k HP "Immune Melee + Immune Magic". 200 is a hard
     // ceiling over the catalog's largest real-name cluster (34 rows; only the
     // junk "_" names go higher) so the payload stays bounded.
-    const _nameSel = `select=id,name,class,level,maxlevel,hp,mana,ac,mr,fr,cr,pr,dr,mindmg,maxdmg,runspeed,npcspecialattks,special_abilities,raid_target,bodytype,npc_spells_id,see_invis,see_invis_undead,see_hide,see_improved_hide,race,size,gender,slow_mitigation&limit=200`;
+    const _nameSel = `select=id,name,class,level,maxlevel,hp,mana,ac,mr,fr,cr,pr,dr,mindmg,maxdmg,runspeed,npcspecialattks,special_abilities,raid_target,bodytype,npc_spells_id,see_invis,see_invis_undead,see_hide,see_improved_hide,race,size,gender,slow_mitigation,aggroradius,assistradius&limit=200`;
     const rows = await supabase.select('eqemu_npc_types',
       `or=(name.ilike.${encPlain},name.ilike.${encHashed})&${_nameSel}`);
     // Pick-and-merge (docs/audit-mob-specials.md §"The fix"). The requester's
@@ -18155,6 +18187,11 @@ async function _buildMobInfo(supabase, { name, norm, caseKey, reqZoneId, reqGend
         // Separate from the Unslowable special: a partial slow gives the client no message, so raiders cannot tell
         // (Obsidian Tree Spider Queen, 80). 0 for most of the catalog.
         slow_mitigation: Math.max(0, Math.min(100, Math.round(Number(r.slow_mitigation) || 0))),
+        // Raw catalog radii (eqemu_npc_types.aggroradius / assistradius; 0 = unset). The server turns 0 into 70 and
+        // an unset assist into the aggro radius when it loads the NPC (zone/zonedb.cpp:2025-2034), so the overlay
+        // applies that rule itself and a missing key (an older bot) reads as "unknown", never as 70.
+        aggroradius:  r.aggroradius ?? null,
+        assistradius: r.assistradius ?? null,
         // The NPC's mana pool. Only ~21% of the catalog has one (3,741 of
         // 18,033), and 3,384 have both a pool and a spell list — so the
         // overlay draws no bar at all when this is null rather than an empty
@@ -18261,7 +18298,8 @@ const _MOB_PACK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 //   9 (2026-10-19): raid_target also true for the curated PoP bosses (data/named-bosses.json)
 //  10 (2026-10-22): level_bodies, the level bands of a name that is two bodies in one zone (FB-80)
 //  11 (2026-11-04): slow_mitigation, percent of a slow the mob resists (partial slow, e.g. Obsidian Tree Spider Queen 80)
-const _MOB_PACK_VERSION = 11;
+//  12 (2026-11-15): aggroradius, assistradius (raw catalog values; Target Info shows the server's effective radii)
+const _MOB_PACK_VERSION = 12;
 const _MOB_PACK_PINNED = Array.from({ length: 24 }, (_, i) => 200 + i);
 const _mobPacks = new Map();          // zoneId → { etag, builtAt, body, gz, version }
 const _mobPackQueue = [];             // zone ids waiting to build
@@ -22278,8 +22316,7 @@ async function _handleAgentPoll(req, res) {
   out.agent_kill        = control.agent_kill;
   out.min_agent_ver_num = control.min_agent_ver_num;
 
-  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-  return res.end(JSON.stringify(out));
+  return require('./utils/gzipReply').sendJson(req, res, 200, JSON.stringify(out), { 'Cache-Control': 'no-store' });
 }
 
 // POST /api/agent/rescan-done — the agent closes a "Sync from my logs" request it was handed on the poll's `rescan`

@@ -411,6 +411,7 @@ async function callHandler({ identity = { discord_id: 'u1' }, query = 'class=Cle
     './utils/range': rangeUtil,
     './utils/buffGroups': bg,
     // the bundle's coalescing cache and the shared roster/characters snapshots (real: they only call the fake client)
+    './utils/gzipReply': require('../utils/gzipReply.js'),
     './utils/ttlCache': require('../utils/ttlCache.js'),
     './utils/readSnapshots': require('../utils/readSnapshots.js'),
     // the live-state read goes to memory first; nothing is noted here, so it is cold and the fake client answers

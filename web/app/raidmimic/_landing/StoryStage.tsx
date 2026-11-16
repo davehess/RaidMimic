@@ -60,11 +60,13 @@ export default function StoryStage({ downloadUrl, onHost = false }: { downloadUr
     handle.current?.replay();
   };
 
-  // On a raidmimic host the layout wraps the page in 12/16px of padding: the stage reaches out to the viewport's edges.
-  const place = onHost ? '-mx-3 -mt-3 sm:-mx-4 sm:-mt-4' : 'rm-stage-in-site';
+  // On a raidmimic host the layout wraps the page in 12/16px of padding: the stage reaches out to the viewport's edges. The
+  // shell's header (Wolf Pack's, 2026-11-15) sits above it, so the stage keeps no top bleed.
+  const place = onHost ? '-mx-3 sm:-mx-4' : 'rm-stage-in-site';
 
-  // The lockup (icon + name) and the menu: the header, on the timeline.
-  const header = (
+  // The lockup (icon + name) and the menu: the header, on the timeline. A raidmimic host has the shell's header above the stage
+  // instead, so it draws none of its own.
+  const header = onHost ? null : (
     <header className={`pointer-events-none absolute inset-x-0 ${hidden ? 'top-9' : 'top-0'} z-30 flex items-center gap-2 p-2 sm:gap-3 sm:p-3`}>
       <a href="#top" data-reveal="icon" aria-label={W.brand} tabIndex={show.icon ? 0 : -1}
         className={`pointer-events-auto flex items-center gap-2 rounded-lg text-[#f2ede1] no-underline hover:no-underline ${SLOW} ${on(show.icon)}`}>

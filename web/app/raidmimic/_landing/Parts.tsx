@@ -10,6 +10,7 @@ export interface Ctx {
   onHost: boolean;      // served on a raidmimic host (bare shell, no query string, no Wolf Pack header)
   interest: string;     // the Register-interest address
   setup: string;        // the set-up guide: /setup on a raidmimic host, /raidmimic/setup on the Wolf Pack hosts
+  demo: string;         // the guild demo ("See the guild demo"): /demo/raid on a raidmimic host, /raidmimic/demo/raid on the Wolf Pack hosts
 }
 
 const BTN = 'inline-flex min-h-11 items-center justify-center rounded-md border px-4 py-2 text-sm font-semibold no-underline transition-colors motion-reduce:transition-none';
@@ -17,7 +18,7 @@ export const PRIMARY_BTN = `${BTN} border-gold bg-gold text-[#1a1206] hover:bg-[
 export const EXT = { target: '_blank', rel: 'noreferrer' } as const;
 
 export function InterestButton({ ctx, className = PRIMARY_BTN }: { ctx: Ctx; className?: string }) {
-  return <a href={ctx.interest} className={className} {...(ctx.onHost ? EXT : {})}>{CTA.button}</a>;
+  return <a href={ctx.interest} className={className}>{CTA.button}</a>;
 }
 
 // ─── Register interest ──────────────────────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ export function Footer({ onHost = false }: { onHost?: boolean }) {
         <a href={REPO_URL} {...EXT}>Source code</a> <span aria-hidden>&middot;</span>{' '}
         <LegalLinks onHost={onHost} /> <span aria-hidden>&middot;</span>{' '}
         <a href={EQMIMIC_ORIGIN} {...EXT}>The free player tool</a> <span aria-hidden>&middot;</span>{' '}
+        <a href="/costs">What it costs to run</a> <span aria-hidden>&middot;</span>{' '}
         Licensed AGPL-3.0-or-later.
       </p>
     </footer>

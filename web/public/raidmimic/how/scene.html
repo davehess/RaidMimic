@@ -2,7 +2,7 @@
 <!--
   Raid Mimic · How it works. One interactive isometric scene with four camera stops, embedded in the raidmimic.com page
   (web/app/raidmimic/_landing/HowItWorks.tsx) in an iframe. Self-contained on purpose: no external fonts, scripts or
-  requests; it posts only its own height to the page that holds it. Drawn with ISO-GLOW (MIT), credited at the foot.
+  requests; it posts only its own height to the page that holds it. Drawn with ISO-GLOW (MIT); the credit link at its foot was removed on purpose (the guild lead, 2026-11-16).
   The people in it are invented; none is a member.
 -->
 <html lang="en" data-theme="dark">
@@ -28,9 +28,6 @@
   nav button { font:inherit; color:inherit; background:none; border:1px solid var(--edge); border-radius:10px; cursor:pointer; }
   .layout { display:grid; grid-template-columns:230px minmax(0,1fr); grid-template-rows:auto 1fr; grid-template-areas:"nav fig" "credit fig"; gap:14px; align-items:start; }
   .layout > nav { grid-area:nav; } .layout > figure { grid-area:fig; } .layout > .credit { grid-area:credit; }
-  .made-with { display:flex; justify-content:flex-end; padding:2px 6px 0; font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
-  .made-with a { color:var(--line); text-decoration:none; transition:color .2s; }
-  .made-with a:hover { color:var(--ink); }
   .credit { align-self:end; display:grid; gap:3px; padding:0 16px 22px; font-size:12px; line-height:1.5; letter-spacing:.04em; }
   #figtext { align-self:start; padding:4px 16px 0; font-size:12.5px; line-height:1.6; color:var(--ink); }
   #figtext b { color:var(--ink-hi); font-weight:500; }
@@ -115,7 +112,6 @@
       <div class="cap"><span id="hint"></span><span class="hi" id="readout"></span></div>
     </figure>
   </div>
-  <footer class="made-with"><a href="https://iso-glow.vercel.app" target="_blank" rel="noopener">Made with ISO-GLOW ↗</a></footer>
 </div>
 <script>
   // Gallery settings: palette 'ember' | 'city' | your own [[name, darkAccent, darkHi, lightAccent, lightHi], ...]

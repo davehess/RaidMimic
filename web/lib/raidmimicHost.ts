@@ -67,9 +67,15 @@ export const RAIDMIMIC_HUBS_PATH = '/api/hubs';
 // "My characters" (2026-11-09, DECISIONS §545): where a player loads their characters from Zeal's PoPFlags file.
 export const RAIDMIMIC_CHARACTERS_PATH = '/characters';
 
+// "My raids" (2026-11-15): the player's own upcoming raids, calendar and guild days.
+export const RAIDMIMIC_RAIDS_PATH = '/raids';
+
+// "What Raid Mimic costs to run" (2026-11-15, DECISIONS §588): public, no sign-in.
+export const RAIDMIMIC_COSTS_PATH = '/costs';
+
 export function isRaidmimicOpenPath(pathname: string): boolean {
   return pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/') || pathname === RAIDMIMIC_HUBS_PATH
-    || pathname === RAIDMIMIC_CHARACTERS_PATH
+    || pathname === RAIDMIMIC_CHARACTERS_PATH || pathname.startsWith(`${RAIDMIMIC_CHARACTERS_PATH}/`) || pathname === RAIDMIMIC_RAIDS_PATH || pathname === RAIDMIMIC_COSTS_PATH
     || pathname === RAIDMIMIC_GUILDS_PATH || pathname.startsWith(`${RAIDMIMIC_GUILDS_PATH}/`);
 }
 
@@ -90,6 +96,8 @@ export const RAIDMIMIC_DEMO_PATH = '/raidmimic/demo';
 export const RAIDMIMIC_PRIVACY_PATH = '/raidmimic/privacy';
 export const RAIDMIMIC_TERMS_PATH = '/raidmimic/terms';
 export const RAIDMIMIC_REFUNDS_PATH = '/raidmimic/refunds';
+// raidmimic.com/security (the guild lead, 2026-11-15: "write up a security page in the same scheme as the privacy page").
+export const RAIDMIMIC_SECURITY_PATH = '/raidmimic/security';
 
 // ─── Search engines (the guild lead, 2026-10-23: "search engines on, together with the new story") ───────────────
 // raidmimic.com is the one address that is INDEXED: it, and its two sister hosts, serve the page with
@@ -106,7 +114,7 @@ export interface RaidmimicSeo {
 }
 
 /** The `robots` and canonical metadata for one of the two pages. `path` is the page's address on raidmimic.com. */
-export function raidmimicSeo(host: string | null | undefined, path: '/' | '/setup' | '/register' | '/privacy' | '/terms' | '/refunds'): RaidmimicSeo {
+export function raidmimicSeo(host: string | null | undefined, path: '/' | '/setup' | '/register' | '/privacy' | '/terms' | '/refunds' | '/security'): RaidmimicSeo {
   if (!isRaidmimicIndexedHost(host) || process.env.NEXT_PUBLIC_IS_BETA === '1') return { robots: { index: false, follow: false } };
   return { robots: { index: true, follow: true }, alternates: { canonical: `${RAIDMIMIC_ORIGIN}${path}` } };
 }
@@ -125,7 +133,7 @@ export function isRaidmimicAsset(pathname: string): boolean {
  * tacked on rides further:
  *   /setup               -> the set-up guide (a trailing slash and any capitals are fine)
  *   /register            -> the interest form
- *   /privacy, /terms, /refunds -> the legal pages
+ *   /privacy, /terms, /refunds, /security -> the legal pages
  *   /demo, /demo/<page>, /demo/<a>/<b> (and the same under /raidmimic/demo) -> the demo page, path kept, lowercase a-z 0-9 -
  *   /robots.txt         -> robots for these hosts (allow all, and the sitemap)
  *   /sitemap.xml         -> the pages
@@ -139,6 +147,7 @@ export function raidmimicLandingTarget(pathname = '/'): { pathname: string; sear
   if (path === '/privacy') return { pathname: RAIDMIMIC_PRIVACY_PATH, search: '' };
   if (path === '/terms') return { pathname: RAIDMIMIC_TERMS_PATH, search: '' };
   if (path === '/refunds') return { pathname: RAIDMIMIC_REFUNDS_PATH, search: '' };
+  if (path === '/security') return { pathname: RAIDMIMIC_SECURITY_PATH, search: '' };
   const demo = path.match(/^(?:\/raidmimic)?\/demo((?:\/[a-z0-9-]+){0,3})$/);
   if (demo) return { pathname: `${RAIDMIMIC_DEMO_PATH}${demo[1]}`, search: '' };
   if (path === '/robots.txt') return { pathname: RAIDMIMIC_ROBOTS_PATH, search: '' };

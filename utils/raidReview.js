@@ -666,6 +666,8 @@ async function saveTrash(win, bounds) {
     const supabase = require('./supabase');
     if (!supabase.isEnabled()) return false;
     const sum = trashSummary(win.nightKey, bounds);
+    // trashSummary answers null when the night's tally is empty inside the kill span; nothing to save yet.
+    if (!sum) return false;
     const entries = [...t.entries.values()]
       .sort((a, b) => b.atMs - a.atMs).slice(0, TRASH_PERSIST_ENTRIES)
       .map(e => [e.name, e.damage, e.sec, e.atMs]);

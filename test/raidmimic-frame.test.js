@@ -12,25 +12,25 @@ const code = (rel) => stripJs(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
 
 describe('the Raid Mimic frame', () => {
   const frame = code('web/components/RaidmimicFrame.tsx');
-  it('draws the bar (home + nav) and the Raid Mimic footer, and nothing on a Wolf Pack host', () => {
-    expect(frame).toMatch(/import \{ Footer \} from '@\/app\/raidmimic\/_landing\/Parts';/);
-    expect(frame).toMatch(/<nav aria-label="Raid Mimic"/);
-    // "Your guilds" means "manage my Raid Mimic account", so it carries stay=1 (2026-11-02, redirect by default): without it
-    // a one-guild player would be bounced to their guild's site every time they pressed it.
-    expect(frame).toMatch(/href: GUILDS_STAY_PATH/);
-    expect(GUILDS_STAY_PATH).toBe('/guilds?stay=1');
-    expect(frame).toMatch(/<Footer onHost \/>/);
-    // "top bar on the raidmimic.com site doesn't lock" (2026-11-02): pinned, opaque, one line (links scroll inside it)
-    expect(frame).toMatch(/<header className="sticky top-0 z-40 [^"]*\bbg-bg\b[^"]*">/);
-    expect(frame).toMatch(/<nav aria-label="Raid Mimic" className="[^"]*overflow-x-auto whitespace-nowrap"/);
-    // the landing page takes the same bar under its stage, on a raidmimic host only
-    const landing = code('web/app/raidmimic/page.tsx');
-    expect(landing).toMatch(/import \{ HostBar \} from '@\/components\/RaidmimicFrame';/);
-    // Signed out the bar sits under the stage; signed in it comes first, above the Dashboard (2026-11-09). Once either way.
-    expect(landing).toMatch(/\{!signedIn && onHost && <HostBar \/>\}\s*<FeatureBlocks \/>/);
-    expect(landing).toMatch(/\{signedIn && onHost && <div className="mx-auto max-w-5xl"><HostBar \/><\/div>\}/);
+  it('is the shell on a raidmimic host (Wolf Pack header, side nav, footer) and nothing on a Wolf Pack host', () => {
+    expect(frame).toMatch(/import ShellFrame from '@\/components\/RaidmimicShell';/);
     expect(frame).toMatch(/if \(!onHost\) return <>\{children\}<\/>;/);
+    expect(frame).toMatch(/return <ShellFrame>\{children\}<\/ShellFrame>;/);
     expect(frame).not.toMatch(/['"]use client['"]/);
+    // "Your guilds" means "manage my Raid Mimic account", so it carries stay=1 (2026-11-02, redirect by default): without it
+    // a one-guild player would be bounced to their guild's site every time they pressed it. The menus draw it from the nav list.
+    expect(code('web/lib/raidmimicNav.ts')).toMatch(/href: GUILDS_STAY_PATH/);
+    expect(GUILDS_STAY_PATH).toBe('/guilds?stay=1');
+    const shell = code('web/components/RaidmimicShell.tsx');
+    expect(shell).toMatch(/<RaidmimicHeader/);
+    expect(shell).toMatch(/<RaidmimicShellFooter \/>/);
+    // the header is pinned and opaque (2026-11-02: "top bar on the raidmimic.com site doesn't lock")
+    expect(code('web/components/RaidmimicHeader.tsx')).toMatch(/<header [^>]*className="sticky top-0 z-40 [^"]*\bbg-bg[^"]*"/);
+    // the landing page takes the same frame (2026-11-15, rm-shell-landing): signed in or out, on a raidmimic host only
+    const landing = code('web/app/raidmimic/page.tsx');
+    expect(landing).toMatch(/import HostFrame from '@\/components\/RaidmimicFrame';/);
+    expect(landing).toMatch(/<HostFrame onHost=\{onHost\}>/);
+    expect(landing).toMatch(/\{!onHost && <Footer onHost=\{false\} \/>\}/);
   });
 
   it('wraps every raidmimic-host page that had no header or footer', () => {
@@ -43,10 +43,10 @@ describe('the Raid Mimic frame', () => {
     }
     // /guilds/<slug> has two returns (a visitor's and a member's); both are framed
     expect((code('web/app/guilds/[slug]/page.tsx').match(/<HostFrame onHost=\{onHost\}>/g) || []).length).toBe(2);
-    // the set-up guide ends in its own footer, so it takes the bar only
+    // the set-up guide takes the same frame; its own footer is the shell's on a raidmimic host
     const setup = code('web/app/raidmimic/setup/page.tsx');
-    expect(setup).toMatch(/\{onHost && <HostBar \/>\}/);
-    expect(setup).not.toMatch(/<HostFrame/);
+    expect(setup).toMatch(/<HostFrame onHost=\{onHost\}>/);
+    expect(setup).not.toMatch(/HostBar/);
   });
 
   it('/guilds: Wolf Pack\'s card reads like the others, and "Find my guilds" never says "none" beside a listed guild', () => {

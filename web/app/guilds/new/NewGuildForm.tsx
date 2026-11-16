@@ -71,12 +71,12 @@ export default function NewGuildForm() {
           className={`${INPUT} font-mono`}
           placeholder="123456789012345678"
         />
-        <p className="mt-1 text-xs text-dim">Lets members who are in that Discord server find the guild with &ldquo;Find my guilds&rdquo;. You can leave it empty and use invite codes.</p>
+        <p className="mt-1 text-xs text-dim">Members of that server can find the guild with &ldquo;Find my guilds&rdquo;. Empty is fine: use invite codes.</p>
         {errors.discordGuildId && <p role="alert" className={ERR}>{errors.discordGuildId}</p>}
         {result?.confirmServer && (
           <div className="mt-2">
             <SignInButton next="/guilds/new" flow="manage" label="Confirm my server" />
-            <p className="mt-1 text-xs text-dim">Asks Discord once which servers you manage. The list is not stored.</p>
+            <p className="mt-1 text-xs text-dim">Asks Discord once for your servers. Not stored.</p>
           </div>
         )}
       </div>
@@ -86,7 +86,7 @@ export default function NewGuildForm() {
           <input type="checkbox" checked={openJoin} onChange={e => setOpenJoin(e.target.checked)} className="mt-1 h-4 w-4" />
           <span>
             Anyone in the Discord server can join without a code
-            <span className="mt-0.5 block text-xs text-dim">Off by default: people then need an invite code from you. It only matters if you set a Discord server id.</span>
+            <span className="mt-0.5 block text-xs text-dim">Off: invite code needed. Only matters with a Discord server id.</span>
           </span>
         </label>
       </div>

@@ -38,6 +38,7 @@ export const ADMIN_BLURBS: Record<string, string> = {
   '/admin/theme': 'The site theme. Not on this branch yet.',
   '/admin/settings': 'Raid schedule, roles, jobs, DKP and the guest rule.',
   '/admin/access': 'Lock a member out of the guild tools whatever their Discord roles, and unlock them again.',
+  '/admin/hub-conflicts': 'Character names two or more Raid Mimic players loaded, with each holder and their flag counts.',
   '/admin/flag-lab': 'A sandbox for the PoP flag matrix and the hail board. Nothing is saved.',
   '/who': 'Every character ever seen in a /who, sortable and filterable.',
   '/quartermaster': 'Utility-kit coverage and the common-quest checklist.',

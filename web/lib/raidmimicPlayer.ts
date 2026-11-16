@@ -73,18 +73,41 @@ export interface Door {
   more: string;       // the quiet second link
 }
 export const PATHS = {
-  line: 'One program, three ways in. Pick the one that sounds like you.',
+  title: 'Pick your path',
+  line: 'One program, three ways in.',
   doorsLabel: 'Three ways in',
   seeTitle: 'See it run',
-  seeLead: 'The real overlays, on made-up raiders. Raiders get the screen; the people running the night get the board.',
+  seeLead: 'The real overlays, on made-up raiders.',
 };
+
+// ─── The first screen (the guild lead, 2026-11-15, card lab-rm-first-screen: C, with the headline, the muted video beside the
+// words and "See the guild demo" as the second button) ──────────────────────────────────────────────────────────────────
+// A title, one line, two buttons. The video is a 12 second muted loop of the mascot at a desk (web/public/raidmimic/motion);
+// the 81 second story lives only on the For guild leaders page (/register), the guild lead's pick on card rm-home.
+export const FIRST = {
+  headline: 'Damage, boss debuffs and timers, on your screen while you raid',
+  line: 'Free overlays built from the log your game already writes.',
+  demo: 'See the guild demo',
+  video: { src: '/raidmimic/motion/loop-sq-1080.mp4', poster: '/raidmimic/motion/story-first-sq-poster.jpg', w: 1080, h: 1080 },
+  videoAlt: 'A treasure chest with a mimic’s grin beside a monitor showing a raid with Mimic’s overlays on it.',
+};
+
+// The line under "Running a guild?": everything below it is for the people who run the night. (Card rm-home, option A.)
+export const GUILD_PART = {
+  id: 'guild',
+  title: 'Running a guild?',
+  line: 'Shared reviews, merged parses and a command center for the whole raid.',
+};
+
+/** The intro video's button on the For guild leaders page (/register), the only place it plays now. */
+export const STORY_BUTTON = 'Watch the 80 second story';
 export const DOORS: Door[] = [
   {
     id: 'player', label: 'Door 1 · I play', name: 'Player', head: 'Overlays for your own game', tone: 'free',
     story: 'Download it, choose Just me on the first screen, and play. It reads the log your game already writes.',
     points: [
-      'Damage meters, timers, trigger alerts and a Map',
-      'Your own inventory, replay and parses',
+      'Damage meters, target debuffs, timers and a Map',
+      'The CH chain, your own inventory, replay and parses',
       'No guild, account or password',
     ],
     next: HERO.download,
@@ -96,7 +119,7 @@ export const DOORS: Door[] = [
     story: 'Your raiders start on their own, free. When enough of them run it, a guild hub adds them up.',
     points: [
       'Raid review and parses merged from every log',
-      'CH chain and Command Center for the whole raid',
+      'Command Center and a hail board for the whole raid',
       'A shared replay you can send by link',
     ],
     next: 'Ask about a hub',
@@ -124,9 +147,7 @@ export const DOORS: Door[] = [
 export const HOW = {
   id: 'how',
   title: 'How it works',
-  lead:
-    'Four steps in one drawing. Start on one raider’s screen, then pull back to the raid, the raid leader’s review ' +
-    'and the hub that runs it. Click it and press keys to play.',
+  lead: 'One raider’s screen, the raid, the raid leader’s review, the hub that runs it. Click to play.',
   steps: ['Overlays', 'The raid', 'Raid leader', 'Hosting'],
   frameTitle:
     'How Raid Mimic works: an interactive drawing in four steps, from one raider’s overlays to the raid, ' +
@@ -189,4 +210,4 @@ export const SIGNIN_FIRST = {
 };
 
 /** Every sentence the page's own story can put on the screen, for the sweeps in test/raidmimic-landing.test.js. */
-export const ALL_TEXT = [HERO, PATHS, DOORS, TAG, ASK, HOW, META, SIGNIN_FIRST];
+export const ALL_TEXT = [HERO, PATHS, FIRST, GUILD_PART, STORY_BUTTON, DOORS, TAG, ASK, HOW, META, SIGNIN_FIRST];

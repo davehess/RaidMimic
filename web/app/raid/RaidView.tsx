@@ -414,8 +414,6 @@ export default function RaidView({
           <h1 className="text-2xl text-gold">⚔️ Raid</h1>
           <p className="text-sm text-dim mt-1">
             Live operational view — built from the Zeal raid roster + every Mimic that&apos;s running.
-            {' '}
-            <span className="text-orange text-xs">[mockup — stage 1 of <code>docs/raid-hub-roadmap.md</code>]</span>
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -665,10 +663,6 @@ export default function RaidView({
               >show</button>
             </section>
           )}
-
-          {/* Soon-but-not-yet feature teasers, all data-driven from what we
-              already have or know how to add. Visible so we keep momentum. */}
-          <ComingSoon />
         </div>
 
         {/* Side panel — character detail (real buffs/HP-slots/zone). Sticky on
@@ -1480,25 +1474,6 @@ function CoverageUnlocks({ raidSize, mimicCovered }: { raidSize: number; mimicCo
         </div>
       )}
       </>)}
-    </section>
-  );
-}
-
-function ComingSoon() {
-  return (
-    <section className="bg-panel border border-dashed border-border/60 rounded-lg p-3 text-[11px] text-dim">
-      <div className="text-orange text-xs mb-1">🛠️ wiring next (preview)</div>
-      <MoreInfo>
-      <ul className="list-disc list-inside leading-6 space-y-0.5 mt-1">
-        <li><b>Real buff timers</b> — once we track the cast → countdown bars per buff, the &quot;expiring soon&quot; tier becomes precise (instead of inferring from low-tick remaining).</li>
-        <li><b>Mass-buff cooldowns</b> — surface &quot;Aego MGB ready: Cordina · 2m · 12m · …&quot; so the raid lead can stagger casts.</li>
-        <li><b>Feral Avatar queue</b> — sorted by recent damage, with worn-attack-capped players skipped automatically (needs Quarmy AA + worn-item parser, in flight).</li>
-        <li><b>RaidHelper diff</b> — who signed up vs. who&apos;s actually here; which class slots are short.</li>
-        <li><b>DKP loop</b> — auction winner highlights on their row + a one-tap &quot;Add as looter&quot; that posts to OpenDKP.</li>
-        <li><b>Group regrouping</b> — &quot;Move Hopeya/Melting/Hitya into Grp 4 so Bardtholemu can MGB all three in one cast.&quot;</li>
-      </ul>
-      <div className="mt-2 text-dim/70">Full plan: <code>docs/raid-hub-roadmap.md</code></div>
-      </MoreInfo>
     </section>
   );
 }

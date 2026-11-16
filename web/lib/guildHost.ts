@@ -59,13 +59,13 @@ export function guildHostUrl(slug: string): string {
 // The page's own images sit under /raidmimic/<folder>/ (the Raid Mimic header's mascot): raidmimicHost.ts isRaidmimicAsset.
 export function isGuildHostOpenPath(pathname: string): boolean {
   return pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/') || pathname.startsWith('/_next/')
-    || pathname === '/characters' || pathname === '/guilds' || pathname.startsWith('/guilds/');
+    || pathname === '/characters' || pathname.startsWith('/characters/') || pathname === '/guilds' || pathname.startsWith('/guilds/');
 }
 
 // The platform's own pages (the story, the demo, the set-up guide, the interest form, the legal pages). The Raid Mimic
 // header and footer link to them by these short paths; on a guild's address they belong to the platform's.
 export const PLATFORM_ORIGIN = 'https://raidmimic.com';
-const PLATFORM_PATH_RX = /^\/(?:setup|register|privacy|terms|refunds|demo(?:\/[a-z0-9-]+){0,3})\/?$/;
+const PLATFORM_PATH_RX = /^\/(?:setup|register|privacy|terms|refunds|security|demo(?:\/[a-z0-9-]+){0,3})\/?$/;
 
 /**
  * Where a request on another guild's address goes: null to serve it as it is, else where to redirect (query dropped).

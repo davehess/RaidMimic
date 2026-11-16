@@ -46,7 +46,7 @@ export const sameReveal = (a: Reveal, b: Reveal) =>
 // ─── Features (one picture and one sentence each) ──────────────────────────────────────────────
 // The pictures are plain strings, not imports: a file that is not on disk yet is a 404 in a preview, never a failed build.
 // `chip` marks a promise: anything not built yet says "coming" (CLAUDE.md, honesty rule; web/lib/raidmimicLanding.ts COMING).
-export type FeatureId = 'canvas' | 'studio' | 'sync' | 'replay' | 'zeal';
+export type FeatureId = 'canvas' | 'chchain' | 'studio' | 'sync' | 'replay' | 'zeal';
 // `top`: crop a tall picture from its top edge instead of its middle (the Zeal settings capture is nearly square).
 export interface Feature { id: FeatureId; name: string; line: string; img: string; alt: string; chip?: string; top?: boolean }
 const SHOTS = '/raidmimic/shots';
@@ -54,6 +54,10 @@ export const FEATURES: readonly Feature[] = [
   { id: 'canvas', name: 'Canvas & builder', line: 'Standard overlays on one canvas, or build your own.',
     img: `${SHOTS}/canvas-overlays.webp`,
     alt: 'The Mimic canvas: the standard overlays (damage, target debuffs, timers) laid out on one screen over the game.' },
+  // The guild lead, 2026-11-16 (card rm-home-story, extra "chchain-side"): the CH chain belongs on the player side.
+  { id: 'chchain', name: 'CH chain', line: 'The Complete Heal rotation on the tank, with a late-heal warning.',
+    img: `${SHOTS}/ch-chain.webp`, top: true,
+    alt: 'The CH Chain overlay for a tank: a gap warning, four numbered cleric slots each with mana and a cast bar, and a countdown to the next slot.' },
   { id: 'studio', name: 'UI Studio', line: 'Design your EverQuest UI once, keep every version.',
     img: `${SHOTS}/ui-studio.webp`,
     alt: 'UI Studio: a layout of the game window being arranged, with the list of saved versions beside it.' },
@@ -75,28 +79,25 @@ export const featureById = (id: FeatureId): Feature => {
 };
 
 // ─── Money ──────────────────────────────────────────────────────────────────────────────────────────
-// Guild: $25 a month, monthly only, first month free (DECISIONS §495). Individual: NOT decided (DESIGN-raidmimic-hosted.md §8d
-// costs options and recommends one; the guild lead has not picked), so the price is `null` and the page says "price at launch".
+// ONE paid plan: Pro · Guild, $25 a month, monthly only, first month free (DECISIONS §495). The page sells what a guild learns from
+// its raids; storage is included while you pay and is never the reason given for a price (the guild lead, 2026-11-09, DECISIONS
+// §552). There is no individual plan (removed the same day).
 export const GUILD_PRICE = 25;
-export const INDIVIDUAL_PRICE: number | null = null;
 export function priceLabel(price: number | null, per = 'month'): string {
   return price == null ? 'price at launch' : `$${price} / ${per}`;
 }
 
-export interface Tier { id: 'free' | 'guild' | 'individual'; name: string; price: string; note: string; tone: 'green' | 'blue' | 'gold'; points: string[]; coming?: string }
-export const TIERS = (individual: number | null = INDIVIDUAL_PRICE): Tier[] => [
+export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string }
+export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
   // lead, 2026-11-02, pick A, DECISIONS §526: "it's gotta be cheap for users to be able to get their popflags and mob kills
-  // synced"). Free syncing sends flags and kills only, never the per-second fight feed, which is what costs storage.
+  // synced"). Free syncing sends flags and kills only, never the per-second fight feed.
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
     points: ['The overlays', 'Triggers', 'Your own parses', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
     coming: 'Syncing for players outside Wolf Pack is coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(GUILD_PRICE), note: 'Monthly only. First month free.', tone: 'blue',
     points: ['Shared raid reviews', 'Merged parses', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
-  { id: 'individual', name: 'Pro · Individual', price: priceLabel(individual), note: 'For you, with or without a guild.', tone: 'gold',
-    points: ['Cloud sync of your layouts and UI Studio backups', 'Your history and replays, with you highlighted', 'Gear comparisons'],
-    coming: 'Coming.' },
 ];
 
 /** The page's gold button (the same classes as Parts.tsx PRIMARY_BTN), for the client stages that cannot import Parts. */
@@ -124,7 +125,7 @@ export const STORY_WORDS = {
   brand: 'Raid Mimic',
   signUp: 'Sign up with Discord',
   signIn: 'Sign in',
-  startFree: 'Start free · Pro for your guild or for you',
+  startFree: 'Start free · Pro for your guild',
   // Under the Pro Guild price, with "refunds" linking the refunds page (the guild lead's pre-launch checklist, 2026-11-01).
   renews: 'Renews monthly until you cancel · cancel any time ·',
   refunds: 'refunds',
@@ -147,7 +148,7 @@ export const STORY_WORDS = {
   ],
   featuresTitle: 'What you get',
   pricingTitle: 'Start free',
-  pricingLead: 'Pro for your guild or for you.',
+  pricingLead: 'Pro reads your guild\'s raids back to you.',
   after: '/guilds',
 } as const;
 
