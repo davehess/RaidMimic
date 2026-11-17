@@ -60,6 +60,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # The six AZURE_* code-signing settings live in the `signing` environment, whose deployment branches are limited to
+    # main, beta and alpha (DECISIONS §562), so a workflow on any other branch cannot read them. Repository-level
+    # settings of the same names still work here; without any, the build is the unsigned build (docs/code-signing.md).
+    environment: signing
     # Alpha builds replace one release's files, so two must never interleave;
     # every other run keeps its own group (unchanged behaviour).
     concurrency: ${{ github.ref_name == 'alpha' && 'release-mimic-alpha' || github.run_id }}
