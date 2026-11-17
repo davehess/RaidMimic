@@ -72,6 +72,12 @@ describe('release notes step', () => {
     expect(above.trim()).toBe('**see FB-2 for context**');
   });
 
+  it('a manual run on a sync tip names the newest real change before it', () => {
+    commitMsg('mimic (beta) - the real change');
+    commitMsg('sync: beta -> alpha [sync]');
+    expect(run('').split('\n---\n')[0].trim()).toBe('**mimic (beta) - the real change**');
+  });
+
   it('never prints a signing line', () => {
     const base = commitMsg('start');
     commitMsg('x');
