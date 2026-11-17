@@ -654,8 +654,11 @@ the Developer Portal before acting):
   voice or stage event is visible only if the bot can view that channel. Never send another guild today's provisioning
   integer (2252135193504768: Manage Roles, Manage Events, …).
 - Global slash commands for the shared bot (guild-scoped stay for Wolf Pack's own); 100 commands per scope.
-- Verification opens past 75 servers and is required at 100 (owner identity, privacy and terms, a reason for any
-  privileged intent). Own the app through a Discord Developer Team. Unverified, it stops joining at 100.
+- Verification is required at 100 servers. **Corrected 2026-11-17 from the Developer Portal itself:** its checklist has
+  no server minimum, so an app can be verified before it is in any server. The criteria: the app belongs to a Team; no
+  harmful language in its name, description or commands; Terms of Service and Privacy Policy links; an install link; the
+  team owner's identity verification; every team member with a verified email and 2FA. After verification the app's name
+  and ownership change only through Discord support. Unverified, it stops joining at 100.
 - Privileged intents (`GuildMembers`, `MessageContent`, `GuildPresences`) need approval past 100: the shared bot should use
   none. Officer roles come from Discord sign-in instead.
 - Rate limits: 50 requests a second per bot, and a ban after 10,000 401/403/429 in ten minutes. Poll events per guild no
