@@ -1,12 +1,11 @@
-// The frame the three Raid Mimic legal pages share: the [beta] tag, the title and date, the sections, and the footer with
+// The frame the Raid Mimic legal pages share: the title and date, the sections, and the footer with
 // the fan-site notice and the four small-print links. Server components, no client JS. The sentences are in the pages;
 // this file only decides how a block LOOKS (the same look as the set-up guide: web/app/raidmimic/setup/page.tsx).
 // Colours are theme tokens and `white`, not hex literals: test/theme-tokens.test.js only lets stray hex shrink.
 import type { ReactNode } from 'react';
-import NewPageTag from '@/components/NewPageTag';
 import LegalLinks from '@/components/LegalLinks';
 import ShellFrame from '@/components/RaidmimicShell';
-import { CONTACT_HREF, LEGAL_UPDATED, TERMS_VERSION, legalPaths } from '@/lib/legal';
+import { LEGAL_UPDATED, TERMS_VERSION, legalPaths } from '@/lib/legal';
 import { RIGHTS_NOTICE } from '@/lib/raidmimicLanding';
 
 export const B = ({ children }: { children: ReactNode }) => <strong className="text-white">{children}</strong>;
@@ -47,7 +46,6 @@ export function LegalShell({ onHost, title, lead, showVersion = false, updated =
   // On a raidmimic host the shell (header, side nav, footer) wraps the page; the Wolf Pack hosts keep this page's own footer.
   const page = (
     <div className="mx-auto max-w-3xl pb-12">
-      <NewPageTag note="New page, still being shaped." href={onHost ? CONTACT_HREF : '/feedback'} />
       <header className="border-b border-border pb-4">
         <p className="text-xs uppercase tracking-widest text-gold">Raid Mimic</p>
         <h1 className="mt-1 text-3xl leading-tight text-white">{title}</h1>

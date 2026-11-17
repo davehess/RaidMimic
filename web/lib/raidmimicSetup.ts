@@ -21,10 +21,9 @@ export const LANDING_PATH_ON_HOST = '/';                 // raidmimic.com/
 export const LANDING_PATH_ON_WOLFPACK = '/raidmimic';    // the same page, on the Wolf Pack hosts
 
 // ─── Header ─────────────────────────────────────────────────────────────────────────────────────────
-export const TITLE = '[beta] Set up Raid Mimic';
+export const TITLE = 'Set up Raid Mimic';
 export const DESCRIPTION =
   'A step-by-step guide to setting up Mimic on your own PC for EverQuest on Project Quarm, with no guild needed: what you need, what works on your own, and how to join a raid.';
-export const BETA_NOTE = 'New page, a first draft, still being shaped.';
 
 export const HERO = {
   kicker: 'Set up Raid Mimic',

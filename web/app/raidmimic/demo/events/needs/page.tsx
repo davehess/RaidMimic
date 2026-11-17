@@ -6,7 +6,7 @@ import { AVAILABLE_THIS_WEEK, CHARS, TARGETS, eventByTarget, needsFor } from '@/
 import DemoShell, { DemoButton, PANEL, demoBase } from '../../_parts/DemoShell';
 
 export const metadata: Metadata = {
-  title: { absolute: '[beta] Demo guild · Flag needs board' },
+  title: { absolute: 'Demo guild · Flag needs board' },
   description: 'Option B for coordinating flag events: every flag target ranked by how many raiders still need it, with a schedule button. Invented guild.',
   robots: { index: false, follow: false },
 };

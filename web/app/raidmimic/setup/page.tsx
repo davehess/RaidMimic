@@ -9,12 +9,11 @@
 // ./SetupSteps.tsx (one step at a time by default, the guild lead, 2026-10-28), which receives the rendered cards.
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
-import NewPageTag from '@/components/NewPageTag';
 import CopyChip from '@/components/CopyChip';
 import { isRaidmimicHost, raidmimicSeo } from '@/lib/raidmimicHost';
 import { EQMIMIC_FEEDBACK_PATH, EQMIMIC_ORIGIN, interestUrl, RIGHTS_NOTICE } from '@/lib/raidmimicLanding';
 import {
-  BETA_NOTE, CREDIT, HERO, LANDING_PATH_ON_HOST, LANDING_PATH_ON_WOLFPACK, RELEASES_URL, REQUIREMENTS,
+  CREDIT, HERO, LANDING_PATH_ON_HOST, LANDING_PATH_ON_WOLFPACK, RELEASES_URL, REQUIREMENTS,
   STEPS, STILL_STUCK, TROUBLESHOOTING, type Step,
 } from '@/lib/raidmimicSetup';
 import { REPO_URL } from '@/lib/eqmimicLanding';
@@ -25,7 +24,7 @@ import HostFrame from '@/components/RaidmimicFrame';
 import StartFree from '@/components/StartFree';
 import { startFreeVariant } from '@/lib/raidmimicStartFree';
 
-const TITLE = '[beta] Set up Raid Mimic';
+const TITLE = 'Set up Raid Mimic';
 const DESCRIPTION =
   'A step-by-step guide to setting up Mimic on your own PC for EverQuest on Project Quarm, with no guild needed: what you need, what works on your own, and how to join a raid.';
 
@@ -83,7 +82,6 @@ export default function RaidmimicSetupPage({ searchParams }: { searchParams?: { 
   return (
     <HostFrame onHost={onHost}>
     <div className="mx-auto max-w-3xl pb-12">
-      <NewPageTag note={BETA_NOTE} href={onHost ? interest : '/feedback'} />
 
       <header className="mb-6">
         <p className="text-xs uppercase tracking-widest text-gold">{HERO.kicker}</p>

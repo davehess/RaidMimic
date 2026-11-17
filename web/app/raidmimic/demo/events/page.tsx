@@ -8,7 +8,7 @@ import { CHARS, EVENTS, TARGETS, needsFor, targetByKey, type DemoChar } from '@/
 import DemoShell, { DemoButton, PANEL, demoBase } from '../_parts/DemoShell';
 
 export const metadata: Metadata = {
-  title: { absolute: '[beta] Demo guild · Flag events' },
+  title: { absolute: 'Demo guild · Flag events' },
   description: 'Option A for coordinating flag events: a leader posts an event and sees which raiders still need it and who signed. Invented guild.',
   robots: { index: false, follow: false },
 };

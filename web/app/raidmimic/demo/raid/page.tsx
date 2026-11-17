@@ -6,7 +6,7 @@ import PieceMatrix from '../_parts/PieceMatrix';
 import DemoShell, { PANEL } from '../_parts/DemoShell';
 
 export const metadata: Metadata = {
-  title: { absolute: '[beta] Demo guild · Next raid' },
+  title: { absolute: 'Demo guild · Next raid' },
   description: 'A demo raid night: who signed and which flags each raider still needs before the pull, so the leader can fix it first. Invented guild.',
   robots: { index: false, follow: false },
 };
