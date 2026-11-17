@@ -824,7 +824,7 @@ const MELEE_HIT_MAX = Math.max(6000, parseInt(process.env.WP_MELEE_HIT_MAX, 10) 
 // first word ("You flying" / "Torvahk round"), producing a phantom combatant
 // whose damage the multi-word anti-NPC filter then discards — monk specials
 // were credited to nobody and Harm Touch damage never parsed at all
-// (pq-companion comparison, analysis 04 §3-A).
+// (an earlier comparison with another parser).
 const SPECIAL_VERB_RX =
   '(?:harm\\s+touch(?:es)?|flying\\s+kicks?|round\\s+kicks?|dragon\\s+punch(?:es)?|' +
   'eagle\\s+strikes?|tiger\\s+claws?|tail\\s+rakes?|frenzies\\s+on|frenzy\\s+on)';
@@ -3559,7 +3559,7 @@ function _durTicksForLevel(formula, capTicks, level) {
   if (!lvl || !f) return cap;                       // no level → spell max
   // EQMac/Al'Kabor integer division is FLOOR, and formula 6 carries a +2 term
   // we never had (verified against the EQMacEmu CalcBuffDuration_formula port
-  // in the pq-companion comparison, pinned by its PQDI-checked test vectors:
+  // in an earlier comparison, pinned by PQDI-checked test vectors:
   // f6 L57 → 30 ticks, L60 → 32). On our catalog f6/base-35 is 25 spells —
   // essentially the whole slow line (Forlorn Deeds, Tagar's/Togor's/Tigir's
   // Insects, Languid Pace, Slow, Cloud of Grummus …). At L60 the real answer
@@ -34306,7 +34306,7 @@ function wpTrigApplyForm(base, f) {
       + '    <button id="trigCancelBtn" type="button" style="display:none;background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Cancel edit</button>'
       + '    <button id="trigPreviewBtn" type="button" style="background:#21262d;color:var(--green);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Fire the overlay with the current form text (no save, no DB)">▶ Preview</button>'
       + '    <button id="trigTestBtn" type="button" style="background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Test pattern…</button>'
-      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or PQ Companion trigger file">⬇ Import GINA / EQLP / PQ Companion</button>'
+      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or JSON trigger pack file">⬇ Import GINA / EQLP / JSON pack</button>'
       + '    <span id="trigAddMsg" class="dim" style="font-size:11px"></span>'
       + '  </div>'
       + '  <div id="trigTestPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
@@ -34316,7 +34316,7 @@ function wpTrigApplyForm(base, f) {
       + '    <div id="trigTestResult" class="dim" style="font-size:11px;margin-top:6px"></div>'
       + '  </div>'
       + '  <div id="trigImportPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
-+ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or <b>PQ Companion</b> (its exported .json trigger pack). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
++ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or a <b>JSON trigger pack</b> (a .json export). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
       + '    <input id="trigImportFile" type="file" accept=".tgf,.gz,.gtp,.xml,.json,application/gzip,application/json,text/xml" style="display:block;margin-bottom:6px;font-size:11px;color:var(--text)">'
       + '    <textarea id="trigImportXml" placeholder="…or paste the .tgf JSON / SharedTriggers XML here" style="width:100%;height:120px;background:var(--wp-panel);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;margin-bottom:6px"></textarea>'
       + '    <button id="trigImportRun" type="button" style="background:var(--wp-accent);color:#fff;border:0;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px">Import pasted text</button>'
@@ -35026,7 +35026,7 @@ function wpTrigApplyForm(base, f) {
         summary += '<br><span class="dim" style="font-size:11px">' + j.sound_notes.length + ' trigger' + (j.sound_notes.length === 1 ? '' : 's') + ' played a sound that could not come along, so ' + (j.sound_notes.length === 1 ? 'it keeps' : 'they keep') + ' the spoken callout: '
           + j.sound_notes.slice(0, 4).map(function(n){ return esc(n.name) + (n.file ? ' (' + esc(n.file) + ')' : '') + ' &mdash; ' + esc(n.why); }).join('; ') + (j.sound_notes.length > 4 ? '; and ' + (j.sound_notes.length - 4) + ' more' : '') + '. Drop the file in your sounds folder and pick it in the trigger.</span>';
       }
-      // PQ Companion packs: what a personal trigger has no place for.
+      // JSON trigger packs: what a personal trigger has no place for.
       if (Array.isArray(j.not_carried) && j.not_carried.length > 0) {
         summary += '<br><span class="dim" style="font-size:11px">Not carried over: '
           + j.not_carried.slice(0, 6).map(function(n){ return esc(n.name) + ' (' + n.what.map(esc).join('; ') + ')'; }).join('; ')
@@ -39026,7 +39026,7 @@ function startWebDashboard(port) {
       // ⚠ GONE (2026-08-27): the local /api/loot/dkp route used to call
       // api.opendkp.com DIRECTLY from this machine, once a minute per running
       // agent, to fetch the whole 472-character standings array and render one
-      // number. Moncs saw ~54 calls/hour from a single member's home ip.
+      // number. The upstream maintainer saw ~54 calls/hour from a single member's home ip.
       //
       // The guild lead: "agents shouldnt be reaching out to opendkp like this."
       // The bot now owns that call — one fetch for the whole guild, counted,
@@ -40063,7 +40063,7 @@ function startWebDashboard(port) {
 
       // POST /api/personal-triggers/import — accepts a GINA / EQLogParser
       // XML blob (both export the same SharedTriggers shape), an EQLogParser
-      // .tgf tree or a PQ Companion JSON pack (_parseTriggerImport) and APPENDS
+      // .tgf tree or a third-party trigger pack (JSON) (_parseTriggerImport) and APPENDS
       // parsed entries to the personal triggers list. Existing personal
       // triggers are preserved; duplicates by name are skipped (caller can
       // delete + re-import to overwrite). Returns { imported, skipped,
@@ -40149,14 +40149,14 @@ function startWebDashboard(port) {
         }
         const parsed = _parseTriggerImport(raw);
         if (!parsed.length) {
-          res.writeHead(400); return res.end(JSON.stringify({ error: 'no triggers found in that file (GINA, EQLogParser and PQ Companion exports are supported)' }));
+          res.writeHead(400); return res.end(JSON.stringify({ error: 'no triggers found in that file (GINA, EQLogParser and JSON trigger pack exports are supported)' }));
         }
         const existingNames = new Set(_personalTriggers.map(t => String(t.name || '').toLowerCase()));
         const compiled = [];
         const errors = [];
         let imported = 0, skipped = 0, soundsCopied = 0;
         const soundNotes = [];   // triggers whose sound file could not come along
-        const notCarried = [];   // pieces of a trigger a personal trigger has no place for (PQ Companion packs)
+        const notCarried = [];   // pieces of a trigger a personal trigger has no place for (JSON trigger packs)
         const noteNotCarried = (t) => {
           if (Array.isArray(t.not_carried) && t.not_carried.length) {
             notCarried.push({ name: String(t.name || '').slice(0, 100), what: t.not_carried.slice(0, 8).map(s => String(s).slice(0, 120)) });
@@ -40208,7 +40208,7 @@ function startWebDashboard(port) {
             actions,
           };
           if (t.timer_duration_sec > 0) row.timer_duration_sec = Math.max(1, Math.min(3600, t.timer_duration_sec));
-          // PQ Companion pack fields the parser already cleaned (timer warnings, excludes, capture-timed
+          // JSON trigger pack fields the parser already cleaned (timer warnings, excludes, capture-timed
           // timers, bar colour, loop); other formats never set them.
           for (const k of _PQC_ROW_FIELDS) if (t[k] !== undefined) row[k] = t[k];
           if (t.enabled === false) row.enabled = false;
@@ -40226,7 +40226,7 @@ function startWebDashboard(port) {
             existingNames.add(row.name.toLowerCase());
             imported++;
           } catch (err) {
-            // Import DISABLED rather than drop (pq-companion's contract, and
+            // Import DISABLED rather than drop (the pack format's contract, and
             // the right one): a silently-missing trigger is the worse failure
             // mode. The row sits in the list flagged for manual editing.
             compiled.push({ ...row, enabled: false, import_error: String(err.message || err).slice(0, 200),
@@ -49481,7 +49481,7 @@ function _escapeForLiteralMatch(s) {
 // ── Trigger pattern compiler (GINA / EQLogParser / native) ──────────────────
 // One pipeline for every pattern, no matter which door it came through —
 // import, guild poll, personal load, or the dashboard test box. Built from the
-// pq-companion comparison (scratchpad analysis 01), which ran 1,189 real
+// an earlier comparison, which ran 1,189 real
 // GINA/EQLP fixture triggers through the OLD translators: 92 threw at compile,
 // 311 ^-anchored patterns could never fire, and 82 bound their action tokens
 // to the wrong capture. With this pipeline the same corpus compiles 583/583.
@@ -49534,7 +49534,7 @@ function _rewriteAnchorsForRawLine(pattern) {
 }
 
 // .NET / RE2 dialect → JavaScript. GINA and EQLogParser write .NET regex; a
-// pq-companion pack writes Go/RE2. JS has lookbehind and backrefs (RE2's gap —
+// third-party trigger pack writes Go/RE2. JS has lookbehind and backrefs (RE2's gap —
 // our advantage) but NOT scoped inline flags, which .NET packs use heavily.
 // Rewrites: (?P<n>…)→(?<n>…) · (?#comment) removed · (?i:…)→(?:…)+flag ·
 // (?i) hoisted · (?>…)→(?:…) · duplicate (?<x>…) renamed x_2 with an alias so
@@ -51856,8 +51856,8 @@ function _parseTriggerXml(xml) {
     const enableRegex = get('EnableRegex').toLowerCase() === 'true';
     const displayText = get('DisplayText');
     const ttsText     = get('TextToVoiceText');
-    // GINA timer semantics — corrected 2026-08-07 (pq-companion analysis 01
-    // §3.9): TimerDuration is the COUNTDOWN length, and we used to import it
+    // GINA timer semantics — corrected 2026-08-07 (found in an earlier
+    // comparison): TimerDuration is the COUNTDOWN length, and we used to import it
     // as cooldown_seconds — a semantic inversion that turned a 450s raid
     // timer into a 450s MUTE on the trigger with no timer at all. GINA has no
     // lockout concept, so cooldown is always 0 here; the duration becomes a
@@ -51991,7 +51991,7 @@ function _parseTriggerTgfJson(text) {
   return out;
 }
 
-// PQ Companion's trigger pack (2026-10-20): plain JSON, {pack_name, description, triggers:[…]}, written by
+// A third-party trigger pack (2026-10-20): plain JSON, {pack_name, description, triggers:[…]}, written by
 // its Triggers page "Export" (a whole list or one category). Read from its published trigger model; the
 // code here is our own. A trigger is one record: `pattern` (Go regex, run on the message with the timestamp
 // already stripped, so a leading ^ is normal — compileTriggerPattern handles that and the (?P<name>…) groups,
@@ -52001,7 +52001,7 @@ function _parseTriggerTgfJson(text) {
 // sentences for whatever has no home in a personal trigger, which the import result lists. A trigger with
 // nothing to match on comes back with no pattern, so the endpoint reports it without storing it.
 // `characters` is deliberately never carried — it names the exporter's own characters.
-// Returns null when the text is not a PQ Companion pack, so the caller can try the next format.
+// Returns null when the text is not a JSON trigger pack, so the caller can try the next format.
 const _PQC_ROW_FIELDS = ['timer_warnings', 'exclude_patterns', 'timer_duration_capture', 'timer_key_capture',
   'bar_color', 'pinned', 'display_threshold_sec', 'timer_loop', 'timer_loop_max'];
 function _parsePqCompanionPack(text) {
@@ -52099,7 +52099,7 @@ function _parsePqCompanionPack(text) {
   }
   return out;
 }
-// One door for the import endpoint: XML (GINA / EQLogParser share-data), a PQ Companion pack, or an
+// One door for the import endpoint: XML (GINA / EQLogParser share-data), a JSON trigger pack, or an
 // EQLogParser .tgf tree — told apart by what the text is, never by file name.
 function _parseTriggerImport(raw) {
   if (!/^\s*[[{]/.test(raw)) return _parseTriggerXml(raw);
@@ -60430,7 +60430,7 @@ function _readZipEntry(zipPath, entryName) {
 
 // Buffer-based sibling of _readZipEntry for GINA .gtp packages — a .gtp is a
 // PKZIP holding one ShareData.xml, which our gzip-only import path could never
-// read (the "advertised and broken" finding in the pq-companion comparison).
+// read (the "advertised and broken" finding in an earlier comparison).
 // Prefers a member whose basename matches `preferBase`, else the first .xml
 // member, else the first member. Store (0) and deflate (8) only.
 function _readZipMemberFromBuf(buf, preferBase) {
@@ -63815,7 +63815,7 @@ function _synthesizeMatchingLine(t, captures) {
   // by prepending a synthetic timestamp below, so REHEARSE chews on the same
   // raw-line shape the live tail produces. The old blanket anchor delete made
   // a ^-anchored pattern rehearse green while being dead on live (the
-  // false-green half of the pq-companion 01 findings).
+  // false-green half of the earlier comparison's findings).
   src = src.replace(/[?*+]/g, '');
   src = src.replace(/\$$/, '');
   if (src.startsWith('^')) src = src.slice(1);
@@ -71364,7 +71364,7 @@ module.exports = {
   _setPronunciationsForTest: (synced, local) => { _pronSynced = new Map(_pronPairs(synced)); _pronLocal = { ...(local || {}) }; _pronMerged = null; },
   _noteOwnMelee, _afterMyMeleeOk, _ownMeleeAt,
   _importSoundFile, _parseTriggerXml, _parseTriggerTgfJson,
-  // PQ Companion pack import (2026-10-20) — exported for test/pqc-import.test.js.
+  // JSON trigger pack import (2026-10-20) — exported for test/pqc-import.test.js.
   _parsePqCompanionPack, _parseTriggerImport, _PQC_ROW_FIELDS, compileTriggerPattern,
   _setVoiceStateDirForTest: (d) => { _voiceStateDir = d || null; },
   _setGuildTriggersForTest: (arr) => { stats.guildTriggers = arr; stats.guildTriggersVersion = null; },
