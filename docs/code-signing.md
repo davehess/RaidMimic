@@ -1,12 +1,14 @@
 # Code signing — Raid Mimic (Windows)
 
-> ## STATUS (2026-10-29): pipeline ready, waiting on the Azure account.
+> ## STATUS (2026-11-17): identity validation reported finished; steps 4 to 7 left.
 >
 > Our side is built and **inert**: with the six settings below absent, the build is
 > the unsigned build it has always been and CI stays green. The moment they exist,
 > every Windows build (stable, beta, alpha) signs and verifies itself.
-> Nothing is signed yet, because the Azure Artifact Signing account (and the
-> identity validation behind it) does not exist yet. That part is the guild lead's.
+> Nothing is signed yet. The account (`RaidMimic`, Basic, East US) exists and the guild lead reported the
+> individual identity validation finished on 2026-11-17; the certificate profile, app registration and the
+> six GitHub settings (steps 4 to 6) are the guild lead's. Since 2026-11-17 the release job names the GitHub
+> environment `signing` (DECISIONS §562), so the settings go there, limited to main, beta and alpha.
 >
 > | Piece | Where |
 > |---|---|
@@ -30,7 +32,10 @@
 >    **Artifact Signing Certificate Profile Signer** role on the certificate profile (or the account)
 >    ([roles](https://learn.microsoft.com/en-us/azure/artifact-signing/tutorial-assign-roles)):
 >    `az role assignment create --assignee <service principal object id> --role "Artifact Signing Certificate Profile Signer" --scope <certificate profile resource id>`.
-> 6. **GitHub, repo Settings, Secrets and variables, Actions** (names are exact):
+> 6. **GitHub, repo Settings, Environments, New environment `signing`**: under Deployment branches and tags pick
+>    "Selected branches and tags" and add `main`, `beta` and `alpha`; no required reviewers (a reviewer would hold every
+>    build). Then add these in that environment (names are exact; repo-level Secrets and variables, Actions, also work
+>    but any branch's workflow could read them):
 >    - **Secrets:** `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (the app registration's tenant, application (client) id and secret value).
 >    - **Variables:** `AZURE_SIGNING_ENDPOINT` (the regional endpoint, e.g. `https://eus.codesigning.azure.net`, listed in
 >      [the integrations doc](https://learn.microsoft.com/en-us/azure/artifact-signing/how-to-signing-integrations)),
