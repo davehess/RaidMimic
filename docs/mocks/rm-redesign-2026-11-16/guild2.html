@@ -29,17 +29,36 @@
 <span class="era">Quarm · <b>Planes of Power</b> ▾</span><span class="sep"></span>
 <a class="tab">Home</a><a class="tab">Raids</a><a class="tab">Progress</a><a class="tab on">Guilds</a><a class="tab off">Guild console</a>
 <span class="grow"></span><span class="k">Search raids, guilds, characters <kbd>Ctrl K</kbd></span>
-<span class="look"><a class="aa" title="Look">Aa</a><div class="menu">
- <h4>Titles</h4><span class="seg"><a class="t-eng" id="t-eng">Engraved</a><a id="t-plain">Plain</a></span>
- <h4>Mode</h4><span class="seg"><a id="m-dark">Dark</a><a id="m-light">Light</a><a id="m-sys">System</a></span>
- <p>Saved on this device; signed in, it follows you.</p></div></span>
+<span class="look"><a class="aa" title="Look" id="aa">Aa</a><div class="menu">
+ <h4>Look</h4>
+ <div class="tiles">
+  <a data-l="engraved:dark" class="tile" style="--tb:#101114;--tf:#ecedf0;font-family:Cinzel,serif">Aa<small>Engraved · Dark</small></a>
+  <a data-l="plain:dark" class="tile" style="--tb:#101114;--tf:#ecedf0">Aa<small>Plain · Dark</small></a>
+  <a data-l="engraved:light" class="tile" style="--tb:#d6c7a6;--tf:#2b2116;font-family:Cinzel,serif">Aa<small>Engraved · Parchment</small></a>
+  <a data-l="plain:light" class="tile" style="--tb:#d6c7a6;--tf:#2b2116">Aa<small>Plain · Parchment</small></a>
+ </div>
+ <h4>Accent</h4>
+ <div class="sw"><a class="guild" data-a="guild" title="The guild's colour on its own pages">G</a><a data-a="gold" style="--c:#e0b14f" title="Gold"></a><a data-a="silver" style="--c:#c3c8d2" title="Silver"></a><a data-a="violet" style="--c:#a98cf5" title="Violet"></a><a data-a="teal" style="--c:#4ccbbd" title="Teal"></a><a data-a="rose" style="--c:#e889b0" title="Rose"></a></div>
+ <p>G uses each guild’s own colour on its pages. Saved on this device; signed in, it follows you.</p></div></span>
 <span class="me"><span class="av"></span>Your cleric · 65</span></header>
 <script>
+ // Dark by default (the guild lead, 2026-11-17). A ?look=&accent= in the address overrides, for the pictures.
  const q = new URLSearchParams(location.search), h = document.documentElement;
- const t = q.get('titles') || 'engraved', m = q.get('mode') || 'dark';
- h.dataset.titles = t; h.dataset.mode = m; if (q.get('menu')) h.dataset.menu = 'open';
- document.getElementById(t === 'plain' ? 't-plain' : 't-eng').className += ' on';
- document.getElementById(m === 'light' ? 'm-light' : 'm-dark').className += ' on';
+ const get = (k, d) => q.get(k) || (() => { try { return localStorage.getItem('rm-' + k); } catch { return null; } })() || d;
+ const GUILD_ACCENT = 'silver'; // this page's guild colour, as the guild set it (sample)
+ function apply(look, accent) {
+   const [t, m] = look.split(':'); h.dataset.titles = t; h.dataset.mode = m;
+   h.dataset.accent = accent === 'guild' ? GUILD_ACCENT : accent;
+   document.querySelectorAll('.tile').forEach(e => e.classList.toggle('on', e.dataset.l === look));
+   document.querySelectorAll('.sw a').forEach(e => e.classList.toggle('on', e.dataset.a === accent));
+ }
+ let look = get('look', 'engraved:dark'), accent = get('accent', 'guild');
+ apply(look, accent);
+ if (q.get('menu')) h.dataset.menu = 'open';
+ document.getElementById('aa').onclick = () => { h.dataset.menu = h.dataset.menu === 'open' ? '' : 'open'; };
+ const save = (k, v) => { try { localStorage.setItem('rm-' + k, v); } catch {} };
+ document.querySelectorAll('.tile').forEach(e => e.onclick = () => { look = e.dataset.l; save('look', look); apply(look, accent); });
+ document.querySelectorAll('.sw a').forEach(e => e.onclick = () => { accent = e.dataset.a; save('accent', accent); apply(look, accent); });
 </script>
 <main class="page">
  <div class="crumb">Guilds · Quarm</div>
