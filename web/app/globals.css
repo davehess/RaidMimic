@@ -214,7 +214,7 @@
 /* ── Browser surfaces ─────────────────────────────────────────────────────
    The parts we did not draw still carry the design. */
 ::selection { background: rgb(var(--wp-gold) / .28); color: rgb(var(--wp-bone)); }
-:root { caret-color: rgb(var(--wp-gold)); accent-color: rgb(var(--wp-gold)); }
+:root { caret-color: rgb(var(--wp-gold)); accent-color: rgb(var(--wp-gold)); color-scheme: dark; } /* dark native selects, date pickers */
 :focus-visible { outline: 2px solid rgb(var(--wp-gold)); outline-offset: 2px; border-radius: 2px; }
 * { scrollbar-color: rgb(var(--wp-border)) rgb(var(--wp-bg)); scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 11px; height: 11px; }

@@ -1,5 +1,5 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Prata, Faustina } from 'next/font/google';
 import Link from 'next/link';
 import SiteHeader from '@/components/SiteHeader';
@@ -32,6 +32,9 @@ const proseFace = Faustina({ subsets: ['latin'], weight: ['400', '600'], variabl
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
   || (IS_BETA ? 'https://b.wolfpack.quest' : 'https://wolfpack.quest');
+
+// The phone browser's bar takes the page ground instead of white (the site is dark only).
+export const viewport: Viewport = { themeColor: '#0d1117' };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
