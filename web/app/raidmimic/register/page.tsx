@@ -13,10 +13,11 @@ import RegisterForm from './RegisterForm';
 import HostFrame from '@/components/RaidmimicFrame';
 import HomePanelGate from '../_landing/HomePanelGate';
 import { DOWNLOAD_URL, STORY_BUTTON } from '@/lib/raidmimicPlayer';
+import { GUILD_PRICE } from '@/lib/raidmimicStory';
 
 const TITLE = '[beta] Register your guild';
 const DESCRIPTION =
-  'Tell us about your raid guild: its game, size, raid nights and DKP tool. No sign-in and no account, just a way to count your guild in for Raid Mimic.';
+  'Free to register: tell us about your raid guild, its game, size, raid nights and DKP tool. No sign-in, no card. Only guild hosting costs money, and only if you choose it.';
 
 // Indexed on the raidmimic apex hosts with https://raidmimic.com/register as the canonical address; noindex on the
 // Wolf Pack hosts and on b.raidmimic.com (web/lib/raidmimicHost.ts raidmimicSeo()).
@@ -46,9 +47,16 @@ export default function RaidmimicRegisterPage() {
       <header className="mb-5">
         <p className="text-xs uppercase tracking-widest text-gold">Raid Mimic</p>
         <h1 className="mt-1 text-3xl leading-tight text-text">Register your guild</h1>
-        <p className="mt-3 max-w-[60ch] text-sm leading-6 text-text">
-          No sign-in. Only the guild name is required.
-        </p>
+        {/* Free to register, said first and plainly (the guild lead, 2026-11-17: "make it very clear that registering up
+            front is free and only the hosting bits cost money"; no free month, §612). */}
+        <div className="mt-4 rounded-md border-l-4 border-green bg-panel px-4 py-3 text-sm leading-6 text-text" data-free-note>
+          <p className="font-semibold text-green">Registering is free.</p>
+          <p className="mt-1">
+            No sign-in, no card, no commitment. Only hosting costs money: Pro · Guild is ${GUILD_PRICE} a month, once guild
+            hosting opens, and only if you choose it. The overlays stay free.
+          </p>
+        </div>
+        <p className="mt-3 max-w-[60ch] text-sm leading-6 text-text">Only the guild name is required.</p>
       </header>
 
       <RegisterForm downloadHref={RELEASES_URL} setupHref={setup} />
