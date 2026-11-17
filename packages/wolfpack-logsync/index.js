@@ -16126,10 +16126,31 @@ function _resolveMainTank(mainTargetName) {
 // (the guild lead, 2026-07-06). Primes the shared extended-target cache as a side
 // effect, so these overlays get fed even without the Extended Target overlay
 // open. Returns { name, hp_pct, raider_count } or null (out of combat / cold).
+// The raid's KILL tag (2026-11-17): the newest fresh tag whose text is KILL. With `@` it is exclusive, so there is one.
+function _killTagNow(now = Date.now()) {
+  let best = null;
+  for (const t of _zealTags.values()) {
+    if (!t || !/^kill\b/i.test(String(t.text || '')) || !(now - (t.tsMs || 0) <= _TAG_FRESH_MS)) continue;
+    if (!best || t.tsMs > best.tsMs) best = t;
+  }
+  return best;
+}
 function _resolveMainTarget(activeCharacter) {
   try { fetchExtendedTarget(activeCharacter); } catch { /* best-effort prime */ }
   const cached = _extTargetCache.get(String(activeCharacter || '').trim().toLowerCase());
   const targets = cached && cached.payload && Array.isArray(cached.payload.targets) ? cached.payload.targets : null;
+  // The main assist's KILL tag names the mob outright ("consume this for targetting", the guild lead, 2026-11-17). It wins
+  // while that mob is still a live row of the raid's targets, or for a minute after the tag before any row shows it; a
+  // dead or long-gone KILL mob falls back to "most targeted" below.
+  try {
+    const kt = _killTagNow();
+    if (kt) {
+      const row = (targets || []).find(t => t && t.kind === 'npc' && !t.stale
+        && ((t.spawn_id != null && Number(t.spawn_id) === Number(kt.spawn_id)) || String(t.name || '').toLowerCase() === kt.mob));
+      if (row) return { name: row.name, hp_pct: row.hp_pct != null ? row.hp_pct : null, raider_count: row.raider_count || 0, source: 'kill_tag' };
+      if (Date.now() - kt.tsMs <= 60_000) return { name: kt.mobDisplay, hp_pct: null, raider_count: 0, source: 'kill_tag' };
+    }
+  } catch { /* a tag is a hint: never break the target bar */ }
   if (!targets || !targets.length) return null;
   let best = null;
   for (const t of targets) {
@@ -50033,6 +50054,11 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
   // more natural raid action than two people tagging simultaneously.
   const first = text[0];
   let mode = 'set';
+  // `@` is `+` plus exclusivity (a member, in the guild's raid channel, 2026-11-17): "+ does 'Add this TAG to my current
+  // target, but don't remove any of its existing tags' ... @ does 'Add this TAG to my current target, but don't remove any
+  // of its existing tags. Also remove specifically this TAG from other targets in the zone'". The main assist's kill macro
+  // is `/tag rsgs @^r^KILL`, so KILL moves with each new target and `/tag target KILL` finds it.
+  const exclusive = first === '@';
   if (first === '+' || first === '@') { mode = 'append'; text = text.slice(1); }
   else if (first === '!') { mode = 'replace'; text = text.slice(1); }
   else if (first === '-') {
@@ -50046,7 +50072,13 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
     shape = _ZEAL_TAG_SHAPES[sm[1].toLowerCase()] || null;            // '^-^' → null = shape cleared
     text = text.slice(sm[0].length);
   }
-  text = text.replace(/\s+/g, ' ').trim().slice(0, 48);
+  text = text.replace(/\^.\^/g, '').replace(/\s+/g, ' ').trim().slice(0, 48);   // a colour code mid-text is not text either
+  // Exclusive: the same tag comes off every OTHER spawn here. Its entry stays, text blanked, as the game leaves the old
+  // target its arrow but no text.
+  if (exclusive && text) {
+    const want = text.toLowerCase();
+    for (const [sid, t] of _zealTags) if (sid !== spawnId && t && String(t.text || '').toLowerCase() === want) t.text = '';
+  }
   const prev = _zealTags.get(spawnId);
   _zealTags.set(spawnId, {
     spawn_id: spawnId, mob: name.toLowerCase(), mobDisplay: name,
@@ -71463,7 +71495,7 @@ module.exports = {
   _applyPetOwnersResponse, _isGeneratedPetName, _guildPetOwners, whoData,
   _liveThreatForTest: () => stats.currentEncounterThreat,
   // +pet spawn ids on the DPS HUD — exported for their test.
-  _petSpawnIdFor, _ownPetSpawnId, _guildPetIds, _zealTagsForTest: _zealTags,
+  _petSpawnIdFor, _ownPetSpawnId, _guildPetIds, _zealTagsForTest: _zealTags, _applyZealTagMessage, _killTagNow,
   _uploadQueueLenForTest: () => _uploadQueue.length,
   // "What you hear" (2026-10-12) — exported for test/trigger-rules.test.js.
   _triggerRules, _resolveRule, _computeRuleGroups, _triggerRulesPayload, _setTriggerRule, _cleanRules,
