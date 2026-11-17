@@ -24,6 +24,11 @@
 // them and do not edit them.
 
 const FLUSH_MS = 2_000;                   // one upsert per table per tick
+// raid_roster waits longer (2026-11-17, DECISIONS §617): every uploader sends the whole raid every ~3 s, so at 2 s each
+// upload was its own write, about a quarter of the bot's raid-night egress. At 6 s about every other upload is written.
+// The bot's own reads come from memory and are unaffected; readers of the Supabase copy (the web, spectator positions)
+// lag up to 6 s instead of 2.
+const ROSTER_FLUSH_MS = 6_000;
 const KEEP_MS = 30 * 60 * 1000;           // memory drops entries older than this (readers' widest window is 15 min)
 const SWEEP_EVERY_MS = 60 * 1000;         // ...checked on write, at most this often
 const MAX_PENDING = 5_000;                // unflushed keys per table; past it the oldest are dropped
@@ -31,9 +36,9 @@ const MAX_PENDING = 5_000;                // unflushed keys per table; past it t
 const _sb = { client: null };             // a test hands in a fake; production requires the real one lazily
 const supabase = () => _sb.client || require('./supabase');
 
-function makeStream(table, onConflict, key, timeField) {
+function makeStream(table, onConflict, key, timeField, flushMs = FLUSH_MS) {
   return {
-    table, onConflict, key, timeField,
+    table, onConflict, key, timeField, flushMs,
     mem: new Map(),        // key → latest merged row
     pending: new Map(),    // key → merged row not yet in Supabase, oldest first
     inflight: null,        // the flush request in the air, if any
@@ -46,7 +51,7 @@ function makeStream(table, onConflict, key, timeField) {
 
 // raid_roster's unique key is (guild_id, uploaded_by_discord_id, name), live state's is (guild_id, character).
 const roster = makeStream('raid_roster', 'guild_id,uploaded_by_discord_id,name',
-  (r) => `${r.guild_id}|${r.uploaded_by_discord_id}|${r.name}`, 'captured_at');
+  (r) => `${r.guild_id}|${r.uploaded_by_discord_id}|${r.name}`, 'captured_at', ROSTER_FLUSH_MS);
 const live = makeStream('character_live_state', 'guild_id,character',
   (r) => `${r.guild_id}|${r.character}`, 'updated_at');
 
@@ -73,7 +78,7 @@ function capPending(s) {
 
 function schedule(s) {
   if (s.timer || !s.pending.size) return;
-  s.timer = setTimeout(() => { s.timer = null; flush(s).catch(() => {}); }, FLUSH_MS);
+  s.timer = setTimeout(() => { s.timer = null; flush(s).catch(() => {}); }, s.flushMs);
   if (s.timer.unref) s.timer.unref();
 }
 
@@ -200,6 +205,6 @@ module.exports = {
   noteRosterRows, noteLiveStateRows, noteLiveStateSwap,
   rosterRowsSince, liveStateRowsSince,
   flushLiveState, flushAll,
-  FLUSH_MS, KEEP_MS, MAX_PENDING,
+  FLUSH_MS, ROSTER_FLUSH_MS, KEEP_MS, MAX_PENDING,
   _reset, _sizes,
 };

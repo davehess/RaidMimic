@@ -11916,9 +11916,9 @@ async function _handleAgentSpellCatalog(req, res, isPublic) {
         count: entries.length,
         entries,
       });
-      // Lightweight ETag = sha1 of the JSON body. Lets the agent skip the parse
-      // on a 304 if its cached copy is current.
-      const etag = '"' + require('crypto').createHash('sha1').update(body).digest('hex') + '"';
+      // Lightweight ETag = sha1 of the JSON body WITHOUT its fetched_at (2026-11-17, DECISIONS §617): with the timestamp
+      // in the hash every rebuild and every redeploy made a new tag, so the agent's daily 304 was mostly a full download.
+      const etag = '"' + require('crypto').createHash('sha1').update(body.replace(/"fetched_at":"[^"]*",/, '')).digest('hex') + '"';
       _spellCatalogCache = { fetchedAt: Date.now(), body, etag };
     } catch (err) {
       console.error('[spell-catalog] fetch failed:', err && err.message);
@@ -12022,8 +12022,8 @@ async function _handleAgentItemClickies(req, res, isPublic) {
         worn_haste: wornHaste,
         duration_foci: durationFoci,
       });
-      const etag = '"' + require('crypto').createHash('sha1').update(body).digest('hex') + '"';
-      _itemClickyCache = { fetchedAt: Date.now(), body, etag };
+      const etag = '"' + require('crypto').createHash('sha1').update(body.replace(/"fetched_at":"[^"]*",/, '')).digest('hex') + '"';   // fetched_at aside (§617)
+      _itemClickyCache ={ fetchedAt: Date.now(), body, etag };
     } else if (_itemClickyCache) {
       _itemClickyCache.fetchedAt = Date.now() - _ITEM_CLICKY_TTL_MS + 5 * 60 * 1000;
     } else {
@@ -12209,8 +12209,8 @@ async function _handleAgentItemCatalog(req, res, isPublic) {
         count: entries.length,
         entries,
       });
-      const etag = '"' + require('crypto').createHash('sha1').update(body).digest('hex') + '"';
-      _itemCatalogCache = { fetchedAt: Date.now(), body, etag };
+      const etag = '"' + require('crypto').createHash('sha1').update(body.replace(/"fetched_at":"[^"]*",/, '')).digest('hex') + '"';   // fetched_at aside (§617)
+      _itemCatalogCache ={ fetchedAt: Date.now(), body, etag };
     } else if (_itemCatalogCache) {
       _itemCatalogCache.fetchedAt = Date.now() - _ITEM_CATALOG_TTL_MS + 5 * 60 * 1000;
     } else {
@@ -16583,6 +16583,20 @@ function _buffDetailFor(rb, buffs, fx) {
 //                  that raider (from the cross-client casting relay), so a
 //                  second cleric doesn't double-up Cure Disease etc.
 // Same auth + small payload as /api/agent/target-casts.
+//
+// The raid-buff-queue's ETag (§617): a hash of the answer with what moves on its own left out. Countdowns (`t`, `s`,
+// `remaining_secs`) and tonight's damage are dropped; a cast in flight counts only as who is casting what; HP counts in
+// 10% steps, so a raider whose health swings still changes the tag. The minute is part of the tag, so a client that
+// keeps getting 304s still gets fresh countdowns once a minute.
+function _rbqEtag(out, now = Date.now()) {
+  const stable = JSON.stringify(out, (k, v) => {
+    if (k === 't' || k === 's' || k === 'remaining_secs' || k === 'damage') return undefined;
+    if (k === 'casting') return Array.isArray(v) ? v.map(c => c && `${c.caster}|${c.spell}`) : v;
+    if (k === 'hp_pct') return (typeof v === 'number') ? Math.round(v / 10) : v;
+    return v;
+  });
+  return '"' + require('crypto').createHash('sha1').update(stable + '|' + Math.floor(now / 60000)).digest('hex') + '"';
+}
 async function _handleAgentRaidBuffQueue(req, res) {
   const identity = await mimicLink.requireAgentAuth(req, res);
   if (!identity) return;
@@ -17057,6 +17071,8 @@ async function _handleAgentRaidBuffQueue(req, res) {
         // Tank HP gap = priority cue for the buff queue's sort. A naked
         // warrior needs Symbol before a naked wizard does.
         needs_tank_hp:         (role === 'tank' && missingHp.length > 0),
+        // Died recently and still nearly bare: sorts right after same-zone (§617). Additive; older overlays ignore it.
+        rebuff_after_death:    _rebuffAfterDeath(name, totalBuffs) || undefined,
         same_zone:             sameZone,
         out_of_range:          outOfRange || undefined,
         inferred: isInferred,
@@ -17066,12 +17082,14 @@ async function _handleAgentRaidBuffQueue(req, res) {
 
     // Buff queue sort:
     //   1. same zone as the buffer first (closer = actionable now)
-    //   2. tank HP gaps next (tanks need HP before DPS does)
-    //   3. severity tier (red → orange → yellow)
-    //   4. group → name as final tie-breakers
+    //   2. died recently and still bare (rebuff after death is the priority, §617)
+    //   3. tank HP gaps next (tanks need HP before DPS does)
+    //   4. severity tier (red → orange → yellow)
+    //   5. group → name as final tie-breakers
     const sev = { red: 0, orange: 1, yellow: 2 };
     buffQueue.sort((a, b) =>
       (Number(!!b.same_zone) - Number(!!a.same_zone))
+      || (Number(!!b.rebuff_after_death) - Number(!!a.rebuff_after_death))
       || (Number(!!b.needs_tank_hp) - Number(!!a.needs_tank_hp))
       || (sev[a.tier] - sev[b.tier])
       || ((a.group || 99) - (b.group || 99))
@@ -17286,7 +17304,16 @@ async function _handleAgentRaidBuffQueue(req, res) {
     }
     if (burstSpec) { out[burstSpec.key] = burstQueue; out.burst_label = burstSpec.label; }
     if (raidSplit.multi) out.raids = raidSplit.raids.map(r => _raidGroups.raidSummary(r, r === myRaid));
-    return require('./utils/gzipReply').sendJson(req, res, 200, JSON.stringify(out));
+    // Send it only when it changed (the guild lead, 2026-11-17: "We're more concerned with when things change"; §617).
+    // The tag ignores countdowns and casts in flight, and HP moves in 10% steps, so an unchanged raid answers 304.
+    // It also turns over each minute, so a client's countdowns are never more than a minute old. Only an agent that
+    // sends If-None-Match gets a 304; older agents get the full body as before.
+    const etag = _rbqEtag(out);
+    if ((req.headers || {})['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Vary': 'Accept-Encoding' });
+      return res.end();
+    }
+    return require('./utils/gzipReply').sendJson(req, res, 200, JSON.stringify(out), { 'ETag': etag });
   } catch (err) {
     console.warn('[raid-buff-queue] failed:', err && err.message);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -20213,6 +20240,13 @@ async function _groupmatesOf(caster) {
 // deaths[] array. In-memory only; restart-fresh is acceptable because
 // buff_casts themselves expire on their catalog duration.
 const _lastRaiderDeath = new Map();   // nameLower → epoch ms of last death
+// Rebuff after a death (the guild lead, 2026-11-17: "when someone died they need to be rebuffed. that's a priority"):
+// died in the last 30 minutes and still carries fewer than 3 buffs. A death reaches this map with the fight's upload.
+const _REBUFF_AFTER_DEATH_MS = 30 * 60 * 1000;
+function _rebuffAfterDeath(name, buffCount, now = Date.now()) {
+  const at = _lastRaiderDeath.get(String(name || '').toLowerCase());
+  return !!at && now - at < _REBUFF_AFTER_DEATH_MS && (buffCount || 0) < 3;
+}
 function _noteRaiderDeaths(deaths) {
   if (!Array.isArray(deaths)) return;
   for (const d of deaths) {

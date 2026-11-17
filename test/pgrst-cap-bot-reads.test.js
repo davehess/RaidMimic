@@ -193,6 +193,8 @@ function buffQueueHandler(sb) {
     _spellFxMap: async () => new Map(),
     _buffDetailFor: () => ({}),
     _castingOnTarget: () => [],
+    _rebuffAfterDeath: () => false,
+    _rbqEtag: () => '"t"',
     _mgbTrainedSet: async () => new Set(),
     _CURSE_COUNTERS_FOR: () => 0,
     _debuffClearMarks: new Map(),
