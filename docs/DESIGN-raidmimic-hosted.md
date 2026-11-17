@@ -678,3 +678,35 @@ dropping the `'wolfpack'` column defaults once writers pass a guild.
 one: it resolves the guild per interaction and per event from `hub_guilds.discord_guild_id`, registers global commands,
 asks for no privileged intent and only the permissions above, and does the import plus raid cards first. Wolf Pack's bot
 does not change. A guild that later wants the full feature set gets its own copy (§9 option C).
+
+**Superseded in part 2026-11-17 (§616): one process, two Discord apps.** The guild lead: *"Can we architect this into the
+current bot then so we don't have to keep doing both? anything new can be done via RaidMimic instead of RaidBosses, with
+the exception of the boards which are barely used"*. The Raid Mimic app stays a separate Discord application (its own
+token, global commands, no privileged intent, the permissions above); what changes is where it runs and who it serves:
+- **It runs inside the current bot service**, not a new one. Hosted guilds' uploads already reach this process (§11), so a
+  second service would split one guild's data path across two boxes without making either safer.
+- **Wolf Pack is just another guild to it.** Every new feature is built once, multi-guild, on the Raid Mimic app, and Wolf
+  Pack's server installs that app beside RaidBosses. Nothing new is built on RaidBosses.
+- **RaidBosses keeps** the boards (barely used, so not ported) and the Wolf Pack jobs that need a live Discord login and
+  privileged intents the shared app must never ask for: member join/leave onboarding and the 6-hour member sync
+  (`GuildMembers`), the patch-notes mirror and the Suno mover (`MessageContent`), the forum-thread hook, voice. It keeps its
+  login lease (§562) and its restart gap.
+- **Raid Mimic never logs in.** Discord sends its slash commands and buttons to an Interactions Endpoint URL on the bot's
+  existing public address (Ed25519 signature check with Node's `crypto`, no dependency); it posts through Discord's REST
+  API with its own token. That route is answered **in standby too**, because it needs no login, so a deploy shows no gap on
+  Raid Mimic clicks. Agent uploads keep today's handover (the one-replica rule in CLAUDE.md is unchanged).
+- **The seam.** New code lives in its own folder (`raidmimic/`), with `index.js` only mounting the route and starting its
+  scheduler. The folder resolves the guild per interaction from `hub_guilds.discord_guild_id` and never reads
+  `DISCORD_GUILD_ID`, `SUPABASE_GUILD_ID`, `'wolfpack'` or `state.json`; a test enforces that. The real copy of anything
+  lives in the database, never only in memory (§615 addendum). Kept that way, the folder can move to its own service later
+  in a day if one guild's load ever needs it.
+- **Scheduled posts** (raid cards, timers) run only on the lease holder and take a database claim row per post, so neither
+  a handover nor a retry posts twice.
+- **Moving an existing Wolf Pack command** happens when it is next changed: the Raid Mimic version ships and the RaidBosses
+  registration is deleted in the same change, so there are never two of one command (Desk `bot-cutover` follow-up). A job
+  that edits a standing message (a bot can edit only its own posts) reposts once under Raid Mimic; the boards are exempt
+  because they stay.
+- **Gaps to design around:** no gateway means no `guildDelete` event, so a server removing the app is learned from a 403
+  on the next poll or post (then stop and start the purge timer); the shared process means one guild's crash or memory
+  climb is every guild's (the `[mem]` line and `/health` already watch it; the folder gets its own kill switch in the
+  tuning map).
