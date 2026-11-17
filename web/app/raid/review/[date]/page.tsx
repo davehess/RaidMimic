@@ -48,6 +48,7 @@ import NightSummary, { type NightStats } from '@/components/NightSummary';
 import LootBlock, { type LootRow } from '@/components/LootBlock';
 import { FightTimeline, type TLEvent } from '@/components/FightTimeline';
 import { GUILD_TAG } from '@/lib/guild';
+import { IconBlades, IconCallout, IconDeath, IconTimer, ICON_INLINE } from '@/components/PlateIcons';
 
 import { pageMetadata } from '@/lib/pageMetaData';
 
@@ -561,7 +562,7 @@ export default async function RaidNightReview({ params }: { params: Promise<{ da
           {timeline.length > 0 && (
             <section className="bg-panel border border-border rounded-lg p-4">
               <h3 className="text-sm text-gold mb-3 flex items-center gap-2">
-                <span aria-hidden>🗡️</span><span>Kills timeline</span>
+                <IconBlades className={ICON_INLINE} /><span>Kills timeline</span>
                 <span className="text-dim text-xs">· {kills.length} kill{kills.length === 1 ? '' : 's'} in the order they happened</span>
               </h3>
               <ol className="space-y-1">
@@ -632,7 +633,7 @@ export default async function RaidNightReview({ params }: { params: Promise<{ da
           {(playerDeaths.length > 0 || petDeaths.length > 0) && (
             <section className="bg-panel border border-border rounded-lg p-4">
               <h3 className="text-sm text-red mb-2 flex items-center gap-2">
-                <span aria-hidden>💀</span><span>Deaths</span>
+                <IconDeath className={ICON_INLINE} /><span>Deaths</span>
                 <span className="text-dim text-xs">· {playerDeaths.length} across the night</span>
               </h3>
               {/* ⚠ w-16, not w-14 (the guild lead, 2026-09-21: "the alignment on times
@@ -669,7 +670,7 @@ export default async function RaidNightReview({ params }: { params: Promise<{ da
           {fightTimelines.length > 0 && (
             <section className="bg-panel border border-border rounded-lg p-4">
               <h3 className="text-sm text-orange mb-1 flex items-center gap-2">
-                <span aria-hidden>🕒</span><span>Fight timelines</span>
+                <IconTimer className={ICON_INLINE} /><span>Fight timelines</span>
                 <span className="text-dim text-xs">· {fightTimelines.length} fight{fightTimelines.length === 1 ? '' : 's'} with something on the axis</span>
               </h3>
               <p className="text-[11px] text-dim mb-3">
@@ -683,7 +684,7 @@ export default async function RaidNightReview({ params }: { params: Promise<{ da
                       <span className="text-dim tabular-nums whitespace-nowrap w-16 shrink-0">{fmtTime(new Date(killAtMs(t.enc)).toISOString(), tz)}</span>
                       <span className="text-text">{bossFor(t.enc)}</span>
                       <span className="text-dim">{fmtDuration(t.enc.duration_sec)}</span>
-                      {t.deaths.length > 0 && <span className="text-red">💀 {t.deaths.length}</span>}
+                      {t.deaths.length > 0 && <span className="text-red"><IconDeath className={ICON_INLINE} /> {t.deaths.length}<span className="sr-only"> deaths</span></span>}
                       {t.events.length > 0 && <span className="text-dim">· {t.events.length} events</span>}
                       {t.fires.length > 0 && <span className="text-dim">· {t.fires.length} callouts</span>}
                       <Link href={`/parses/${t.enc.id}`} className="ml-auto text-blue hover:underline">full parse →</Link>
@@ -731,7 +732,7 @@ export default async function RaidNightReview({ params }: { params: Promise<{ da
           {mechGroups.length > 0 && (
             <section className="bg-panel border border-border rounded-lg p-4">
               <h3 className="text-sm text-orange mb-2 flex items-center gap-2 flex-wrap">
-                <span aria-hidden>📢</span><span>Death Touch &amp; boss mechanics</span>
+                <IconCallout className={ICON_INLINE} /><span>Death Touch &amp; boss mechanics</span>
                 <span className="text-dim text-xs">· {fireMarks.length} fire{fireMarks.length === 1 ? '' : 's'} by fight · a name is a death within 8s of the fire</span>
               </h3>
               <div className="space-y-3">

@@ -25,6 +25,7 @@ import { discordIdOf } from '@/lib/lockout';
 import { fmtTime, dayKey, dayLabel } from '@/lib/format';
 import { userTz } from '@/lib/timezone';
 import { GUILD_TAG } from '@/lib/guild';
+import { IconDeath, IconQuest, IconTarget, ICON_INLINE } from '@/components/PlateIcons';
 
 import { pageMetadata } from '@/lib/pageMetaData';
 
@@ -320,7 +321,7 @@ export default async function PvpPlayerPage({ params }: { params: Promise<{ name
       {/* Per-victim breakdown (public) */}
       <section className="bg-panel border border-border rounded-lg p-4">
         <h3 className="text-sm text-orange mb-3 flex items-center gap-2">
-          <span aria-hidden>🎯</span>
+          <IconTarget className={ICON_INLINE} />
           <span>Victims</span>
           <span className="text-dim text-xs">· times {displayName} killed each opponent</span>
         </h3>
@@ -370,7 +371,7 @@ export default async function PvpPlayerPage({ params }: { params: Promise<{ name
       {/* Full kill history (public) */}
       <section className="bg-panel border border-border rounded-lg p-4">
         <h3 className="text-sm text-blue mb-3 flex items-center gap-2">
-          <span aria-hidden>📜</span>
+          <IconQuest className={ICON_INLINE} />
           <span>Kill history</span>
           <span className="text-dim text-xs">· {kills.length} total</span>
         </h3>
@@ -485,7 +486,7 @@ export default async function PvpPlayerPage({ params }: { params: Promise<{ name
       {viewerOwns ? (
         <section className="bg-panel border border-red/40 rounded-lg p-4">
           <h3 className="text-sm text-red mb-3 flex items-center gap-2">
-            <span aria-hidden>💀</span>
+            <IconDeath className={ICON_INLINE} />
             <span>Your deaths</span>
             <span className="text-dim text-xs">· private — only you can see this · {deaths.length} total</span>
           </h3>

@@ -8,10 +8,10 @@
 // A server component: no state, nothing for the browser to load.
 
 import type { LineNext } from '@/lib/popNextSteps';
+import { WhoIcon } from '@/components/PlateIcons';
 
 export type NextTableRow = { name: string; cls: string | null; isMain: boolean; lines: LineNext[] };
 
-const WHO_ICON = { solo: '🧍', group: '👥', raid: '⚔' } as const;
 const WHO_WORD = { solo: 'solo', group: 'group', raid: 'raid' } as const;
 
 function Cell({ l, href }: { l: LineNext; href: string }) {
@@ -30,7 +30,7 @@ function Cell({ l, href }: { l: LineNext; href: string }) {
     <a href={href} className="block text-text hover:text-blue" title={step.title}>
       <span className="line-clamp-2 break-words">{step.title}</span>
       <span className="text-[10px] text-dim">
-        <span aria-label={WHO_WORD[step.who]}>{WHO_ICON[step.who]}</span>
+        <span role="img" aria-label={WHO_WORD[step.who]}><WhoIcon who={step.who} /></span>
         {step.must && <span className="text-gold"> ★</span>}
         {l.steps.length > 1 && ` +${l.steps.length - 1} more`}
       </span>
@@ -90,7 +90,7 @@ export default function NextTable({ rows, hrefFor, singleHref }: {
       )}
       <p className="text-[11px] text-dim">
         <span className="text-green">✓ done</span> the line is finished. <span className="text-orange">⛔ needs</span> the line
-        it waits on. 🧍 solo · 👥 group · ⚔ raid · <span className="text-gold">★</span> must-have. From Mimic, /who, loot and
+        it waits on. <WhoIcon who="solo" /> solo · <WhoIcon who="group" /> group · <WhoIcon who="raid" /> raid ·<span className="text-gold">★</span> must-have. From Mimic, /who, loot and
         ticks as the page loaded.
       </p>
     </section>

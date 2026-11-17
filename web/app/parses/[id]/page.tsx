@@ -28,6 +28,7 @@ import { classifyEncounter, clearClassification, toggleWipe, markDeathIntentiona
 import { shownActor } from '@/lib/actorName';
 import { isWipe } from '@/lib/encounterMarks';
 import { GUILD_TAG } from '@/lib/guild';
+import { IconDeath, IconReplay, IconTarget, ICON_INLINE } from '@/components/PlateIcons';
 import { toResultView } from '@/lib/parseResultFirstView';
 import TabbedResult from '@/components/parse-result/TabbedResult';
 
@@ -871,7 +872,7 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
         {replayHref && (
           <div className="mt-2 text-xs text-dim">
             <a href={replayHref} target="_blank" rel="noreferrer" className="text-blue hover:underline" title="Opens the ⏪ Replay tool in your local Mimic dashboard, prefilled with this fight's window">
-              ⏪ Replay this fight locally
+              <IconReplay className={ICON_INLINE} /> Replay this fight locally
             </a>
             <span className="ml-2">— runs on YOUR machine against YOUR Mimic logs; hear the real callouts, nothing uploads.</span>
           </div>
@@ -900,7 +901,7 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
         return (
           <section className="bg-panel border border-border rounded-lg p-4">
             <h3 className="text-sm text-blue mb-3 flex items-center gap-2">
-              <span aria-hidden>🎯</span>
+              <IconTarget className={ICON_INLINE} />
               <span>Damage by class</span>
               <span className="text-dim text-xs">· class from OpenDKP roster, then /who, then the raid roster; known pets bucket under Pets</span>
             </h3>
@@ -1020,7 +1021,7 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
       {deaths.length > 0 && (
         <section className="bg-panel border border-border rounded-lg p-4">
           <h3 className="text-sm text-red mb-2 flex items-center gap-2">
-            <span aria-hidden>💀</span>
+            <IconDeath className={ICON_INLINE} />
             <span>Deaths</span>
             <span className="text-dim text-xs">· {deaths.length}</span>
           </h3>

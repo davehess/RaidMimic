@@ -8,6 +8,7 @@
 // checklist stays the exact record and is one link away.
 
 import Link from 'next/link';
+import { KindIcon } from '@/components/PlateIcons';
 import { ESSENCES_ANCHOR, ESSENCE_ICON, type MineProgress, type RaidNextRow } from '@/lib/popSidebar';
 import { ESSENCES, type NextUp } from '@/lib/essencesQueue';
 
@@ -69,7 +70,7 @@ export default function PopMinePanel({ demo, rows, hidden, mineHref, guideHref, 
           <ul className="space-y-2">
             {raid.map(p => (
               <li key={p.key} className="leading-5">
-                <div className="text-text">{p.icon} {p.label}</div>
+                <div className="text-text"><KindIcon kind={p.kind} /> {p.label}</div>
                 <div className="text-dim">
                   <Link href={p.zoneHref} className="hover:underline">{p.zoneShort}</Link>
                   {p.gains > 0 && <> · <span className="text-text">{p.gains}</span> gain it</>}

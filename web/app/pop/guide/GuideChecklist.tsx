@@ -18,10 +18,10 @@ import { guideStepsProven } from '@/lib/popGuideSeer';
 import { setGuideTick } from './actions';
 import SeerPaste, { useFocusStep, type SeerResult } from './SeerPaste';
 import GuideNav, { type NavCount } from './GuideNav';
+import { WhoIcon } from '@/components/PlateIcons';
 
 export type GuideChar = { name: string; cls: string | null; isMain: boolean; manual: string[]; flags: string[] };
 
-const WHO_ICON: Record<Who, string> = { solo: '🧍', group: '👥', raid: '⚔' };
 const WHOS: Who[] = ['solo', 'group', 'raid'];
 
 // The character <option>s, with the characters nobody has a level for in a group at the bottom (the
@@ -186,7 +186,7 @@ export default function GuideChecklist(
           {(['all', ...WHOS] as const).map(w => (
             <button key={w} type="button" onClick={() => setWho(w)} aria-pressed={who === w}
                     className={`px-2 py-0.5 rounded border ${who === w ? 'border-gold text-gold' : 'border-border text-dim hover:text-text'}`}>
-              {w === 'all' ? 'All' : `${WHO_ICON[w]} ${WHO_LABEL[w]}`}
+              {w === 'all' ? 'All' : <><WhoIcon who={w} /> {WHO_LABEL[w]}</>}
             </button>
           ))}
           <label className="flex items-center gap-1 text-dim cursor-pointer">
@@ -430,7 +430,7 @@ function Row({ item, checked, recorded, seer, disabled, onToggle, cards }: {
           <WithItems text={item.title} cards={cards} />
         </label>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px]">
-          <span className="px-1.5 rounded border border-border text-dim">{WHO_ICON[item.who]} {WHO_LABEL[item.who]}</span>
+          <span className="px-1.5 rounded border border-border text-dim"><WhoIcon who={item.who} /> {WHO_LABEL[item.who]}</span>
           {item.must && <span className="px-1.5 rounded border border-gold/60 text-gold">★ must</span>}
           {recorded && <span className="px-1.5 rounded border border-green/60 text-green">✓ recorded</span>}
           {seer === 'in' && <span className="px-1.5 rounded border border-blue/60 text-blue" title="Shown by the Seer text you pasted; save it to keep it">✓ in your Seer paste</span>}

@@ -33,3 +33,57 @@ export const IconMap = (p: IconProps) => (
 export const IconSpark = (p: IconProps) => (
   <Frame {...p}><path d="M10 2.4 11.6 8 17 9.8 11.6 11.6 10 17.2 8.4 11.6 3 9.8 8.4 8Z" /></Frame>
 );
+
+// Second batch (2026-11-17): the icons the pop pages, the raid review and the
+// parse page used to draw with emoji. Same grid, same stroke; geometry only.
+export const IconTrial = (p: IconProps) => (
+  <Frame {...p}><path d="M3 17h14M10 2.8 3.4 7h13.2Z" /><path d="M5.5 8.5v6.5M10 8.5v6.5M14.5 8.5v6.5" /></Frame>
+);
+export const IconQuest = (p: IconProps) => (
+  <Frame {...p}><path d="M5.5 3.5h9v11.5a2 2 0 0 1-2 2h-9a2 2 0 0 0 2-2Z" /><path d="M8 7.5h4M8 10.5h4" /></Frame>
+);
+export const IconLoot = (p: IconProps) => (
+  <Frame {...p}><path d="M3 9V7.5A3.5 3.5 0 0 1 6.5 4h7A3.5 3.5 0 0 1 17 7.5V9" /><path d="M3 9h14v7.5H3Z" /><path d="M10 9v3" /></Frame>
+);
+export const IconDeath = (p: IconProps) => (
+  <Frame {...p}><path d="M10 2.8a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2.4 4.4V16h7.2v-2.8c1.2-.8 2.4-2.2 2.4-4.4a6 6 0 0 0-6-6Z" /><circle cx="7.6" cy="9.4" r="1" /><circle cx="12.4" cy="9.4" r="1" /></Frame>
+);
+export const IconSolo = (p: IconProps) => (
+  <Frame {...p}><circle cx="10" cy="6" r="2.6" /><path d="M4.8 17c0-3.2 2.3-5.4 5.2-5.4s5.2 2.2 5.2 5.4" /></Frame>
+);
+export const IconGroup = (p: IconProps) => (
+  <Frame {...p}><circle cx="7.5" cy="6.5" r="2.3" /><path d="M3 16.5c0-2.8 1.9-4.6 4.5-4.6s4.5 1.8 4.5 4.6" /><circle cx="14" cy="7.5" r="1.9" /><path d="M13.6 12c2.3 0 3.9 1.5 3.9 3.8" /></Frame>
+);
+export const IconHail = (p: IconProps) => (
+  <Frame {...p}><path d="M3.5 4h13v9h-6L6.5 16.5V13h-3Z" /></Frame>
+);
+export const IconTouch = (p: IconProps) => (
+  <Frame {...p}><path d="M7 11V4.6a1.2 1.2 0 0 1 2.4 0V9M9.4 8.4V3.8a1.2 1.2 0 0 1 2.4 0V9M11.8 9V5a1.2 1.2 0 0 1 2.4 0v6.5c0 3.2-1.6 5-4.2 5-2.2 0-3.4-1-4.6-3L3.8 10.8a1.2 1.2 0 0 1 2-1.3Z" /></Frame>
+);
+export const IconCallout = (p: IconProps) => (
+  <Frame {...p}><path d="M3.5 8v4h3l7 3.5v-11L6.5 8Z" /><path d="M16.5 8.5v3" /></Frame>
+);
+export const IconReplay = (p: IconProps) => (
+  <Frame {...p}><path d="M9 5 4 10l5 5ZM16 5l-5 5 5 5Z" /></Frame>
+);
+export const IconTarget = (p: IconProps) => (
+  <Frame {...p}><circle cx="10" cy="10" r="6.5" /><circle cx="10" cy="10" r="2.5" /><path d="M10 1.8v3M10 15.2v3M1.8 10h3M15.2 10h3" /></Frame>
+);
+
+// Size with the text it sits beside: <IconDeath className={ICON_INLINE} />.
+export const ICON_INLINE = 'inline-block h-[1em] w-[1em] align-[-0.125em]';
+
+// Who a step is for (solo / group / raid) and what a flag step asks of you (kill, trial, ...). Both sit beside
+// their label or carry an aria-label at the call site, so the glyph stays decorative.
+const WHO_ICONS = { solo: IconSolo, group: IconGroup, raid: IconBlades } as const;
+export function WhoIcon({ who, className = ICON_INLINE }: { who: keyof typeof WHO_ICONS; className?: string }) {
+  const I = WHO_ICONS[who];
+  return <I className={className} />;
+}
+const KIND_ICONS = {
+  kill: IconBlades, trial: IconTrial, quest: IconQuest, event: IconSpark, loot: IconLoot, hail: IconHail, touch: IconTouch,
+} as const;
+export function KindIcon({ kind, className = ICON_INLINE }: { kind: string; className?: string }) {
+  const I = KIND_ICONS[kind as keyof typeof KIND_ICONS] ?? IconSpark;
+  return <I className={className} />;
+}

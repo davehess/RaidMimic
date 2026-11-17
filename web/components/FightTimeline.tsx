@@ -13,7 +13,9 @@
 // native <title> per marker for hover — no client JS needed at this size.
 // Colors mirror the site's tailwind tokens (web/tailwind.config.ts).
 
-type TLDeath = { name: string; ts: string; class?: string | null; riposteDeath?: boolean };
+import { IconTimer, ICON_INLINE } from '@/components/PlateIcons';
+
+type TLDeath ={ name: string; ts: string; class?: string | null; riposteDeath?: boolean };
 // A raid-wide boss event or a trigger fire on the same axis. `subtype` colors
 // the raid-event ticks by kind (#105: slow_on/off, mob_heal, disc).
 export type TLEvent = { at: string; label: string; kind?: 'raid_event' | 'fire'; subtype?: string | null };
@@ -137,7 +139,7 @@ export function FightTimeline({
     <section className="bg-panel border border-border rounded-lg p-4 md:p-5">
       <div className="flex items-baseline justify-between gap-2 mb-1 flex-wrap">
         <h3 className="text-sm text-orange flex items-center gap-2">
-          🕒 Fight timeline
+          <IconTimer className={ICON_INLINE} /> Fight timeline
         </h3>
         <span className="text-[11px] text-dim">
           {mmss(durSec)} · {deaths.length} death{deaths.length === 1 ? '' : 's'}
