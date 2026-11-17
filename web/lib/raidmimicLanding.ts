@@ -42,9 +42,9 @@ export const STATUS_LABEL: Record<Status, string> = {
 export const WORKS_WITH = {
   title: 'Works with what you already run',
   lead:
-    'PQ Companion, GINA and EQLogParser can stay installed and keep running. They read the game’s log file, ' +
+    'GINA and EQLogParser can stay installed and keep running. They read the game’s log file, ' +
     'and so does this, so there is nothing to uninstall and nothing to choose between.',
-  tools: ['PQ Companion', 'GINA', 'EQLogParser'],
+  tools: ['GINA', 'EQLogParser'],
   extra: 'Triggers you already have as a GINA file can be imported.',
   rights: 'These tools belong to their makers. This project is not affiliated with them.',
 };
