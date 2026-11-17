@@ -56803,6 +56803,17 @@ function _mapApplyShared(zone, j, now) {
         n: Math.max(1, Math.trunc(Number(t.n)) || 1), age: Math.max(0, botNow - at) });   // age on the bot's clock, when the pull came back
     }
     _mapSync.targets[zone] = { rows, pulledAt: now };
+    // Another raider's target is a sighting here too (the guild lead, 2026-11-17: "if another raider has targetted a mob
+    // and knows that mob has died" it should come off everyone's map). The FIRST place we hear of a spawn id is kept, as a
+    // first tab of our own is; a later death of that id (Zeal's death message, a slain line) is then placed on its spawn
+    // point by the same certainty rules, and the point's "died" goes out to the guild. Standing on its spot, it is pinned
+    // now, the way our own target is.
+    const ch = _mapActiveCharacter(now);
+    for (const r of rows) {
+      const loc = { x: r.x, y: r.y, z: r.z };
+      try { _mapNoteSighting(zone, r.id, r.name, loc, now - r.age); } catch (e) { void e; }
+      try { if (ch) _mapTryPin(zone, ch, r.id, r.name, loc, now, {}); } catch (e) { void e; }
+    }
   }
   if (j.trails && typeof j.trails === 'object' && !Array.isArray(j.trails)) {
     const tracked = MAP_TRACKED_PATHS[zone] || [];
@@ -57688,6 +57699,13 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     .filter(s => s && now - s.at <= MAP_SEEN_KEEP_MS && !(zd.timers[String(s.point_id)] && zd.timers[String(s.point_id)].died_at >= s.at))
     .map(s => ({ point_id: s.point_id, spawn_id: s.spawn_id == null ? null : s.spawn_id, name: s.name, at: s.at, by: s.by || null }))
     .sort((a, b) => b.at - a.at);
+  // A seen mob that is now someone's charm pet (the guild lead, 2026-11-17: "charm pets aren't showing up on the map"): the
+  // row says whose, and the Map draws no aggro ring for it. Matched by spawn id only, never by name.
+  try {
+    const charmById = new Map();
+    for (const c of _charmTickTracker.values()) if (c && c.is_active && Number(c.pet_id) > 0) charmById.set(Number(c.pet_id), c.owner || null);
+    if (charmById.size) for (const s of out.seen) if (s.spawn_id != null && charmById.has(Number(s.spawn_id))) s.charmed_by = charmById.get(Number(s.spawn_id)) || '?';
+  } catch { /* a nicety: never break the map */ }
   try {   // health on the alive rows (FB-87): your target, else the Extended Target cache; blank when it is not certain
     const ec = typeof _extTargetCache === 'undefined' ? null : _extTargetCache.get(String(character).trim().toLowerCase());
     const ecRows = ec && ec.payload && ec.payload.targets;
