@@ -733,7 +733,27 @@ export default async function EncounterDetailPage({ params, searchParams }: { pa
     return (
       <div className="space-y-4">
         <div className="text-sm"><Link href="/parses" className="text-blue hover:underline">← back to parses</Link></div>
-        <TabbedResult v={rv} linkNames />
+        <TabbedResult
+          v={rv}
+          linkNames
+          chart={curve && curve.bands.length > 0 ? (
+            <DamageCurve
+              bare
+              buckets={curve.buckets}
+              bands={curve.bands}
+              series={curve.series}
+              totalDamage={curve.totalDamage}
+              mt={curve.mt}
+              durationSec={enc.duration_sec || curve.buckets[curve.buckets.length - 1] || 1}
+              classOf={classOf}
+              bossHp={enc.eqemu_npc_types?.hp ?? null}
+              killed={!isWipe(enc)}
+            />
+          ) : undefined}
+          timeline={(deaths.length > 0 || raidEvents.length > 0 || fireEvents.length > 0) ? (
+            <FightEventLog embedded startedAt={enc.started_at} durationSec={enc.duration_sec} deaths={deaths} events={raidEvents} fires={fireEvents} />
+          ) : undefined}
+        />
         {enc.classification && (
           <p className="text-xs text-dim italic">
             Not counted as a guild kill

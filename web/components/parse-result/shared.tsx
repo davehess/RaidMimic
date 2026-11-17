@@ -20,7 +20,7 @@ export function ResultStrip({ v }: { v: ResultView }) {
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-3">
         <div className="w-full sm:w-auto">
-          <div className={`text-4xl font-bold leading-none ${stateColour}`}>{stateWord}</div>
+          <div className={`text-2xl font-bold leading-none sm:text-4xl ${stateColour}`}>{stateWord}</div>
           {v.state === 'wipe' && v.bossHpLeftPct != null ? (
             <div className="mt-1 text-sm text-text">boss at {v.bossHpLeftPct}%</div>
           ) : null}
@@ -38,7 +38,7 @@ export function ResultStrip({ v }: { v: ResultView }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-3xl font-bold leading-none text-text">{value}</div>
+      <div className="text-xl font-bold leading-none tabular-nums text-text sm:text-3xl">{value}</div>
       <div className={`mt-1 ${LABEL}`}>{label}</div>
     </div>
   );
@@ -78,8 +78,7 @@ export function ClassBar({ v }: { v: ResultView }) {
         ))}
       </div>
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-text">
-        {rows.slice(0, 5).map((r) => <span key={r.cls}>{r.cls} {r.pct.toFixed(0)}%</span>)}
-        {rows.length > 5 ? <span className="text-text">+{rows.length - 5} more</span> : null}
+        {rows.map((r) => <span key={r.cls}>{r.cls} <b className="tabular-nums">{r.pct.toFixed(0)}%</b> <span className="text-dim">· {r.players}</span></span>)}
       </div>
     </div>
   );
@@ -111,6 +110,7 @@ export function DamageTable({ v, linkNames }: { v: ResultView; linkNames?: boole
                 <td className="py-1.5 pr-2 align-top">
                   <div className={`truncate ${mine ? 'font-bold text-gold' : 'text-text'}`}>
                     {linkNames ? <Link href={`/character/${encodeURIComponent(p.name)}`} className="hover:underline">{p.name}</Link> : p.name}
+                    {p.cls ? <span className="ml-1.5 text-xs font-normal text-dim sm:hidden">{p.cls}</span> : null}
                   </div>
                   <div className="mt-0.5 h-0.5 rounded bg-bg"><div className={`h-full rounded ${mine ? 'bg-gold' : 'bg-blue/60'}`} style={{ width: `${(p.damage / top) * 100}%` }} /></div>
                 </td>

@@ -33,7 +33,7 @@
 // right pad is free to hold the label gutter. /raid/review still uses
 // FightTimeline standalone — no cross-chart alignment to preserve.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Band, MTSegment } from '@/lib/fightCurve';
 import { groupSeriesByClass, hpScale, fitAxis } from '@/lib/fightCurve';
 import { classBucket } from '@/lib/parseClasses';
@@ -85,8 +85,10 @@ type DrawBand = {
 
 export function DamageCurve({
   buckets, bands, totalDamage, mt, durationSec,
-  observedHp = [], classOf = {}, repeatPullWarning = false, series, bossHp = null, killed = true,
+  observedHp = [], classOf = {}, repeatPullWarning = false, series, bossHp = null, killed = true, bare = false,
 }: {
+  /** Drop the chart's own box when it already sits inside a card (the parse page's Damage tab). */
+  bare?: boolean;
   buckets: number[];
   bands: Band[];
   totalDamage: number;
@@ -161,8 +163,18 @@ export function DamageCurve({
     return out;
   }, [classGroups, drilled, buckets.length]);
 
-  // Geometry. PADR carries the right-edge label gutter.
-  const W = 1000, PADL = 8, PADR = 148, plotW = W - PADL - PADR;
+  // Geometry. PADR carries the right-edge label gutter. W follows the box's real width, so one viewBox unit is one
+  // screen pixel and the labels keep their size on a phone (a fixed 1000-wide viewBox drew them at ~4px there).
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(1000);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(320, Math.round(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const PADL = 8, PADR = 148, plotW = W - PADL - PADR;
   const PLOT_H = 220, TOP = 14, AXIS_Y = TOP + PLOT_H;
   const MT_Y = AXIS_Y + 30, MT_H = 14;
   const H = MT_Y + MT_H + 26;
@@ -235,7 +247,7 @@ export function DamageCurve({
         hiFinal: upper[upper.length - 1] || 0,
       };
     });
-  }, [drawBands, buckets, totalDamage, denom, dur]);
+  }, [drawBands, buckets, totalDamage, denom, dur, W]);
 
   // Right-edge labels (ask #3): name + % of the fight's damage, sitting beside
   // each band's final span. A simple downward collision pass keeps them 13px
@@ -287,7 +299,9 @@ export function DamageCurve({
     return gaps;
   }, [mt, dur]);
 
-  const step = niceStep(dur);
+  // Thin the ticks until each mm:ss label has ~44px, or a narrow chart prints them on top of each other.
+  let step = niceStep(dur);
+  while ((dur / step) * 44 > plotW) step *= 2;
   const gridPcts = [0, 25, 50, 75, 100];
 
   const derivedHp = useMemo(() => {
@@ -295,7 +309,7 @@ export function DamageCurve({
     const running = new Array(buckets.length).fill(0);
     for (const b of drawBands) for (let i = 0; i < buckets.length; i++) running[i] += b.cum[i] || 0;
     return running.map((v, i) => `${xFor(buckets[i])},${yFor(100 - (v / denom) * 100)}`).join(' ');
-  }, [drawBands, buckets, totalDamage, denom, showHp, dur]);
+  }, [drawBands, buckets, totalDamage, denom, showHp, dur, W]);
 
   const enterDrill = (klass: string) => {
     setDrill(klass); setPinned(new Set()); setHover(null);
@@ -309,7 +323,7 @@ export function DamageCurve({
     });
 
   return (
-    <div style={{ background: C.panel, border: `1px solid ${C.base}`, borderRadius: 8, padding: 12 }}>
+    <div ref={boxRef} style={bare ? undefined : { background: C.panel, border: `1px solid ${C.base}`, borderRadius: 8, padding: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <b style={{ color: C.ink }}>
           Damage over the fight
