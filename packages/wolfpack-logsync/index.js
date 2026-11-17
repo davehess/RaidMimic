@@ -1817,6 +1817,13 @@ const PET_CLAIM_FRESH_MS = 15 * 60 * 1000;
 // class + duration to the session, driving the duration bar + class-aware warn.
 let _pendingCharmSpell = null;   // { cls, dur, owner, ts } | null
 const PENDING_CHARM_WINDOW_MS = 12_000;
+// The last charm each owner held in slot 16 (owner lower → { k: pet lower, at }), so a named pet can be re-adopted from
+// the pet window after its entry was dropped (2026-11-17).
+const _lastCharmPetByOwner = new Map();
+const LAST_CHARM_READOPT_MS = 15 * 60 * 1000;
+// A death report held off because the pet window still showed the pet: if the pet then leaves slot 16 within this
+// long, it died (dropped quietly); after it, a missing pet is a break as usual.
+const CHARM_MAYBE_DEAD_MS = 20_000;
 
 // ── Mob tick learner (the guild lead, 2026-09-26) ───────────────────────────
 // "charm overlay needs both server and mob tick on them (they're different,
@@ -2344,6 +2351,11 @@ function _reconcileGaugeCharms() {
       // gone and called a break 6s later while it was still charmed (FB-121, Giwin Mirakon).
       const open = _charmTickTracker.get(txt.toLowerCase());
       if (open && open.is_active && String(open.owner || '').toLowerCase() === ownerLower) return true;
+      // The same named pet this owner had charmed in the last 15 minutes is back in slot 16: re-adopt it. Once an entry
+      // was dropped (a same-name "slain" line, a missed gauge), a named pet had no way back in without a fresh cast, and
+      // the tracker said "no active charm" while the pet window still showed it (the guild lead, 2026-11-17).
+      const last = _lastCharmPetByOwner.get(ownerLower);
+      if (last && last.k === txt.toLowerCase() && now - last.at < LAST_CHARM_READOPT_MS) return true;
       return false;
     });
     if (!petG) continue;
@@ -2379,6 +2391,7 @@ function _reconcileGaugeCharms() {
       // ~6s and the countdown never visibly ran (a bard, 2026-09-26: "i didnt
       // see it on the regular or mini").
       cur.last_seen_at = now;
+      _lastCharmPetByOwner.set(ownerLower, { k, at: now });   // re-adopt window (filter above)
     }
   }
   // Drop pending entries whose pet is no longer in slot 16 (transient pulse).
@@ -2408,6 +2421,9 @@ function _reconcileGaugeCharms() {
     // case that actually matters. If false "charm break" calls reappear during
     // routine cycling, this is the number to raise.
     if ((!set || !set.has(k)) && (now - (info.last_seen_at || info.last_tick_at || 0)) > 6000) {
+      // A death we held off on because the pet window still named the pet (_slot16StillNames): it really died, so it
+      // goes quietly, as a death does, instead of a "charm break" call.
+      if (info.maybe_dead_at && now - info.maybe_dead_at < CHARM_MAYBE_DEAD_MS) { _charmTickTracker.delete(k); continue; }
       _bumpCharmTick(info.pet, info.owner, 'break', now);     // gauge dropped → break (alert fires now)
     }
   }
@@ -2725,8 +2741,25 @@ function checkCharmPetDeath(line, character) {
   const slainKey = slainName.toLowerCase();
   if (!_charmTickTracker.has(slainKey)) return false;
   if (killerName && isConfirmedPlayer(killerName)) return false;
+  // The owner's pet window still names this pet: the slain one is another of the same name (named mobs come in sets,
+  // "Diaku Armsman"), so keep ours. If it really was ours, slot 16 empties within seconds and the reconcile drops it
+  // quietly (maybe_dead_at). The guild lead, 2026-11-17: the tracker read "no active charm" with the pet still up.
+  const info = _charmTickTracker.get(slainKey);
+  if (info && info.is_active && _slot16StillNames(info.owner, info.pet || slainName)) { info.maybe_dead_at = Date.now(); return false; }
   _charmTickTracker.delete(slainKey);
   return true;
+}
+// Is `petName` still in `owner`'s Zeal pet window (gauge slot 16), on a fresh pipe frame?
+function _slot16StillNames(owner, petName, now = Date.now()) {
+  if (!owner || !petName) return false;
+  const ol = String(owner).toLowerCase(), want = String(petName).toLowerCase();
+  for (const ch of Object.keys(_zealState || {})) {
+    if (String(ch).toLowerCase() !== ol) continue;
+    const st = _zealState[ch];
+    if (!st || !Array.isArray(st.gauges) || (now - (st.updatedAt || 0)) > ZEAL_STALE_MS) return false;
+    return st.gauges.some(g => g && g.slot === 16 && String(g.text || '').toLowerCase() === want);
+  }
+  return false;
 }
 
 // ── /pet health report state (Quarm format) ─────────────────────────────────
@@ -53814,7 +53847,10 @@ function _charmPetDiedById(spawnId) {
   const out = [];
   if (!(id > 0)) return out;
   for (const [k, info] of _charmTickTracker) {
-    if (info && Number(info.pet_id) === id) { out.push(info.pet || k); _charmTickTracker.delete(k); }
+    if (!info || Number(info.pet_id) !== id) continue;
+    // Same hold as checkCharmPetDeath: the id may belong to another same-named mob; the pet window decides.
+    if (info.is_active && _slot16StillNames(info.owner, info.pet || k)) { info.maybe_dead_at = Date.now(); continue; }
+    out.push(info.pet || k); _charmTickTracker.delete(k);
   }
   return out;
 }
@@ -71202,7 +71238,7 @@ module.exports = {
   classifyMovement, observedSpeed, rootActiveOn, withSpellIds, _tgtMoveNote, _tgtMoveResetForTest: () => { _tgtMove.id = null; _tgtMove.pts = []; },
   TGT_HIST_MAX, TGT_HIST_KEEP_MS, _tgtHistNoteFromState, _tgtHistNoteSlain, _targetHistoryPayload, _pastMobInfo,
   _saveTargetHistory, _loadTargetHistory, _trimTargetHistory,
-  _zealDeathsFromState, _charmPetDiedById, _tgtHistNoteZealDeath, _zealDeathSeen,
+  _zealDeathsFromState, _charmPetDiedById, _tgtHistNoteZealDeath, _zealDeathSeen, checkCharmPetDeath, _lastCharmPetByOwner,
   _tgtHistForTest: () => _tgtHist, _tgtHistResetForTest: () => { _tgtHist = []; _tgtCur.clear(); },
   // Kite loops (2026-10-15): the Map's summary gate + queue, the guild's loops in, and the queue the summary lands in.
   _kiteLoopSubmit, _kiteLoopBody, _kiteLoopsClean, _kiteLoopsFor, _kiteLoopCache, _handleKiteLoopPost, _handleKiteLoopsGet,
