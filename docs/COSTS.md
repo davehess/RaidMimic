@@ -234,6 +234,15 @@ page before anyone quotes them; storage is billed only above Supabase Pro's incl
 
 ### 8b. Per guild, per month, by paid piece
 
+> **Re-measured 2026-11-17 (Sunday 2026-11-15's raid, 01:00–05:45 UTC), for the guild lead's question "what would shared
+> parses and per-mob analytics cost a night if we didn't save the details?":** the per-second fight feed 19.7 MB (17,824
+> rows), buff landings 3.1 MB, parse contributions 1.6 MB (raw nulled at 7 days), fights 15 kB, per-player rows 0.18 MB,
+> /who 0.16 MB: ≈ 25 MB, of which ≈ 23 MB is detail. **Without the detail, a guild's parses and per-mob numbers keep ≈ 2 MB
+> a night ≈ 26 MB a month: $0 inside Pro's 8 GB, ≈ $0.04 a month even after a year above it.** Compute does not change
+> (uploads still arrive and merge): ≈ $0.10 a guild on the shared bot, ≈ $1–2 for a dedicated Railway service. What dropping
+> the detail costs is features, not money: the damage-over-the-fight chart, replays, threat and the raid review timeline
+> are built from the per-second feed.
+
 | Paid piece | What drives the cost | Basis (measured) | ≈ per guild-month |
 |---|---|---|---|
 | **Card fee on the $25** | Stripe: 2.9% + $0.30 per charge | fixed by the processor | **$1.03**, the largest per-guild line |
