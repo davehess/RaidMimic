@@ -39,7 +39,7 @@ export const releases: Release[] = [
   {
     key: 'buff-queue-on-change-2026-11-17',
     title: 'Buff queue: the dead first, and quieter',
-    version: 'Bot 4.1.6 · Agent 4.0.98',
+    version: 'Bot 4.1.6 · Agent 4.0.99',
     channel: 'beta',
     date: '2026-11-17',
     headline: 'Raiders who just died go to the top of the buff queue, and the queue checks for changes instead of re-downloading everything every two seconds.',
@@ -50,6 +50,8 @@ export const releases: Release[] = [
     fixes: [
       'No more "Buffs dispelled — rebuff" after your own death or after you accept a rez.',
       'Charm tracker: a named pet no longer drops to "no active charm" when another mob of the same name dies, and it comes back by itself while your pet window still shows it.',
+      'Map: when a mob another raider targeted dies, its spawn point starts its respawn timer on your map too and its aggro ring goes away.',
+      'Map: a charmed mob\'s spawn point says "charmed" instead of showing an aggro ring.',
     ],
   },
   {
