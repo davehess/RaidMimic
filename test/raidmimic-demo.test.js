@@ -327,7 +327,7 @@ describe('every page names itself, with no raider in the name', () => {
     expect(p.src).toMatch(/\bdescription\s*:/);
     expect(p.src).toMatch(/robots:\s*\{\s*index:\s*false/);   // a demo copy is never indexed
     const m = metaForPath(route.replace(/\[gate\]/, 'torment'));
-    expect(m.title).toMatch(/^\[beta\] Demo guild/);
+    expect(m.title).toMatch(/^Demo guild/);
     expect(m.title).not.toBe('WolfPack.quest');
     expect(m.description.length).toBeGreaterThan(40);
     expect(`${m.title} ${m.description}`).not.toMatch(NAMES);
@@ -335,7 +335,7 @@ describe('every page names itself, with no raider in the name', () => {
   });
 
   it('the bar every page carries says what it is', () => {
-    expect(D.DEMO_BAR).toBe('[beta] Demo — invented guild, nothing here is real');
+    expect(D.DEMO_BAR).toBe('Demo — invented guild, nothing here is real');
     const shell = FILES.find(f => f.rel.endsWith('_parts/DemoShell.tsx')).src;
     expect(shell).toMatch(/DEMO_BAR/);
     expect(shell).toMatch(/https:\/\/raidmimic\.com\/register/);

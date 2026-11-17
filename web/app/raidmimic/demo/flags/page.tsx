@@ -5,7 +5,7 @@ import { DEMO_DEFAULT_GATE } from '@/lib/demoGuild';
 import FlagsView from '../_parts/FlagsView';
 
 export const metadata: Metadata = {
-  title: { absolute: '[beta] Demo guild · Flags' },
+  title: { absolute: 'Demo guild · Flags' },
   description: 'A demo guild’s Planes of Power progress, piece by piece, with flags a raid leader recorded for someone else shown as reported. Invented guild.',
   robots: { index: false, follow: false },
 };

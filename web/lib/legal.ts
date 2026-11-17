@@ -34,19 +34,19 @@ export const PRODUCT = 'Raid Mimic';
 // One title and sentence per page: the page's metadata and web/lib/pageMeta.ts (the card Discord shows) read the same words.
 export const LEGAL_META = {
   privacy: {
-    title: '[beta] Raid Mimic privacy',
+    title: 'Raid Mimic privacy',
     description: 'Plain words on what Raid Mimic stores about you and your guild, who else handles it, how long it is kept, and how to see it or have it removed.',
   },
   security: {
-    title: '[beta] Raid Mimic security',
+    title: 'Raid Mimic security',
     description: 'Plain words on how Raid Mimic keeps your account and your guild’s data safe: sign-in, what is stored and how it is separated, what Mimic does on your PC, and how to report a problem.',
   },
   terms: {
-    title: '[beta] Raid Mimic terms',
+    title: 'Raid Mimic terms',
     description: 'The short, plain terms for using Raid Mimic: the free tier, Pro billing, what is not allowed, who owns what, and how an account can end.',
   },
   refunds: {
-    title: '[beta] Raid Mimic refunds',
+    title: 'Raid Mimic refunds',
     description: 'How Pro billing, cancelling and refunds work for Raid Mimic: monthly only, cancel any time, and a refund on request within 7 days.',
   },
 } as const;

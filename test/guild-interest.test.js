@@ -231,15 +231,15 @@ describe('the page and its routing', () => {
     for (const p of ['/registers', '/register/x', '/raidmimic/register', '/admin/interest']) expect(raidmimicLandingTarget(p).pathname, p).toBe('/raidmimic');
     expect(fs.existsSync(path.join(ROOT, 'web/app/raidmimic/register/page.tsx'))).toBe(true);
   });
-  it('the tab and the Discord card carry the same words, and the page is [beta], public and server-rendered', () => {
+  it('the tab and the Discord card carry the same words, no beta marker (settled 2026-11-17, §613), public and server-rendered', () => {
     const title = /const TITLE = '([^']+)'/.exec(page)[1];
     const desc = /const DESCRIPTION =\s*'([^']+)'/.exec(page)[1];
     const m = metaForPath('/raidmimic/register');
     expect(m).toEqual({ title, description: desc });
-    expect(title).toMatch(/^\[beta\] /);
+    expect(title).toBe('Register your guild');
     expect(page).toMatch(/export function generateMetadata/);
     expect(page).toMatch(/raidmimicSeo\(headers\(\)\.get\('host'\), '\/register'\)/);
-    expect(page).toMatch(/<NewPageTag\b/);
+    expect(page).not.toMatch(/<NewPageTag\b/);
     expect(page).not.toMatch(/['"]use client['"]|createServerClient|supabase|getUser/i);
   });
   it('is indexed on the apex raidmimic hosts with raidmimic.com/register as canonical; noindex elsewhere', () => {

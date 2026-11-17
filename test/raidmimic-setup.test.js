@@ -26,7 +26,7 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const code = (rel) => stripJs(read(rel));
 const PAGE = 'web/app/raidmimic/setup/page.tsx';
 
-const allText = () => JSON.stringify([S.HERO, S.CREDIT, S.REQUIREMENTS, S.STEPS, S.TROUBLESHOOTING, S.STILL_STUCK, S.BETA_NOTE]);
+const allText = () => JSON.stringify([S.HERO, S.CREDIT, S.REQUIREMENTS, S.STEPS, S.TROUBLESHOOTING, S.STILL_STUCK]);
 
 describe('raidmimicLandingTarget', () => {
   it('/setup is the guide, with a trailing slash or capitals too', () => {
@@ -94,8 +94,8 @@ describe('the middleware, run', () => {
 
 describe('the page', () => {
   const page = code(PAGE);
-  it('is [beta], indexed on the raidmimic hosts only (canonical https://raidmimic.com/setup), public, and a server component', () => {
-    expect(page).toMatch(/const TITLE = '\[beta\] Set up Raid Mimic'/);
+  it('has no beta marker (settled 2026-11-17, §613), indexed on the raidmimic hosts only (canonical https://raidmimic.com/setup), public, and a server component', () => {
+    expect(page).toMatch(/const TITLE = 'Set up Raid Mimic'/);
     // 2026-10-23: the robots and canonical come from raidmimicSeo(), decided per request from the Host header
     expect(page).toMatch(/\.\.\.raidmimicSeo\(headers\(\)\.get\('host'\), '\/setup'\)/);
     expect(page).not.toMatch(/robots:/);
@@ -104,8 +104,7 @@ describe('the page', () => {
     });
     expect(raidmimicSeo('wolfpack.quest', '/setup')).toEqual({ robots: { index: false, follow: false } });
     expect(raidmimicSeo('b.wolfpack.quest', '/setup')).toEqual({ robots: { index: false, follow: false } });
-    expect(page).toMatch(/<NewPageTag\b/);
-    expect(page.indexOf('<NewPageTag')).toBeLessThan(page.indexOf('<h1'));
+    expect(page).not.toMatch(/<NewPageTag\b/);
     expect(page).not.toMatch(/['"]use client['"]|createServerClient|supabase/i);
   });
   it('shows the six steps the guild lead asked for, in order, plus the fixes', () => {
@@ -173,7 +172,7 @@ describe('the page', () => {
 describe('metadata: the tab AND the Discord card (CLAUDE.md, every page unfurls with its own name)', () => {
   it('lib/pageMeta.ts knows /raidmimic/setup, with the same words as the page', () => {
     const m = metaForPath('/raidmimic/setup');
-    expect(m.title).toBe('[beta] Set up Raid Mimic');
+    expect(m.title).toBe('Set up Raid Mimic');
     expect(m.description).not.toBe(DEFAULT_DESCRIPTION);
     expect(m.description.length).toBeGreaterThan(20);
     expect(m.description.length).toBeLessThanOrEqual(300);
