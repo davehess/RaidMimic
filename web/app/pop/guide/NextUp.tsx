@@ -13,10 +13,11 @@ import { useSearchParams } from 'next/navigation';
 import type { NextCard, NextStep } from '@/lib/popNextSteps';
 import type { GateCardEntry } from '@/lib/popGateStatus';
 import GateMissing from './GateMissing';
+import { WhoIcon } from '@/components/PlateIcons';
 
 export type NextUpChar = { name: string; cls: string | null; isMain: boolean; card: NextCard };
 
-const WHO: Record<NextStep['who'], string> = { solo: '🧍 Solo', group: '👥 Group', raid: '⚔ Raid' };
+const WHO: Record<NextStep['who'], string> = { solo: 'Solo', group: 'Group', raid: 'Raid' };
 const chip = 'px-1.5 rounded border border-border text-dim';
 
 export default function NextUp({ chars, initial, anchorPrefix, compareHref, gates }: {
@@ -52,7 +53,7 @@ export default function NextUp({ chars, initial, anchorPrefix, compareHref, gate
             <li key={t.step.key} className="flex flex-col gap-1 py-2 border-t border-border first:border-t-0 first:pt-0">
               <a href={`#${anchorPrefix}${t.step.key}`} className="text-sm text-blue hover:underline break-words">{t.step.title}</a>
               <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                <span className={chip}>{WHO[t.step.who]}</span>
+                <span className={chip}><WhoIcon who={t.step.who} /> {WHO[t.step.who]}</span>
                 {t.step.zone && <span className={chip}>📍 {t.step.zone}</span>}
                 {t.step.must && <span className="px-1.5 rounded border border-gold/60 text-gold">★ must</span>}
                 {t.step.flagLabel && <span className="px-1.5 rounded border border-green/60 text-green" title="The flag this step earns">🚩 {t.step.flagLabel}</span>}

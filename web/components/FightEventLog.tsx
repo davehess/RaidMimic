@@ -18,6 +18,7 @@
 // the folded rows become the toggle rows. docs/DESIGN-fight-timeline.md.
 
 import type { TLEvent } from '@/components/FightTimeline';
+import { IconTimer, ICON_INLINE } from '@/components/PlateIcons';
 import { buildEventLog, offsetLabel, type FightEventIn, type FightEventRow } from '@/lib/fightEvents';
 
 type TLDeath = { name: string; ts: string; class?: string | null; riposteDeath?: boolean };
@@ -117,7 +118,7 @@ export function FightEventLog({
       <details className="group" open={embedded}>
         <summary className="cursor-pointer select-none text-sm text-orange flex items-center gap-2 flex-wrap [&::-webkit-details-marker]:hidden list-none">
           <span className="inline-block transition-transform group-open:rotate-90" aria-hidden>▸</span>
-          <span>🕒 Fight timeline</span>
+          <span><IconTimer className={ICON_INLINE} /> Fight timeline</span>
           <span className="text-[11px] text-dim font-normal">
             {dur ? `${dur} · ` : ''}
             {nDeaths} death{nDeaths === 1 ? '' : 's'} · {nEvents} raid event{nEvents === 1 ? '' : 's'} · {nFires} callout{nFires === 1 ? '' : 's'}

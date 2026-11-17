@@ -121,4 +121,4 @@ export function demoMine(): MineRow[] {
 }
 
 /** One row of "what to raid next", cut down from the page's planner. */
-export type RaidNextRow = { key: string; icon: string; label: string; zoneShort: string; zoneHref: string; gains: number; unlocks: number };
+export type RaidNextRow = { key: string; kind: string; label: string; zoneShort: string; zoneHref: string; gains: number; unlocks: number };

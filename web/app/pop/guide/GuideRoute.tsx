@@ -30,6 +30,7 @@ import { setGuideTick } from './actions';
 import { CharOptions, ChainView, Place, SeqView, WithItems } from './GuideChecklist';
 import SeerPaste, { useFocusStep, type SeerResult } from './SeerPaste';
 import ZoneMap, { type ZoneOutline } from './ZoneMap';
+import { WhoIcon } from '@/components/PlateIcons';
 import { lineFor, startsOfRuns, type GettingThere, type GuideGettingThere } from '@/lib/popGettingThereRuns';
 
 // How a step got its tick. mimic = Mimic saw it happen; database = our records already show it;
@@ -43,7 +44,6 @@ export type RouteChar = {
   seenIn: { zone: string; at: string }[];   // gated planes /who has shown them in, earliest first
 };
 
-const WHO_ICON: Record<Who, string> = { solo: '🧍', group: '👥', raid: '⚔' };
 const WHOS: Who[] = ['solo', 'group', 'raid'];
 const plain = (s: string) => s.replace(/\[\[([^\]#]+)#\d+\]\]/g, '$1');
 
@@ -303,7 +303,7 @@ export default function GuideRoute({ chars, initial, cards, outlines, layout, no
         {(['all', ...WHOS] as const).map(w => (
           <button key={w} type="button" onClick={() => setWho(w)} aria-pressed={who === w}
                   className={`px-2 py-0.5 rounded border ${who === w ? 'border-gold text-gold' : 'border-border text-dim hover:text-text'}`}>
-            {w === 'all' ? 'All' : `${WHO_ICON[w]} ${WHO_LABEL[w]}`}
+            {w === 'all' ? 'All' : <><WhoIcon who={w} /> {WHO_LABEL[w]}</>}
           </button>
         ))}
       </div>
@@ -440,7 +440,7 @@ function StepRow({ item, layout, checked, ev, seerNext, manual, disabled, onTogg
           <WithItems text={item.title} cards={cards} />
         </label>
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px]">
-          <span className="px-1.5 rounded border border-border text-dim">{WHO_ICON[item.who]} {WHO_LABEL[item.who]}</span>
+          <span className="px-1.5 rounded border border-border text-dim"><WhoIcon who={item.who} /> {WHO_LABEL[item.who]}</span>
           {item.must && <span className="px-1.5 rounded border border-gold/60 text-gold">★ must</span>}
           <SourceBadge ev={ev} manual={manual && !ev} />
           {seerNext && <span className="px-1.5 rounded border border-gold/70 text-gold" title="The next step the Seer text you pasted leaves open on this plane">▶ next</span>}

@@ -114,6 +114,7 @@ import PopShell from './PopShell';
 import PopNavPanel from './PopNavPanel';
 import PopMinePanel from './PopMinePanel';
 import EssencesFold from './EssencesFold';
+import { ICON_INLINE, IconSolo, KindIcon } from '@/components/PlateIcons';
 import {
   ELEMENTAL_TIER, demoMine, essencesPlace, mineProgress, navGroups, sideVariant, tierAnchor, zoneAnchor,
   type RaidNextRow,
@@ -181,9 +182,6 @@ function groupNeeds(rows: SpellNeed[]): NeedByChar[] {
     (b.level ?? -1) - (a.level ?? -1) || a.name.localeCompare(b.name));
 }
 
-const KIND_ICONS: Record<string, string> = {
-  kill: '⚔', trial: '🏛', quest: '📜', event: '✨', loot: '🎁', hail: '💬', touch: '✋',
-};
 
 export default async function PopFlagsPage(
   { searchParams }: { searchParams: Promise<{ zone?: string; view?: string; scope?: string; demo?: string; all?: string; pclass?: string; psort?: string; pdir?: string; flags?: string; alts?: string; sort?: string; open?: string; v?: string }> },
@@ -763,12 +761,12 @@ export default async function PopFlagsPage(
             return (
               <li key={s.key} className="text-[13px] leading-5 flex items-baseline justify-between gap-3" title={s.note}>
                 <span className="text-dim min-w-0">
-                  {KIND_ICONS[s.how] ?? KIND_ICONS.event} {s.label}
+                  <KindIcon kind={s.how} /> {s.label}
                   {s.where && <span className="text-dim/60"> · {s.where}</span>}
                   {s.silent && <span title="The server prints no flag line for this step; only the Seer's guided meditation shows it"> 🔇</span>}
                 </span>
                 <span className="text-xs whitespace-nowrap shrink-0">
-                  <span className={n > 0 ? 'text-green' : 'text-dim'}>👤 {n}</span>
+                  <span className={n > 0 ? 'text-green' : 'text-dim'}><IconSolo className={ICON_INLINE} /> {n}</span>
                   {selfOnly > 0 && (
                     <span className="text-gold" title={`${selfOnly} of them ticked by their owners on the site, not seen by Mimic or /who`}> ☑{selfOnly}</span>
                   )}
@@ -783,9 +781,9 @@ export default async function PopFlagsPage(
             const n = flagCount.get(f) ?? 0;
             return (
               <li key={f} className="text-[13px] leading-5 flex items-baseline justify-between gap-3">
-                <span className="text-dim min-w-0">{KIND_ICONS[def?.kind ?? 'event']} {def?.label ?? f}{def && !def.verified && ' *'}</span>
+                <span className="text-dim min-w-0"><KindIcon kind={def?.kind ?? 'event'} /> {def?.label ?? f}{def && !def.verified && ' *'}</span>
                 <span className="text-xs shrink-0">
-                  <span className={n > 0 ? 'text-green' : 'text-dim'}>👤 {n}</span>
+                  <span className={n > 0 ? 'text-green' : 'text-dim'}><IconSolo className={ICON_INLINE} /> {n}</span>
                   {(selfFlagCount.get(f) ?? 0) > 0 && (
                     <span className="text-gold" title={`${selfFlagCount.get(f)} of them ticked by their owners on the site, not seen by Mimic or /who`}> ☑{selfFlagCount.get(f)}</span>
                   )}
@@ -981,7 +979,7 @@ export default async function PopFlagsPage(
     : null;
   const raidNext: RaidNextRow[] = side === 'c'
     ? planTop.slice(0, 3).map(p => ({
-      key: p.flag, icon: KIND_ICONS[POP_FLAGS[p.flag]?.kind ?? 'kill'], label: POP_FLAGS[p.flag]?.label ?? p.flag,
+      key: p.flag, kind: POP_FLAGS[p.flag]?.kind ?? 'kill', label: POP_FLAGS[p.flag]?.label ?? p.flag,
       zoneShort: p.zone.short, zoneHref: hrefFor({ zone: p.zone.key }),
       gains: p.gains.mains + p.gains.alts, unlocks: p.leverage.mains + p.leverage.alts,
     }))
@@ -1151,10 +1149,10 @@ export default async function PopFlagsPage(
                   return (
                     <li key={s.key} title={s.note}>
                       <div className="text-xs">
-                        <span className="text-text">{KIND_ICONS[s.how] ?? KIND_ICONS.event} {s.label}</span>
+                        <span className="text-text"><KindIcon kind={s.how} /> {s.label}</span>
                         {s.where && <span className="text-dim"> · {s.where}</span>}
                         {s.silent && <span title="The server prints no flag line for this step; only the Seer's guided meditation shows it"> 🔇</span>}
-                        <span className={stepHolders(s.key) > 0 ? 'text-green' : 'text-dim'}> · 👤 {stepHolders(s.key)}</span>
+                        <span className={stepHolders(s.key) > 0 ? 'text-green' : 'text-dim'}> · <IconSolo className={ICON_INLINE} /> {stepHolders(s.key)}</span>
                       </div>
                       {need.length > 0 && (
                         <div className="text-xs text-dim pl-4">
@@ -1356,7 +1354,7 @@ export default async function PopFlagsPage(
             })}
             <p className="text-[10px] text-dim text-center">
               Chart topology after Samanna&apos;s classic planar progression chart · ⤓ gate flag with holder count ·
-              👤 characters holding the flag · &quot;N in&quot; = can enter today · counts include characters /who
+              <IconSolo className={ICON_INLINE} /> characters holding the flag · &quot;N in&quot; = can enter today · counts include characters /who
               showed, or loot placed, inside a gated plane · <span className="text-gold">☑ N</span> of the holders are an owner&apos;s
               own tick on the site
             </p>
@@ -1396,7 +1394,7 @@ export default async function PopFlagsPage(
                 <tbody className="divide-y divide-border/50">
                   {planTop.map(p => (
                     <tr key={p.flag}>
-                      <td className="py-1.5 pr-3 text-text">{KIND_ICONS[POP_FLAGS[p.flag]?.kind ?? 'kill']} {POP_FLAGS[p.flag]?.label ?? p.flag}</td>
+                      <td className="py-1.5 pr-3 text-text"><KindIcon kind={POP_FLAGS[p.flag]?.kind ?? 'kill'} /> {POP_FLAGS[p.flag]?.label ?? p.flag}</td>
                       <td className="py-1.5 px-2 text-dim text-xs">
                         <Link href={hrefFor({ zone: p.zone.key })} className="hover:underline">{p.zone.short}</Link>
                       </td>
