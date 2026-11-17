@@ -11,13 +11,19 @@
    Titles (Engraved | Plain) swaps --display; Mode (Dark | Light) swaps the ground and ink. */
 html[data-titles="plain"]{--display:Inter,system-ui,sans-serif}
 html[data-titles="plain"] .head h1{letter-spacing:-.02em}
+/* Parchment, not paper white (the guild lead, 2026-11-17: "I was damn near blinded looking at that in low light").
+   Page 58% and panels 65% luminance (the first light look was 88% / 97%); brown ink; every text colour >= 4.5:1 on
+   page, panel and row. */
 html[data-mode="light"]{
-  --bg:#f5f1e8; --sec:#fffcf5; --row:#ece5d6; --line:#ddd3c0;
-  --text:#1d1a15; --t2:#4d473c; --t3:#6b6456;
-  --gold:#b7841f; --gold2:#8a5c0c; --blue:#2c5fb5; --green:#1d7a45; --orange:#a8580f; --red:#b3362f; --violet:#6a45c4; --onGold:#1d1a15;
+  --bg:#d6c7a6; --sec:#dfd1b2; --row:#cdbd9a; --line:#b8a582;
+  --text:#2b2116; --t2:#47392a; --t3:#55452f;
+  --gold:#c4913a; --gold2:#5e3e06; --blue:#1f4178; --green:#145230; --orange:#723705; --red:#82241e; --violet:#4b2e8f; --onGold:#2b2116;
 }
-html[data-mode="light"] .bar{background:rgba(245,241,232,.92)}
-html[data-mode="light"] .cell.done{background:linear-gradient(180deg,rgba(183,132,31,.12),rgba(183,132,31,.03))}
+html[data-mode="light"] body{background:
+  radial-gradient(1200px 700px at 30% -10%,rgba(255,240,205,.35),transparent 70%),
+  radial-gradient(900px 600px at 110% 110%,rgba(120,85,40,.18),transparent 70%),var(--bg)}
+html[data-mode="light"] .bar{background:rgba(214,199,166,.94)}
+html[data-mode="light"] .cell.done{background:linear-gradient(180deg,rgba(150,105,30,.16),rgba(150,105,30,.05))}
 html[data-mode="light"] .seg a.on{background:var(--text);color:var(--bg)}
 .look{position:relative;margin-left:8px}
 .look .aa{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:8px;font:600 13px Inter;color:var(--t2)}
