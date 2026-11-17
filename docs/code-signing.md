@@ -7,10 +7,15 @@
 > attempt failed with `403 Forbidden` from the signing endpoint until the app registration was given
 > **Artifact Signing Certificate Profile Signer** on the profile (step 5); a re-run a few minutes after
 > the role was added went through. Every Windows build (stable, beta, alpha) now signs from its next push.
+> **Field check (the guild lead, 2026-11-17):** the signed alpha installer ran with **no SmartScreen
+> warning** on a Windows PC. (SmartScreen judges only files carrying the downloaded-from-the-internet mark,
+> so the check counts when the installer came through a browser.)
 > ⚠ **The certificate names a person, not the project.** It is an individual-validation certificate, so
-> the publisher Windows shows (and the release notes' "code-signed by …" line prints) is the guild lead's
-> legal name. Dropping the name from the release notes is a one-line change; the Windows prompt keeps it
-> unless the account is re-validated as an organisation. Open on the Decision Desk.
+> the signer is the guild lead's legal name. The installer is per-user (`perMachine: false`), so there is
+> no admin prompt showing it; it appears in the file's Properties → Digital Signatures, in a SmartScreen
+> box if one ever shows, and in the release notes' "code-signed by …" line, which #mimic-releases reposts.
+> Dropping it from the notes is a one-line change; the signature keeps it unless the account is
+> re-validated as an organisation. Open on the Decision Desk (`signing-publisher`).
 >
 > What follows is the record of how it was set up. The account (`RaidMimic`, Basic, East US) exists and the guild lead reported the
 > individual identity validation finished on 2026-11-17; the certificate profile, app registration and the
