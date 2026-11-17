@@ -375,6 +375,11 @@ jobs:
             if [ -n "$(printf '%s' "$n" | tr -d '[:space:]')" ]; then notes="$n"; break; fi
           done
           title=$( (git log --no-merges --format=%s "${rng[@]}" | grep -viE '^sync:' | head -1) || true)
+          if [ -z "$title" ]; then
+            # A manual run, or a push of only sync merges: the newest real change before it.
+            git fetch -q --deepen=50 origin "${GITHUB_REF:-HEAD}" 2>/dev/null || true
+            title=$( (git log --no-merges --format=%s -50 HEAD | grep -viE '^sync:' | head -1) || true)
+          fi
           [ -n "$title" ] || title=$(git log -1 --format=%s HEAD)
           # Same close words as utils/feedbackRefs.js: "Fixes FB-4", "Implements: FB-5, FB-6 and FB-7".
           fbs=$( (git log --format=%B "${rng[@]}" \
