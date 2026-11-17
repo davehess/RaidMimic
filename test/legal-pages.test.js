@@ -45,8 +45,8 @@ describe('web/lib/legal.ts', () => {
   it('the contact address, the terms version and date, and the minimum age', () => {
     expect(L.CONTACT_EMAIL).toBe('hello@raidmimic.com');
     expect(L.CONTACT_HREF).toBe('mailto:hello@raidmimic.com');
-    expect(L.TERMS_VERSION).toBe('2026-11-01');
-    expect(L.LEGAL_UPDATED).toBe('November 1, 2026');
+    expect(L.TERMS_VERSION).toBe('2026-11-17');
+    expect(L.LEGAL_UPDATED).toBe('November 17, 2026');
     expect(L.MIN_AGE).toBe(13);
     // stay=1 (2026-11-02, redirect by default): /guilds sends a one-guild player to their guild's site, and "Your data" is the
     // page's own section, so the link must not be bounced.
@@ -128,7 +128,8 @@ describe('what the pages must say', () => {
     const src = code(PAGES.terms);
     expect(src).toMatch(/Payments are coming\. Nothing is charged today/);
     expect(src).toMatch(/monthly only/i);
-    expect(src).toMatch(/first month free/i);
+    expect(src).not.toMatch(/first month/i);   // no free month since 2026-11-17 (§612)
+    expect(src).toMatch(/Registering a guild is free; only hosting is paid/);
     expect(src).toMatch(/renews every month until you cancel/i);
     expect(src).toMatch(/Cancel any time, in one click/);
     expect(src).toMatch(/keep Pro until the end of the month you have paid for/);
@@ -148,12 +149,12 @@ describe('what the pages must say', () => {
     expect(mod.RIGHTS_NOTICE).toMatch(/registered trademark of Daybreak Game Company LLC/);
     expect(code(PAGES.terms)).toMatch(/import \{[^}]*RIGHTS_NOTICE[^}]*\} from '@\/lib\/raidmimicLanding'/);
   });
-  it('refunds: payments are not live at the top, monthly only, first month free, cancel any time, 7 days if unused, how to ask', () => {
+  it('refunds: payments are not live at the top, monthly only, no free month, cancel any time, 7 days if unused, how to ask', () => {
     const src = code(PAGES.refunds);
     expect(src.indexOf('Payments are not live yet.')).toBeGreaterThan(-1);
     expect(src.indexOf('Payments are not live yet.')).toBeLessThan(src.indexOf('How billing works'));
     expect(src).toMatch(/Monthly only/);
-    expect(src).toMatch(/first month is free/);
+    expect(src).not.toMatch(/first month/i);
     expect(src).toMatch(/Cancel any time, in one click/);
     expect(src).toMatch(/keep Pro until the end of the month you have paid for/);
     expect(src).toMatch(/Ask within 7 days of a charge/);
