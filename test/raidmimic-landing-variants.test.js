@@ -116,7 +116,7 @@ describe('the money', () => {
     const t = S.TIERS();
     expect(t.map(x => x.id)).toEqual(['free', 'guild']);
     expect(t.find(x => x.id === 'guild').price).toBe('$25 / month');
-    expect(t.find(x => x.id === 'guild').note).toMatch(/Monthly only\. First month free\./);
+    expect(t.find(x => x.id === 'guild').note).toBe('Monthly only.');   // no free month since 2026-11-17 (§612)
     expect(t.find(x => x.id === 'free').price).toBe('$0');
   });
   it('there is no individual tier or price (DECISIONS §552), and no live pricing copy sells storage or "costs us money"', () => {

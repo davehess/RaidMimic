@@ -61,7 +61,7 @@ export default function RaidmimicTermsPage() {
       <Section title="Pro plans and billing">
         <p><B>Payments are coming. Nothing is charged today, and nothing here bills you until billing opens.</B> When it does:</p>
         <Bullets>
-          <li><B>Pro · Guild</B> is ${GUILD_PRICE} a month, monthly only, with the <B>first month free</B>.</li>
+          <li><B>Pro · Guild</B> is ${GUILD_PRICE} a month, monthly only. Registering a guild is free; only hosting is paid.</li>
           <li>It renews every month until you cancel.</li>
           <li><B>Cancel any time, in one click.</B> You keep Pro until the end of the month you have paid for.</li>
           <li>A price change takes effect at a renewal after we have told you, never in the middle of a paid month.</li>

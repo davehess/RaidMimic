@@ -79,7 +79,8 @@ export const featureById = (id: FeatureId): Feature => {
 };
 
 // ─── Money ──────────────────────────────────────────────────────────────────────────────────────────
-// ONE paid plan: Pro · Guild, $25 a month, monthly only, first month free (DECISIONS §495). The page sells what a guild learns from
+// ONE paid plan: Pro · Guild, $25 a month, monthly only (DECISIONS §495; no free month since 2026-11-17, §612: registering is the
+// free part, hosting is what is paid). The page sells what a guild learns from
 // its raids; storage is included while you pay and is never the reason given for a price (the guild lead, 2026-11-09, DECISIONS
 // §552). There is no individual plan (removed the same day).
 export const GUILD_PRICE = 25;
@@ -95,7 +96,7 @@ export const TIERS = (): Tier[] => [
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
     points: ['The overlays', 'Triggers', 'Your own parses', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
     coming: 'Syncing for players outside Wolf Pack is coming.' },
-  { id: 'guild', name: 'Pro · Guild', price: priceLabel(GUILD_PRICE), note: 'Monthly only. First month free.', tone: 'blue',
+  { id: 'guild', name: 'Pro · Guild', price: priceLabel(GUILD_PRICE), note: 'Monthly only.', tone: 'blue',
     points: ['Shared raid reviews', 'Merged parses', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];

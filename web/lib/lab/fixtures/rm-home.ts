@@ -51,7 +51,7 @@ export const DOORS = {
   },
   lead: {
     id: 'lead', title: 'I lead a guild', tag: 'for the people who run the raid',
-    lines: ['Shared raid reviews and merged parses', 'A command center for your officers', 'Pro · Guild, $25 a month, first month free'],
+    lines: ['Shared raid reviews and merged parses', 'A command center for your officers', 'Pro · Guild, $25 a month'],
     primary: 'Register interest', secondary: 'See the guild demo',
   },
   more: { raid: 'What you get as a player', lead: 'What a guild gets' },

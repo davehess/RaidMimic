@@ -74,7 +74,7 @@ const STATIC_META: Record<string, PageMeta> = {
   '/mimic':        { title: 'Download Mimic', description: 'Mimic — the Wolf Pack desktop overlay: DPS/Tank Meter, triggers, buff queue, and log sync for Project Quarm.' },
   '/mimic/dirge':  { title: 'Dirge Tactical Nuke', description: 'For bards, on the Mimic beta: check off your pre-buffs, lift the cover, turn the Puretone key, and fire one button per Dirge your mana holds. Watch it run.', image: '/mimic/dirge-card.png' },
   '/raidmimic':    { title: 'Raid Mimic · free EverQuest raid overlays', description: 'Free, open-source overlays for your EverQuest raids, built from the log the game already writes: run it on your own, or add a guild hub for shared raid reviews, merged parses and a command center.' },
-  '/raidmimic/register': { title: '[beta] Register your guild', description: 'Tell us about your raid guild: its game, size, raid nights and DKP tool. No sign-in and no account, just a way to count your guild in for Raid Mimic.' },
+  '/raidmimic/register': { title: '[beta] Register your guild', description: 'Free to register: tell us about your raid guild, its game, size, raid nights and DKP tool. No sign-in, no card. Only guild hosting costs money, and only if you choose it.' },
   '/raidmimic/setup': { title: '[beta] Set up Raid Mimic', description: 'A step-by-step guide to setting up Mimic on your own PC for EverQuest on Project Quarm, with no guild needed: what you need, what works on your own, and how to join a raid.' },
   // The click-through demo of an invented guild (2026-11-02). Same words as each page's own metadata, and the gate pages
   // (/raidmimic/demo/flags/<gate>) are matched in metaForPath below.

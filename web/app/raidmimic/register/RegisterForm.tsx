@@ -207,7 +207,7 @@ export default function RegisterForm({ downloadHref, setupHref }: { downloadHref
       {error && <p role="alert" className="mt-4 text-sm text-red">{error}</p>}
 
       <p className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <button type="submit" disabled={pending} className={PRIMARY}>{pending ? 'Sending…' : 'Count us in'}</button>
+        <button type="submit" disabled={pending} className={PRIMARY}>{pending ? 'Sending…' : 'Count us in, free'}</button>
         <span className="text-xs text-dim">No sign-in, no account, nothing charged.</span>
       </p>
     </form>
