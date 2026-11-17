@@ -724,7 +724,9 @@ and the same never-refetch guarantee.
   §385's annual option and §487's Personal tier). $25 a month per guild, first month free, cancel in one click, Stripe
   `pause_collection` when the guild has had no raid upload for 30 days (resumes on the next upload with a notice to
   officers); individuals pay nothing (local-first, the free column); tips stay on GitHub Sponsors and Ko-fi. Rail: Stripe
-  Payment Links / Billing with a webhook setting `hub_guilds.plan` and the pause state. The `game` and `server` keys are
+  Payment Links / Billing with a webhook setting `hub_guilds.plan` and the pause state (a Stripe account the operator owns
+  directly; 2026-11-17, §610: a Connect account enrolled by a platform such as Discord only receives that platform's sales,
+  and is a separate thing). The `game` and `server` keys are
   required so a guild keeps its record, theme and subscription if its server ends. For the wizard: billing is HOSTED-only; a
   self-hosting guild has no plan, no webhook and no pause logic.
 - **2026-10-31 — a guild's look is a table row, not a deployment setting** (§488, `docs/DESIGN-theming.md`, web 2.1.80): table
