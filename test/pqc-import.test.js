@@ -1,12 +1,12 @@
-// test/pqc-import.test.js — importing a PQ Companion trigger pack into the agent's personal triggers.
+// test/pqc-import.test.js — importing a third-party trigger pack into the agent's personal triggers.
 //
-// A raider switching from (or running beside) PQ Companion keeps their triggers: its Export writes plain
+// A raider switching from (or running beside) another trigger tool keeps their triggers: its Export writes plain
 // JSON { pack_name, description, triggers:[…] }. The shipped parser maps each trigger onto the personal
 // shape the GINA / EQLogParser imports already produce — pattern, spoken + shown text, countdown, warnings
 // before it ends, end-early text — and lists what a personal trigger has no place for, so the import
 // result can say so instead of dropping it in silence.
 //
-// The fixture is invented (test/fixtures/pqc-pack.json); only the SHAPE comes from PQ Companion.
+// The fixture is invented (test/fixtures/pqc-pack.json); only the SHAPE comes from a third-party trigger pack format.
 //
 //   · detection: by what the text is, not the file name — a PQ pack, a GINA XML and an EQLogParser .tgf
 //     tree each reach their own parser through the one entry point the endpoint uses
@@ -161,7 +161,7 @@ describe('_parsePqCompanionPack — triggers with nothing to match on', () => {
 });
 
 describe('_parsePqCompanionPack — refuses what is not a pack, without throwing', () => {
-  it('returns null for text that is not a PQ Companion pack', () => {
+  it('returns null for text that is not a third-party trigger pack', () => {
     const P = agent._parsePqCompanionPack;
     expect(P('')).toBeNull();
     expect(P('not json at all')).toBeNull();
@@ -181,7 +181,7 @@ describe('_parsePqCompanionPack — refuses what is not a pack, without throwing
 });
 
 describe('_parseTriggerImport — the one entry point finds the format', () => {
-  it('a PQ Companion pack', () => {
+  it('a third-party trigger pack', () => {
     expect(agent._parseTriggerImport(FIXTURE)).toEqual(parsed);
   });
 

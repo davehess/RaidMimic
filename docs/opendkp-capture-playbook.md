@@ -26,7 +26,7 @@ reading the wrong number out of the first one for an unknown length of time.
 | Endpoint | What it returns | Use |
 |---|---|---|
 | `GET /clients/{client}/dkp` | **"Get DKP Summary"** — a `Models[]` array with *"current DKP, character information, attended ticks, total ticks, and calculated values for different time periods (30, 60, 90 days, and lifetime)"* plus an `AsOfDate`. | ✅ The balance. ONE call serves the whole guild — this is what `getStandings()` fetches and `_panelStandings` caches. |
-| `GET /clients/{client}/characters/{id}/dkp` | **"Get DKP Details for Character"** — an array of DKP *entries*: `Order, Date, SourceType, Source, SourceId, CharacterName, CharacterId, Value, Cumulative, TickId`. | ❌ Not for a balance. It is a LEDGER; the balance is `Cumulative` on the last entry. Would be one call PER CHARACTER — the exact per-member traffic Moncs flagged on 2026-08-27. Good candidate for a future DKP-history view, nothing else. |
+| `GET /clients/{client}/characters/{id}/dkp` | **"Get DKP Details for Character"** — an array of DKP *entries*: `Order, Date, SourceType, Source, SourceId, CharacterName, CharacterId, Value, Cumulative, TickId`. | ❌ Not for a balance. It is a LEDGER; the balance is `Cumulative` on the last entry. Would be one call PER CHARACTER — the exact per-member traffic the upstream maintainer flagged on 2026-08-27. Good candidate for a future DKP-history view, nothing else. |
 
 **The live bug this exposed:** the panel showed 192 where OpenDKP says 143.
 Since the summary already contains BOTH the current balance and 30/60/90/lifetime

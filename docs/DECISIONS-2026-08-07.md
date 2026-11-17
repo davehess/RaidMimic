@@ -13,4 +13,3 @@ The original file: `git show 89d3c5f1:docs/DECISIONS-2026-08-07.md`.
 | 2026-08-07/6 | [loot-dkp](decisions/loot-dkp.md) | Loot bidding (2026-08-09) |
 | 2026-08-07/7 | [triggers](decisions/triggers.md) | Triggers — the `{s}` timestamp swallow (2026-08-09) |
 | 2026-08-07/8 | [process](decisions/process.md) | Branches — beta stops drifting (2026-08-09) |
-| 2026-08-07/9 | [process](decisions/process.md) | pq-companion |

@@ -16,12 +16,11 @@ would not have to take our word for our traffic. We spent two days driving the
 numbers on it down: 140 MB/day of audits to under 10, a fan-in auction cache,
 an outbound governor, a kill switch.
 
-The next morning Moncs asked:
+The next morning the upstream maintainer asked whether we purposefully call
+`/dkp` once a minute: about 54 calls an hour were arriving from a single
+residential address.
 
-> "Do you purposefully call /dkp once a minute? Looking back over the past 60
-> minutes, it looks like theres about 54 calls from <residential-ip> calling it"
-
-**That ip was a member's home PC.** `opendkp_call_stats` is populated by
+**That address was a member's home PC.** `opendkp_call_stats` is populated by
 `utils/opendkp.js`, which is bot code. The agent called `api.opendkp.com`
 directly, from every machine running Mimic, and so:
 

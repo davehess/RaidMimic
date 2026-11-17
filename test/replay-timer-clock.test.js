@@ -1,7 +1,7 @@
 // test/replay-timer-clock.test.js — replayed trigger timers must arm on the
 // WALL clock, not the historical log timestamp.
 //
-// The bug (found via the pq-companion comparison, 2026-08-07): replay passes
+// The bug (found in a replay review, 2026-08-07): replay passes
 // the log line's tsMs into _startTimer, which computed
 // ends_at_ms = tsMs + duration. For any log older than the duration that is
 // already in the past, and _activeTimersSnapshot deletes such rows on the next

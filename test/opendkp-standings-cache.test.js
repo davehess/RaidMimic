@@ -1,8 +1,8 @@
 // test/opendkp-standings-cache.test.js — nothing but the BOT talks to OpenDKP.
 //
-// Moncs, OpenDKP's operator, 2026-08-27: "Do you purposefully call /dkp once a
-// minute? Looking back over the past 60 minutes, it looks like theres about 54
-// calls from 184.144.103.149 calling it".
+// The upstream maintainer, 2026-08-27, asked whether we purposefully call /dkp
+// once a minute: about 54 calls an hour were arriving from one residential
+// address.
 //
 // That ip was a MEMBER'S PC. Every open Mimic asked OpenDKP for the full 472-
 // character standings array once a minute, directly, to render one number — so

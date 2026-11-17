@@ -234,8 +234,8 @@ the destination, on the day it ships — not by trusting green CI.
 ## 2026-08-25/4 — The OpenDKP incident — halt, root cause, and the governor (bot 3.1.71–3.1.72)
 *2026-08-25 · DECISIONS-2026-08-25.md · OpenDKP traffic incident, halt and governor*
 
-**What happened.** OpenDKP's owner (Moncs) reported high-volume automated
-traffic and blocked our bot's IP at his WAF. His API Gateway logs (6h window,
+**What happened.** OpenDKP's upstream maintainer reported high-volume automated
+traffic and blocked our bot's IP at their WAF. Their API Gateway logs (6h window,
 2026-08-25): **1,678 calls to `GET /clients/{client}/auctions`, 1,115 MB**
 (~665 KB per response), plus 632 `GET /clients/{client}/dkp` and 416
 `GET /clients/{client}/characters`.
@@ -250,7 +250,7 @@ and reached the whole fleet in Mimic v2.0.0 on **2026-07-19**. Correct
 escaping is what turned the firehose on.
 
 **Decisions:**
-1. **`OPENDKP_HALT=1`** stays until fixes are verified and Moncs unblocks.
+1. **`OPENDKP_HALT=1`** stays until fixes are verified and the upstream maintainer unblocks.
    The halt lives at `_get`/`_post` in `utils/opendkp.js` — no wrapper can
    bypass it (bot 3.1.71 + `test/opendkp-halt.test.js`).
 2. **The panel reads `GET /clients/{name}/auctions/active`** — OpenDKP's own
@@ -268,7 +268,7 @@ escaping is what turned the firehose on.
    `OPENDKP_MAX_CALLS_PER_MIN` sliding budget (default 60, 0=off) + global
    cooldown honoring 429 `Retry-After` (default 30s, cap 5min). This is the
    standing guarantee no future caller repeats this, and the ready position
-   for the rate limiting Moncs will likely add.
+   for the rate limiting the upstream maintainer will likely add.
    `test/opendkp-outbound-budget.test.js`.
 5. **Audits/adjustments early-break**: the list walk stops at the first page
    with nothing above the watermark, but only after page 1 *proves*
@@ -278,7 +278,7 @@ escaping is what turned the firehose on.
    night; bot-side cache already makes these cheap): panel poll 7s→adaptive,
    agent standings cache 60s→5min, back-off when `document.hidden`.
 
-**Numbers for the record** (model in the artifact page shown to Moncs):
+**Numbers for the record** (model in the artifact page shown to the upstream maintainer):
 before = ~37k upstream calls/day per open dashboard; after = ≤720/day idle
 fleet-wide, ~1.5k on a raid night with bidding, bounded by the governor at
 60/min worst case.
@@ -286,16 +286,16 @@ fleet-wide, ~1.5k on a raid night with bidding, bounded by the governor at
 ## 2026-08-26/2 — A public OpenDKP counter, and a kill switch that doesn't need a deploy
 *2026-08-26 · DECISIONS-2026-08-26.md · Public OpenDKP counter with quick kill switch*
 
-> "moncs is ready to unblock us, so I need a live counter site that's open
+> "the upstream maintainer is ready to unblock us, so I need a live counter site that's open
 > access on wolfpack.quest (make it /opendkp) and I need to be able to shut it
 > down quickly if it's not fixed."
 
 **`wolfpack.quest/opendkp` — no sign-in, deliberately.** It is the only
 member-facing page without an auth check. The reason is the whole point of the
-page: the person who most needs it is OpenDKP's owner, who is not in our
+page: the person who most needs it is the upstream maintainer, who is not in our
 Discord and is being asked to unblock our IP on our word after our traffic cost
-him real money. A page behind our sign-in would be useless to exactly one
-person, and he is the one.
+them real money. A page behind our sign-in would be useless to exactly one
+person, and they are the one.
 
 **What it exposes, and nothing else:** endpoint shapes, call counts, bytes,
 error counts, halt state. No member names, no character names, no DKP, no
@@ -303,8 +303,8 @@ credentials. `opendkp_call_stats` is consequently the single `anon`-readable
 table in the schema — a deliberate exception, recorded here so nobody widens it
 by pattern-matching later.
 
-**Endpoints are normalized to HIS log shape** (`/clients/{client}/auctions/{id}/bids`)
-rather than ours, so his API Gateway table and our page can be read across
+**Endpoints are normalized to the upstream log shape** (`/clients/{client}/auctions/{id}/bids`)
+rather than ours, so their API Gateway table and our page can be read across
 without a translation step. Our numbers in our own format is what he already had
 reason to distrust.
 
@@ -333,13 +333,13 @@ Shipped: bot 3.1.73, web 1.1.98, migration `20260826120000_opendkp_call_stats`
 ## 2026-08-26/3 — Unblock day: what the 1,486 actually was (bot 3.1.74 / web 1.1.99)
 *2026-08-26 · DECISIONS-2026-08-26.md · Unblock day: refused counts were sign-in calls*
 
-Moncs lifted the block, `OPENDKP_HALT` went to 0, and the page immediately read
+The upstream maintainer lifted the block, `OPENDKP_HALT` went to 0, and the page immediately read
 **1,486 "refused by us" against 4 real calls.** Guild lead: *"stats are flowing but
 I'm concerned by our block."* Right to be — that reads like we tried to hammer
 him 1,486 times an hour.
 
 **We didn't. Every one of them was AWS Cognito** — our own sign-in provider,
-`POST /`, which never touches OpenDKP's API. Zero reached his infrastructure.
+`POST /`, which never touches OpenDKP's API. Zero reached their infrastructure.
 Confirmed by grouping `opendkp_call_stats` by endpoint rather than reasoning
 about it.
 
@@ -351,8 +351,8 @@ successes only. With a COLD cache and a failing upstream, every dashboard poll
 re-attempted — so the guarantee the whole design rests on ("N dashboards cost
 what one costs") **evaporated exactly when OpenDKP was unreachable**, which is
 the moment it matters most. Measured: ~106 attempts/minute, which is 4
-dashboards × 7s × the auctions+my-bids pair. Had Moncs's API been merely *slow*
-rather than blocking us, we would have done this to him for real. Failures now
+dashboards × 7s × the auctions+my-bids pair. Had their API been merely *slow*
+rather than blocking us, we would have done this to them for real. Failures now
 cache for 20s — long enough to collapse a poll storm, short enough that
 recovery is seconds, and on its own TTL so "upstream broken" never masquerades
 as "no auctions open" for the 120s idle window.
@@ -608,8 +608,8 @@ That is deliberately slacker than the healing pass wants: a gap can now sit for
 seven days. **It is temporary, and it is tied to the API request.** If OpenDKP
 gains a `since` / `afterId` parameter, a full pull stops costing anything and
 this goes back to being frequent — or stops being a separate mode at all. Until
-then we are buying his bandwidth with our staleness, which is the right way
-round: the rows we would be healing are rows his API has no cheap way to hand us.
+then we are buying their bandwidth with our staleness, which is the right way
+round: the rows we would be healing are rows their API has no cheap way to hand us.
 
 Tunable without a deploy, and the days are a **list** on purpose:
 `OPENDKP_LIST_FULL_SWEEP_DAYS=0,3,4` restores the three raid nights, which is the
@@ -663,8 +663,8 @@ Two fixes, both shipped in bot **3.1.84**:
 KB) + ONE 6.2 MB sweep a week + 2 calls per deploy — against 381 calls / 140 MB
 measured over the preceding 24h.**
 
-## 2026-08-27/3 — Why this matters for the API request to Moncs
-*2026-08-27 · DECISIONS-2026-08-27.md · Revised ask to OpenDKP owner: weekly pull*
+## 2026-08-27/3 — Why this matters for the API request to the upstream maintainer
+*2026-08-27 · DECISIONS-2026-08-27.md · Revised ask to the upstream maintainer: weekly pull*
 
 It changes what we are asking for. The ask is no longer "let us keep polling" —
 it is:

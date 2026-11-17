@@ -11,7 +11,7 @@
 -- "1,330 calls / 91.3 MB" over 24h against a true 2,074 / 115.9 MB.
 --
 -- ⚠ It under-reported BY ~36%, IN OUR FAVOUR, on the one page whose entire
--- purpose is that OpenDKP's operator does not have to take our word for our
+-- purpose is that the upstream maintainer does not have to take our word for our
 -- traffic. A page like that being wrong in the flattering direction is worse
 -- than it being down.
 --

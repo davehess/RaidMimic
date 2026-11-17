@@ -22,8 +22,8 @@ const https = require('https');
 // OPENDKP_HALT=1 stops EVERY outbound request to OpenDKP — background syncs,
 // the register-queue drain, and on-demand slash commands alike.
 //
-// Why this exists (2026-08-25): OpenDKP's owner posted that API Gateway
-// requests had "skyrocketed", pushing his infrastructure bill past $200 for
+// Why this exists (2026-08-25): the upstream maintainer reported that API Gateway
+// requests had "skyrocketed", pushing the infrastructure bill past $200 for
 // the month, and asked anyone running automation to make contact. Wolf Pack
 // runs the heaviest automation we know of against that API — the 30-minute
 // background sync alone can issue ~50 raid-detail calls per pass, plus
@@ -41,7 +41,7 @@ const https = require('https');
 // TWO halts, deliberately. The env var needs a Railway redeploy (~90s); the
 // runtime flag is pushed in from the 60s overlay_tuning refresh in index.js, so
 // an officer can stop the fleet from /admin/overlays with NO deploy at all.
-// That mattered on 2026-08-26: we asked OpenDKP's owner to unblock our IP on
+// That mattered on 2026-08-26: we asked the upstream maintainer to unblock our IP on
 // the promise that we could stop again quickly, and "quickly" cannot mean a
 // build. Either one halts; only clearing BOTH resumes.
 let _runtimeHalt = false;
@@ -66,11 +66,11 @@ function _logHalt(where) {
 }
 
 // ── Outbound governor ─────────────────────────────────────────────────────────
-// 2026-08-25 (Moncs incident): the dashboard's uncached 7s auction poll put
+// 2026-08-25 (rate-limit incident): the dashboard's uncached 7s auction poll put
 // 1,678 calls / 1.1 GB on OpenDKP's API Gateway in one afternoon, from ONE
 // open dashboard. Caching upstream fixes the known caller — this governor is
 // the guarantee that no FUTURE caller can do it again, and the ready position
-// for the rate limiting Moncs is likely to add. Same placement philosophy as
+// for the rate limiting the upstream maintainer is likely to add. Same placement philosophy as
 // the halt: at the two primitives, where it cannot be bypassed.
 //
 //   • Sliding-window budget: OPENDKP_MAX_CALLS_PER_MIN (default 60, 0 = off).
@@ -109,16 +109,16 @@ function _admitCall(where) {
 }
 
 // ── Public call counter ─────────────────────────────────────────────────────
-// Feeds wolfpack.quest/opendkp, which is open-access so OpenDKP's owner can
-// watch our volume himself rather than take our word for it.
+// Feeds wolfpack.quest/opendkp, which is open-access so the upstream maintainer can
+// watch our volume themselves rather than take our word for it.
 //
 // Aggregated in memory and flushed once a minute. A row per call would be the
 // very write-amplification pattern that caused this incident — writing our
 // apology in the same handwriting as the offence.
 //
-// Endpoints are NORMALIZED to the shape his API Gateway groups by
+// Endpoints are NORMALIZED to the shape the upstream API Gateway groups by
 // (`/clients/{client}/auctions/{id}/bids`), so the page can be read straight
-// across against his own log table instead of needing a translation step.
+// across against their own log table instead of needing a translation step.
 function _normalizeEndpoint(pathname, hostname) {
   // AWS Cognito is OUR identity provider, not OpenDKP. Counting its calls is
   // useful (a token storm is still a bug of ours) but showing them as OpenDKP
@@ -509,7 +509,7 @@ async function getAuctions(page = 1) {
 // GET /clients/{name}/auctions/active — "Get Active Auctions" in OpenDKP's own
 // Postman doc. Returns ONLY currently-open auctions, which is all the live
 // bidding panel ever needed — the full /auctions list we polled instead is the
-// entire settled history (~665 KB per response, measured by OpenDKP's owner,
+// entire settled history (~665 KB per response, measured by the upstream maintainer,
 // 2026-08-25). Same shape family as /auctions; each auction carries Bids[].
 async function getActiveAuctions() {
   const headers = await _bearerHeaders();
@@ -666,8 +666,8 @@ async function getRaids(opts = {}) {
 
 // GET /clients/{name}/dkp — the authoritative standings array (Models[]).
 //
-// ⚠ THIS IS THE CALL MONCS CAUGHT (2026-08-27): "Do you purposefully call /dkp
-// once a minute?" It used to be made by every member's Mimic, DIRECTLY to
+// ⚠ THIS IS THE CALL THE UPSTREAM MAINTAINER CAUGHT (2026-08-27): once a minute
+// from one address. It used to be made by every member's Mimic, DIRECTLY to
 // api.opendkp.com, once a minute each — bypassing this module entirely, so it
 // never appeared in our call counter, was not covered by the outbound governor,
 // and scaled linearly with how many people had Mimic open.

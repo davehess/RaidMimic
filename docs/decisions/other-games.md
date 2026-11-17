@@ -2,23 +2,6 @@
 
 World of Warcraft and anything outside EverQuest. Oldest first. Find an entry by its ID in [the index](README.md); new decisions go in `inbox/` and are merged here.
 
-## §445 — WoW parses: parses.gg exists and does the uploader half (open, the guild lead's pick, 2026-10-26)
-*2026-09-21 · DECISIONS-2026-09-21.md · WoW parses.gg already does uploader half*
-
-The guild lead: *"on the wow front it looks like https://parses.gg/ exists and does a lot of what we're already doing,
-discord bot, desktop client"*. Read 2026-10-26 (its site blocks cloud addresses; read through a public page reader):
-- **What it is:** combat logs for every WoW version, Classic Era to Retail, with WoW Forever boards opening from the beta
-  (launch Nov 4). A desktop client (Windows, Apple silicon) uploads each pull within a minute; a Discord bot posts each pull
-  and answers /rank /guild /build; a 3D position replay; custom widget boards. Reading needs no account.
-- **Open by design:** a no-auth JSON API (20 req/s per address), the whole public dataset as daily Parquet dumps
-  (pseudonymised characters, real guild names, no wipes, no raw logs), and signed per-owner webhooks (`fight.indexed`,
-  HMAC sha256, retried, `X-Parses-Delivery` idempotency key). Small so far: 15,487 fights, a 4.5 MB dump.
-- **Ours:** a Classic WoW reader built on `wow-land` / `claude/wow-classic-reader`, never landed (its `encounters`
-  migration unapplied).
-- **The pick:** A, use parses.gg for WoW parses and keep our guild layer (sign-ups, DKP, loot, attendance, Discord cards
-  from its webhook / API) — recommended; B, ship our own reader. A webhook carries only its owner's fights, so a
-  guild-wide card needs the guild endpoint polled or each raider's webhook registered: verify before building.
-
 ## §377 — Other games: a thin reader per game; the EQ family and Classic WoW first; Monsters & Memories on hold (2026-10-19)
 *2026-10-19 · DECISIONS-2026-09-21.md · Thin reader per game, EQ family and WoW first*
 

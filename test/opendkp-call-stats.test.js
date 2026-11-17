@@ -1,13 +1,13 @@
 // The public call counter behind wolfpack.quest/opendkp.
 //
-// Context: on 2026-08-25 our traffic cost OpenDKP's owner real money and got
-// our IP blocked. He is unblocking us on our word, so the counter is the
+// Context: on 2026-08-25 our traffic cost the upstream maintainer real money and got
+// our IP blocked. It was unblocked on our word, so the counter is the
 // evidence replacing that word. Two properties therefore matter more than the
 // feature working at all:
 //
-//   1. Endpoint names must match the shape HIS API Gateway logs group by, or
-//      the page cannot be read across against his table and is just our numbers
-//      in our format — which is what he already had reason to distrust.
+//   1. Endpoint names must match the shape the upstream API Gateway logs group by, or
+//      the page cannot be read across against their table and is just our numbers
+//      in our format — which is what they already had reason to distrust.
 //   2. The counter must not become the thing it measures. A row per call is
 //      exactly the write amplification that caused the incident.
 //
@@ -40,7 +40,7 @@ describe('endpoint normalization matches OpenDKP\'s own log shape', () => {
   });
 
   it('reproduces the exact rows from his 6-hour sample', () => {
-    // Verbatim from the API Gateway table he shared, 2026-08-25.
+    // Verbatim from the upstream API Gateway table, 2026-08-25.
     expect(n('/clients/wolfpack/dkp')).toBe('/clients/{client}/dkp');
     expect(n('/clients/wolfpack/characters')).toBe('/clients/{client}/characters');
   });

@@ -1502,7 +1502,7 @@ Tests: `test/feedback-log-slice.test.js` (agent + card), `test/feedback-ingest.t
 
 ### raidmimic.com landing page (web 1.9.5, 2026-10-18, [beta]; DECISIONS §370)
 - **What:** the guild leaders' door, game-agnostic: what the platform does, each block tagged live / alpha / coming,
-  works-with (PQ Companion, GINA, EQLogParser), the consent model, what it costs (no price list), "any solved world",
+  works-with (GINA, EQLogParser), the consent model, what it costs (no price list), "any solved world",
   and Register interest. The one layout is **Pick your path** (`PathsLayout.tsx`, the guild lead's pick of 2026-10-23, web 2.1.16;
   it replaced Scene-first, §409): three doors (**Player**, **Guild**, **Self-host**), then **See it run** (the layered mascot hero,
   the tabbed player of looping recordings of the real overlays, **For raiders** and **For raid leaders and guild leaders**, and the
@@ -5595,7 +5595,7 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   ⚠ **Two halts now.** `OPENDKP_HALT` (env, needs a Railway redeploy) and
   `flag_opendkp_halt` in the `overlay_tuning` map (no deploy, lands within the
   60s cache via `_refreshOverlayTuningCache` → `setRuntimeHalt`). The second is
-  the one promised to Moncs as "we can stop quickly" — a build is not quickly.
+  the one promised to the upstream maintainer as "we can stop quickly" — a build is not quickly.
   Either halts; both must be clear to resume. Blocked calls are still COUNTED,
   so the page can tell "the kill switch works" from "the bot fell over".
   Tests: `test/opendkp-call-stats.test.js`.
@@ -5614,7 +5614,7 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   Tests: `test/bid-prefs-roaming.test.js`.
 - **Loot bidding serving (#108/#121)** — `server-panel` keys `opendkp-auth-config`
   / `item-history` / `bid-history`; `_lootItemSummary`/`_familyDkpTotals`.
-  Since bot 3.1.72 (the Moncs incident) the `auctions`/`my-bids` keys read
+  Since bot 3.1.72 (the rate-limit incident) the `auctions`/`my-bids` keys read
   OpenDKP's `GET /clients/{name}/auctions/active` through ONE shared cache
   (`_panelAuctions`: 15s TTL live / 120s idle / stale-on-error; roster 1h via
   `_panelCharacters`) — N dashboards cost one upstream call, and the my-bids

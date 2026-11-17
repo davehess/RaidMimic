@@ -7540,9 +7540,9 @@ function _pickAccountDkpFromModels(models, main, familyNames) {
 }
 
 // ── Panel standings cache (#… agent third-party removal, 2026-08-27) ────────
-// Moncs: "Do you purposefully call /dkp once a minute? Looking back over the
-// past 60 minutes, it looks like theres about 54 calls from <ip> calling it".
-// That ip was a MEMBER'S PC. Every open Mimic asked OpenDKP for the full 472-
+// The upstream maintainer asked whether we purposefully call /dkp once a minute:
+// about 54 calls an hour from one address.
+// That address was a MEMBER'S PC. Every open Mimic asked OpenDKP for the full 472-
 // character standings array once a minute, directly, to render one number.
 //
 // The standings now live here — one fetch for the whole guild, through
@@ -8222,7 +8222,7 @@ async function _handleAgentServerPanel(req, res) {
     }
     if (key === 'account-dkp') {
       // The authoritative pooled account balance, from OpenDKP's own standings.
-      // Replaces the per-member DIRECT call that Moncs caught on 2026-08-27 —
+      // Replaces the per-member DIRECT call that the upstream maintainer caught on 2026-08-27 —
       // see _panelStandings above. One upstream fetch serves the whole guild,
       // gated on an auction being open (or a raid window), and it is counted,
       // governed and haltable like every other call this bot makes.
@@ -12839,7 +12839,7 @@ async function _refreshOverlayTuningCache() {
     // No-deploy OpenDKP kill switch. `flag_opendkp_halt = 1` on /admin/overlays
     // stops every outbound OpenDKP call within one cache period (60s). The env
     // var OPENDKP_HALT still works and still needs a redeploy; this is the one
-    // we promised OpenDKP's owner we could hit "quickly" when he unblocks us,
+    // we promised the upstream maintainer we could hit "quickly" when they unblock us,
     // and a build is not quickly. Either halts; both must be clear to resume.
     try {
       require('./utils/opendkp').setRuntimeHalt(

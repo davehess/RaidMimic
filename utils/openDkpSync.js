@@ -1316,7 +1316,7 @@ async function _syncListEndpoint({
     const freshRows = rows.filter(r => Number(r[pkCol]) > priorMax);
     const toSend    = fullSweep ? rows : freshRows;
 
-    // Early break (2026-08-25, the Moncs incident): these endpoints have no
+    // Early break (2026-08-25, the rate-limit incident): these endpoints have no
     // "since" filter, so this walk made OpenDKP re-serialise its ENTIRE audit
     // table (~15 pages, 48k rows) every 30 minutes for three months. The pages
     // are newest-first, so once a page yields nothing above our watermark,

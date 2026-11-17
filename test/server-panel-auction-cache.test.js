@@ -3,7 +3,7 @@
 // 2026-08-25, from OpenDKP's own API Gateway logs: the "auctions"/"my-bids"
 // panel keys forwarded EVERY dashboard poll upstream — 1,678 calls / 1.1 GB in
 // one afternoon from ONE open dashboard (7s poll × ~665 KB full-history
-// responses), which got our IP blocked by OpenDKP's owner. The fix this file
+// responses), which got our IP blocked by the upstream maintainer. The fix this file
 // characterizes: the panel now reads GET /clients/{name}/auctions/active
 // (OpenDKP's own documented endpoint) through ONE shared bot-side cache —
 // 15s TTL while auctions are live, 120s idle — so N dashboards cost the same
