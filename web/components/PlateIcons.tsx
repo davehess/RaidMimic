@@ -24,6 +24,13 @@ export const IconTimer = (p: IconProps) => (
 export const IconBlades = (p: IconProps) => (
   <Frame {...p}><path d="M3.4 3.4 12 12M16.6 3.4 8 12" /><path d="M6.2 16.4 8 12M13.8 16.4 12 12" /><path d="M10.4 13.6 13.6 10.4M6.4 10.4 9.6 13.6" /></Frame>
 );
+// The kill / raid crest (the guild lead's pick N7, 2026-11-17): the one FILLED icon in the set, because an outline
+// shrinks to ~1px at text size and the thin blades read as ✕. Crossed blades are cut out of a solid shield.
+export const IconCrest = ({ className = '' }: IconProps) => (
+  <svg viewBox="0 0 20 20" width="20" height="20" className={`fill-current ${className}`} aria-hidden="true" focusable="false">
+    <path fillRule="evenodd" d="M3.4 4.2 10 2.4l6.6 1.8v5.6c0 4-3 6.8-6.6 8.6-3.6-1.8-6.6-4.6-6.6-8.6ZM6.2 6.2l.9-.9 2.9 2.9 2.9-2.9.9.9-2.9 2.9 2.4 2.4.9-.9.7.7-1 1 1 1-.7.7-1-1-1 1-.7-.7.9-.9L10 10l-2.4 2.4.9.9-.7.7-1-1-1 1-.7-.7 1-1-1-1 .7-.7.9.9L9.1 9.1Z" />
+  </svg>
+);
 export const IconRank = (p: IconProps) => (
   <Frame {...p}><path d="M10 3.2 12 7.4l4.6.6-3.3 3.2.8 4.6L10 13.6 5.9 15.8l.8-4.6L3.4 8l4.6-.6Z" /></Frame>
 );
@@ -75,13 +82,13 @@ export const ICON_INLINE = 'inline-block h-[1em] w-[1em] align-[-0.125em]';
 
 // Who a step is for (solo / group / raid) and what a flag step asks of you (kill, trial, ...). Both sit beside
 // their label or carry an aria-label at the call site, so the glyph stays decorative.
-const WHO_ICONS = { solo: IconSolo, group: IconGroup, raid: IconBlades } as const;
+const WHO_ICONS = { solo: IconSolo, group: IconGroup, raid: IconCrest } as const;
 export function WhoIcon({ who, className = ICON_INLINE }: { who: keyof typeof WHO_ICONS; className?: string }) {
   const I = WHO_ICONS[who];
   return <I className={className} />;
 }
 const KIND_ICONS = {
-  kill: IconBlades, trial: IconTrial, quest: IconQuest, event: IconSpark, loot: IconLoot, hail: IconHail, touch: IconTouch,
+  kill: IconCrest, trial: IconTrial, quest: IconQuest, event: IconSpark, loot: IconLoot, hail: IconHail, touch: IconTouch,
 } as const;
 export function KindIcon({ kind, className = ICON_INLINE }: { kind: string; className?: string }) {
   const I = KIND_ICONS[kind as keyof typeof KIND_ICONS] ?? IconSpark;
