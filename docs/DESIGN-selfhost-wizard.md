@@ -711,6 +711,10 @@ and the same never-refetch guarantee.
   plan and the domain's nameservers at Vercel; Supabase Auth carries the matching redirect entries (`raidmimic.com`,
   `www.raidmimic.com`, `*.raidmimic.com`, done 2026-10-31). The Hobby-plan caps in this section (CPU, deployments, storage) do
   not carry over: a hosted deployment is Pro. A self-hosting guild uses its own domain and needs none of it.
+  **Superseded 2026-11-17 (§605):** no nameserver move and no Vercel wildcard. DNS stays at the registrar (Porkbun, DNSSEC on)
+  with one wildcard CNAME `*.raidmimic.com → cname.vercel-dns.com`, already in place; each guild's name is then added to the
+  Vercel project one by one (`<slug>.raidmimic.com`), and Vercel issues that name's certificate itself. Hobby allows 50 domains
+  per project (16 used on 2026-11-17), so the per-guild cost is one API call until roughly 30 guilds.
 - **2026-10-31 — the per-second threat feed leaves Postgres for object storage** (hosted design §7a, recommended in §484; not
   built). 41 MB of a ~55 MB raid night is the threat feed; at 1,000 guilds it is 500 GB of hot rows, against about 20 GB of
   gzipped files at roughly $0.02/GB/mo, with Postgres keeping the per-fight summary. This is the line that keeps $25 a guild
