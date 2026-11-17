@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-free-register-2026-11-17',
+    title: 'Registering your guild is free',
+    version: 'Web 2.2.11',
+    date: '2026-11-17',
+    headline: 'raidmimic.com now says up front that registering a guild is free, and only guild hosting costs money.',
+    features: [
+      { name: 'Free, said first', blurb: 'The guild sign-up opens with "Registering is free": no sign-in, no card, no commitment. Hosting is $25 a month, only if you choose it.' },
+      { name: 'Cleaner pages', blurb: 'The "beta" boxes are gone from the top of the sign-up, set-up and legal pages.' },
+    ],
+    fixes: [
+      'The guild plan no longer offers a free first month; the 7-day refund stays.',
+    ],
+  },
+  {
     key: 'pop-raid-tiers-2026-11-16',
     title: 'The raid night plan, by tier',
     version: 'Web 2.2.10',
