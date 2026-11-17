@@ -114,7 +114,7 @@ import PopShell from './PopShell';
 import PopNavPanel from './PopNavPanel';
 import PopMinePanel from './PopMinePanel';
 import EssencesFold from './EssencesFold';
-import { KindIcon } from '@/components/PlateIcons';
+import { ICON_INLINE, IconSolo, KindIcon } from '@/components/PlateIcons';
 import {
   ELEMENTAL_TIER, demoMine, essencesPlace, mineProgress, navGroups, sideVariant, tierAnchor, zoneAnchor,
   type RaidNextRow,
@@ -766,7 +766,7 @@ export default async function PopFlagsPage(
                   {s.silent && <span title="The server prints no flag line for this step; only the Seer's guided meditation shows it"> 🔇</span>}
                 </span>
                 <span className="text-xs whitespace-nowrap shrink-0">
-                  <span className={n > 0 ? 'text-green' : 'text-dim'}>👤 {n}</span>
+                  <span className={n > 0 ? 'text-green' : 'text-dim'}><IconSolo className={ICON_INLINE} /> {n}</span>
                   {selfOnly > 0 && (
                     <span className="text-gold" title={`${selfOnly} of them ticked by their owners on the site, not seen by Mimic or /who`}> ☑{selfOnly}</span>
                   )}
@@ -783,7 +783,7 @@ export default async function PopFlagsPage(
               <li key={f} className="text-[13px] leading-5 flex items-baseline justify-between gap-3">
                 <span className="text-dim min-w-0"><KindIcon kind={def?.kind ?? 'event'} /> {def?.label ?? f}{def && !def.verified && ' *'}</span>
                 <span className="text-xs shrink-0">
-                  <span className={n > 0 ? 'text-green' : 'text-dim'}>👤 {n}</span>
+                  <span className={n > 0 ? 'text-green' : 'text-dim'}><IconSolo className={ICON_INLINE} /> {n}</span>
                   {(selfFlagCount.get(f) ?? 0) > 0 && (
                     <span className="text-gold" title={`${selfFlagCount.get(f)} of them ticked by their owners on the site, not seen by Mimic or /who`}> ☑{selfFlagCount.get(f)}</span>
                   )}
@@ -1152,7 +1152,7 @@ export default async function PopFlagsPage(
                         <span className="text-text"><KindIcon kind={s.how} /> {s.label}</span>
                         {s.where && <span className="text-dim"> · {s.where}</span>}
                         {s.silent && <span title="The server prints no flag line for this step; only the Seer's guided meditation shows it"> 🔇</span>}
-                        <span className={stepHolders(s.key) > 0 ? 'text-green' : 'text-dim'}> · 👤 {stepHolders(s.key)}</span>
+                        <span className={stepHolders(s.key) > 0 ? 'text-green' : 'text-dim'}> · <IconSolo className={ICON_INLINE} /> {stepHolders(s.key)}</span>
                       </div>
                       {need.length > 0 && (
                         <div className="text-xs text-dim pl-4">
@@ -1354,7 +1354,7 @@ export default async function PopFlagsPage(
             })}
             <p className="text-[10px] text-dim text-center">
               Chart topology after Samanna&apos;s classic planar progression chart · ⤓ gate flag with holder count ·
-              👤 characters holding the flag · &quot;N in&quot; = can enter today · counts include characters /who
+              <IconSolo className={ICON_INLINE} /> characters holding the flag · &quot;N in&quot; = can enter today · counts include characters /who
               showed, or loot placed, inside a gated plane · <span className="text-gold">☑ N</span> of the holders are an owner&apos;s
               own tick on the site
             </p>

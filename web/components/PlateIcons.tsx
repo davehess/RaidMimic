@@ -22,7 +22,7 @@ export const IconTimer = (p: IconProps) => (
   <Frame {...p}><circle cx="10" cy="11" r="6.4" /><path d="M10 7.6V11l2.6 1.7M7.6 2.6h4.8" /></Frame>
 );
 export const IconBlades = (p: IconProps) => (
-  <Frame {...p}><path d="M3.4 3.4 12 12M16.6 3.4 8 12" /><path d="M6.2 16.4 8 12M13.8 16.4 12 12" /></Frame>
+  <Frame {...p}><path d="M3.4 3.4 12 12M16.6 3.4 8 12" /><path d="M6.2 16.4 8 12M13.8 16.4 12 12" /><path d="M10.4 13.6 13.6 10.4M6.4 10.4 9.6 13.6" /></Frame>
 );
 export const IconRank = (p: IconProps) => (
   <Frame {...p}><path d="M10 3.2 12 7.4l4.6.6-3.3 3.2.8 4.6L10 13.6 5.9 15.8l.8-4.6L3.4 8l4.6-.6Z" /></Frame>
