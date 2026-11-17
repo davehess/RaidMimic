@@ -184,12 +184,10 @@ describe('release-mimic.yml — signing is gated on configuration', () => {
     expect(i(/Verify Authenticode/)).toBeLessThan(i(/Build release notes/));
   });
 
-  it('the release body says signed-by only when signing ran, otherwise keeps the unsigned line', () => {
+  it('the release body never names the signer (DECISIONS §607: the certificate carries a person\'s name)', () => {
     const notes = byName(/Build release notes/);
-    expect(notes.env.SIGNED_BY).toContain(GATE);
-    expect(notes.env.SIGNED_BY).toContain('steps.verify.outputs.publisher');
-    expect(notes.run).toMatch(/code-signed by %s/);
-    expect(notes.run).toMatch(/not code-signed \(SmartScreen/);
+    expect(notes.env?.SIGNED_BY).toBeUndefined();
+    expect(notes.run).not.toMatch(/steps\.verify\.outputs\.publisher|code-signed by/);
   });
 
   it('never echoes a secret', () => {

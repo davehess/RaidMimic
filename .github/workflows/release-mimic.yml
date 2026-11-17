@@ -354,50 +354,42 @@ jobs:
         if: steps.tag.outputs.build == 'true'
         shell: bash
         env:
-          # "signed by" only when the verify step ran and passed; the name goes through env, never
-          # interpolated into the script.
-          SIGNED_BY: ${{ steps.sign.outputs.configured == 'true' && steps.verify.outputs.publisher || '' }}
+          # Where this push started (all zeros for a new branch, empty on a manual run). The notes and the FB
+          # numbers come from every commit of the push, so a sync or docs commit on top cannot become the release.
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          subject=$(git log -1 --pretty=%s HEAD)
-          fullbody=$(git log -1 --pretty=%b HEAD)
-          # PLAYER-FACING NOTES FIRST. Raiders read these — they want gameplay
-          # impact, not engineering. If the version-bump commit provides a plain-
-          # language block between <!--player-notes--> and <!--/player-notes-->
-          # markers, use ONLY that as the release body. Otherwise fall back to the
-          # technical commit body (older/beta commits, or any that forget the
-          # block, still get notes). The #mimic-releases announcer shows the part
-          # above the --- either way.
-          notes=$(printf '%s\n' "$fullbody" | sed -n '/<!--[[:space:]]*player-notes[[:space:]]*-->/,/<!--[[:space:]]*\/player-notes[[:space:]]*-->/p' | sed '1d;$d')
-          if [ -n "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
-            header=''
-            body="$notes"
-          else
-            # Body minus git trailers (Co-Authored-By / Claude-Session / Signed-off-by).
-            header="**$subject**"
-            body=$(printf '%s\n' "$fullbody" | grep -viE '^(co-authored-by|claude-session|signed-off-by):' || true)
+          # Release text is for a raider on a phone (DECISIONS §607, the guild lead's pick B, 2026-11-17):
+          #   above the ---: the newest player-notes block in the push, else ONE line, the newest commit title
+          #     that is not a sync (never a technical body). #mimic-releases reposts only this part.
+          #   below the ---: the FB numbers the push closes (numbers only, never a report's text), and how to get
+          #     Mimic. No signing line: it named a person, and a signed build needs no SmartScreen steps.
+          rng=(-1 HEAD)
+          if [ -n "${BEFORE:-}" ] && ! printf '%s' "$BEFORE" | grep -qE '^0+$'; then
+            git fetch -q --deepen=200 origin "${GITHUB_REF:-HEAD}" 2>/dev/null || true
+            if git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then rng=("$BEFORE..HEAD"); fi
           fi
-          # Trim leading + trailing blank lines (pure awk — no `tac`, which the
-          # Windows runner's Git Bash may not ship).
-          body=$(printf '%s\n' "$body" | awk '
-            { lines[NR]=$0 }
-            END {
-              s=1; while (s<=NR && lines[s] ~ /^[[:space:]]*$/) s++
-              e=NR; while (e>=s && lines[e] ~ /^[[:space:]]*$/) e--
-              for (i=s;i<=e;i++) print lines[i]
-            }')
+          notes=''
+          for c in $(git log --format=%H "${rng[@]}"); do
+            n=$(git log -1 --format=%b "$c" | sed -n '/<!--[[:space:]]*player-notes[[:space:]]*-->/,/<!--[[:space:]]*\/player-notes[[:space:]]*-->/p' | sed '1d;$d')
+            if [ -n "$(printf '%s' "$n" | tr -d '[:space:]')" ]; then notes="$n"; break; fi
+          done
+          title=$( (git log --no-merges --format=%s "${rng[@]}" | grep -viE '^sync:' | head -1) || true)
+          [ -n "$title" ] || title=$(git log -1 --format=%s HEAD)
+          # Same close words as utils/feedbackRefs.js: "Fixes FB-4", "Implements: FB-5, FB-6 and FB-7".
+          fbs=$( (git log --format=%B "${rng[@]}" \
+            | grep -oiE '\b(fixes|implements|closes|resolves)[[:space:]]*:?[[:space:]]*FB-[0-9]+([[:space:]]*(,|&|and)[[:space:]]*FB-[0-9]+)*' \
+            | grep -oiE 'FB-[0-9]+' | tr 'fb' 'FB' | sort -t- -k2,2n -u | paste -sd, - | sed 's/,/, /g') || true)
           {
-            if [ -n "$header" ]; then printf '%s\n' "$header"; fi
-            if [ -n "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
-              if [ -n "$header" ]; then printf '\n'; fi
-              printf '%s\n' "$body"
+            if [ -n "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+              # Trim blank edge lines (pure awk; the Windows runner's Git Bash may not ship tac).
+              printf '%s\n' "$notes" | awk '{ l[NR]=$0 } END { s=1; while (s<=NR && l[s] ~ /^[[:space:]]*$/) s++; e=NR; while (e>=s && l[e] ~ /^[[:space:]]*$/) e--; for (i=s;i<=e;i++) print l[i] }'
+            else
+              printf '**%s**\n' "$title"
             fi
             printf '\n---\n'
-            if [ -n "$SIGNED_BY" ]; then
-              printf 'Windows installer — code-signed by %s. Bundles its own Node runtime; auto-updates in place via electron-updater, no re-download.\n' "$SIGNED_BY"
-            else
-              printf 'Windows installer — not code-signed (SmartScreen → More info → Run anyway). Bundles its own Node runtime; auto-updates in place via electron-updater, no re-download.\n'
-            fi
+            if [ -n "$fbs" ]; then printf 'Fixes %s.\n\n' "$fbs"; fi
+            printf 'New to Mimic? Download Raid-Mimic-Setup below. Already have it? It updates itself.\n'
           } > "$GITHUB_WORKSPACE/release-notes.md"
           echo "----- release-notes.md -----"; cat "$GITHUB_WORKSPACE/release-notes.md"
 
