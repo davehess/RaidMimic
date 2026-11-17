@@ -1,0 +1,96 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wolf Pack</title><link rel="stylesheet" href="v2.css">
+<style>
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;margin-top:22px}
+.tier{display:grid;grid-template-columns:86px repeat(4,minmax(0,1fr));gap:8px;align-items:stretch;margin-bottom:8px}
+.tl{font-size:12px;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;padding-top:12px}
+.cell{background:var(--sec);border:1px solid var(--line);border-radius:9px;padding:9px 11px;min-height:66px}
+.cell b{display:block;font:600 14px Cinzel,serif}
+.cell .who{font-size:12px;color:var(--t2)}
+.cell .d{font-size:12px;margin-top:3px}
+.cell.done{border-color:rgba(224,177,79,.45);background:linear-gradient(180deg,rgba(224,177,79,.10),rgba(224,177,79,.02))}
+.cell.done .d{color:var(--gold2)}
+.cell.now{border-color:var(--blue);box-shadow:0 0 0 1px rgba(121,172,255,.25) inset}.cell.now .d{color:var(--blue)}
+.cell.none{opacity:.55}
+.empty{visibility:hidden}
+.night{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:14px;padding:12px 14px;border-bottom:1px solid var(--line);align-items:baseline}
+.night:last-child{border-bottom:0}
+.night .t b{font-weight:600}.night .t div{font-size:12px;color:var(--t3)}
+.night .s{font-size:14px}.night .s em{font-style:normal;color:var(--t3)}
+.night .z{font:600 13px Cinzel,serif;color:var(--gold2);margin-right:6px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);font-size:14px}.kv:last-child{border-bottom:0}
+.kv span{color:var(--t3)}
+.up{padding:11px 14px;border-bottom:1px solid var(--line)}.up:last-child{border-bottom:0}
+.up b{font-weight:600}.up .raid{font:600 15px Cinzel,serif;display:block;margin-top:2px}
+@media(max-width:700px){.cols{grid-template-columns:1fr}.tier{grid-template-columns:repeat(2,minmax(0,1fr))}.tl{grid-column:1/3;padding:4px 0 0}.empty{display:none}
+ .night{grid-template-columns:1fr}.night .r{text-align:left}}
+</style></head><body>
+<header class="bar"><a class="logo"><span class="chest"></span>Raid Mimic</a>
+<span class="era">Quarm · <b>Planes of Power</b> ▾</span><span class="sep"></span>
+<a class="tab">Home</a><a class="tab">Raids</a><a class="tab">Progress</a><a class="tab on">Guilds</a><a class="tab off">Guild console</a>
+<span class="grow"></span><span class="k">Search raids, guilds, characters <kbd>Ctrl K</kbd></span><span class="me"><span class="av"></span>Your cleric · 65</span></header>
+<main class="page">
+ <div class="crumb">Guilds · Quarm</div>
+ <div class="head"><div><h1>Wolf Pack</h1><p>Sunday, Wednesday and Thursday, 8:30 to 11:30 PM Eastern · takes guests on a 6-hour pass</p></div>
+  <div class="stats"><div class="stat"><b class="n">12 / 15</b><span>PoP raid bosses down</span></div><div class="stat"><b>Xegony</b><span>now on</span></div><div class="stat"><b>Sun Nov 15</b><span>last raid</span></div><div class="stat"><b>Wed 8:30</b><span>next raid</span></div></div></div>
+
+ <div class="cols"><div>
+  <section class="sec">
+   <div class="sech"><h2>Through the planes</h2><span>each plane’s raid boss and the night it first fell</span></div>
+   <div class="tier"><div class="tl">Tier 1</div>
+    <div class="cell done"><b>Innovation</b><div class="who">Manaetic Behemoth</div><div class="d n">Oct 4</div></div>
+    <div class="cell done"><b>Disease</b><div class="who">Grummus</div><div class="d n">Oct 9</div></div><div class="cell empty"></div><div class="cell empty"></div></div>
+   <div class="tier"><div class="tl">Tier 2</div>
+    <div class="cell done"><b>Valor</b><div class="who">Aerin`Dar</div><div class="d n">Oct 14</div></div>
+    <div class="cell done"><b>Terris Thule</b><div class="who">Terris Thule</div><div class="d n">Oct 14</div></div>
+    <div class="cell done"><b>Crypt of Decay</b><div class="who">Bertoxxulous</div><div class="d n">Oct 15</div></div>
+    <div class="cell done"><b>Torment</b><div class="who">Saryrn</div><div class="d n">Oct 18</div></div></div>
+   <div class="tier"><div class="tl">Tier 3</div>
+    <div class="cell done"><b>Thunder</b><div class="who">Agnarr</div><div class="d n">Oct 15</div></div>
+    <div class="cell done"><b>Temple of Marr</b><div class="who">Mithaniel Marr</div><div class="d n">Oct 18</div></div>
+    <div class="cell done"><b>Tactics</b><div class="who">Rallos Zek</div><div class="d n">Oct 21</div></div>
+    <div class="cell done"><b>Sol Ro</b><div class="who">Solusek Ro</div><div class="d n">Oct 22</div></div></div>
+   <div class="tier"><div class="tl">Elemental</div>
+    <div class="cell done"><b>Water</b><div class="who">Coirnav</div><div class="d n">Nov 5</div></div>
+    <div class="cell done"><b>Fire</b><div class="who">Fennin Ro</div><div class="d n">Nov 8</div></div>
+    <div class="cell now"><b>Air</b><div class="who">Xegony</div><div class="d">now on · 6 named down</div></div>
+    <div class="cell none"><b>Earth</b><div class="who">The Rathe Council</div><div class="d dim">no kill on record</div></div></div>
+   <div class="tier"><div class="tl">Time</div>
+    <div class="cell none"><b>Plane of Time</b><div class="who">Quarm</div><div class="d dim">no kill on record</div></div><div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div></div>
+  </section>
+
+  <section class="sec">
+   <div class="sech"><h2>Raid nights</h2><span>newest first · a night opens into its fights</span></div>
+   <div class="box">
+    <div class="night"><div class="t"><b>Sun Nov 15</b><div class="n">8:50 to 11:27 PM</div></div><div class="s"><span class="z">Plane of Air</span>Baltaldor the Cursed, Queen Silandria, Lossenmachar and Sigismond Windwalker down</div><div class="r sub n">4 kills ▾</div></div>
+    <div class="night"><div class="t"><b>Thu Nov 12</b><div class="n">8:50 to 11:14 PM</div></div><div class="s"><span class="z">Tower of Solusek Ro</span>Xuzl, Arlyxir, Jiva and the Guardian of Dresolik, then Solusek Ro</div><div class="r sub n">5 kills ▾</div></div>
+    <div class="night"><div class="t"><b>Wed Nov 11</b><div class="n">evening</div></div><div class="s"><span class="z">Plane of Air</span>first kills of Baltaldor the Cursed, Calebgrothiel and Arch Mage Alchtonion</div><div class="r sub n">3 kills ▾</div></div>
+    <div class="night"><div class="t"><b>Sun Nov 8</b><div class="n">evening</div></div><div class="s"><span class="z">Doomfire</span>first kill of Fennin Ro, Tyrant of Fire</div><div class="r sub n">▾</div></div>
+    <div class="night"><div class="t"><b>Thu Nov 5</b><div class="n">evening</div></div><div class="s"><span class="z">Reef of Coirnav</span>Grioihin, Hydrotha, Krziik and Ofossaa, then the first kill of Coirnav</div><div class="r sub n">5 kills ▾</div></div>
+   </div>
+  </section>
+ </div>
+
+ <aside>
+  <section class="sec">
+   <div class="sech"><h2>Open to guests</h2><span>next 7 days</span></div>
+   <div class="box">
+    <div class="up"><b>Wed Nov 18 · 8:30 PM</b><span class="raid">Eryslai, the Kingdom of Wind</span><div class="sub">short 2 healers · <span class="warn">needs Maelin’s power source</span></div><div style="margin-top:8px"><a class="btn p">Ask to join</a></div></div>
+    <div class="up"><b>Thu Nov 19 · 8:30 PM</b><span class="raid dim">Target not set yet</span></div>
+    <div class="up"><b>Sun Nov 22 · 8:30 PM</b><span class="raid dim">Target not set yet</span></div>
+   </div>
+  </section>
+  <section class="sec">
+   <div class="sech"><h2>How they raid</h2></div>
+   <div class="box">
+    <div class="kv"><span>Guests</span><b>Welcome, 6-hour pass</b></div>
+    <div class="kv"><span>Loot for guests</span><b class="dim">Not set by the guild</b></div>
+    <div class="kv"><span>Loot</span><b>DKP</b></div>
+    <div class="kv"><span>Timezone</span><b>Eastern</b></div>
+   </div>
+  </section>
+ </aside></div>
+ <span class="note">Real: Wolf Pack’s schedule, guest pass and first kills (encounter records); Earth and Time show “no kill on record” because the records do not show one. The open-to-guests panel is a sample.</span>
+</main>
+<nav class="tabbar"><a>Home</a><a>Raids</a><a>Progress</a><a class="on">Guilds</a></nav>
+</body></html>
