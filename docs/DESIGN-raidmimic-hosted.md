@@ -659,8 +659,12 @@ the Developer Portal before acting):
   harmful language in its name, description or commands; Terms of Service and Privacy Policy links; an install link; the
   team owner's identity verification; every team member with a verified email and 2FA. After verification the app's name
   and ownership change only through Discord support. Unverified, it stops joining at 100.
-- Privileged intents (`GuildMembers`, `MessageContent`, `GuildPresences`) need approval past 100: the shared bot should use
-  none. Officer roles come from Discord sign-in instead.
+- Privileged intents (`GuildMembers`, `MessageContent`, `GuildPresences`): **the Developer Portal (2026-11-17) says they need
+  review once the bot reaches 10,000 users** (until then they are toggles; corrected from "100 servers"). The shared bot uses
+  none (all three off on the Raid Mimic app); officer roles come from Discord sign-in instead.
+- **The app is Public** (needed for any other server to add it), so anyone can add it to any server. A server not linked to
+  a guild on raidmimic.com (`hub_guilds.discord_guild_id`) gets one message pointing at the link page and nothing else: no
+  reads, no posts, no stored data.
 - Rate limits: 50 requests a second per bot, and a ban after 10,000 401/403/429 in ten minutes. Poll events per guild no
   faster than every 5 minutes with jitter, and stop polling a server that answers 403.
 - When a server removes the bot (`guildDelete`): stop at once, purge that guild's imported data on a timer.
