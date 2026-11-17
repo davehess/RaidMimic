@@ -11,24 +11,41 @@ import { ROOT, sliceBlock, stripJs } from './_source-slice.js';
 const dash = fs.readFileSync(path.join(ROOT, 'packages/wolfpack-logsync/dashboard.html'), 'utf8');
 const src = sliceBlock(dash, 'function wpOpenLocalSite(page, how) {', '\n  fallback();\n}');
 
-function world() {
-  const w = { href: null, opened: [], mimic: [], flag: null };
-  const fn = new Function('location', 'sessionStorage', 'window', src + '\nreturn wpOpenLocalSite;')(
+// The page is the dashboard's middle pane (2026-11-17: "launched a new tab instead of just the middle one"); `pane:false`
+// is a page with no frame (an older dashboard shape), which still navigates in place.
+function world({ pane = true } = {}) {
+  const w = { href: null, opened: [], mimic: [], flag: null, src: null, active: [] };
+  const el = (id) => ({ id, classList: { add: (c) => { if (c === 'active') w.active.push(id); }, remove() {} } });
+  const frame = { getAttribute: () => w.src, setAttribute: (k, v) => { w.src = v; } };
+  const doc = {
+    getElementById: (id) => (!pane && (id === 'wpLocalFrame' || id === 'localpage') ? null : id === 'wpLocalFrame' ? frame : el(id)),
+    querySelectorAll: () => [],
+  };
+  const fn = new Function('location', 'sessionStorage', 'window', 'document', 'wpRailReveal', 'wpIndexSync', src + '\nreturn wpOpenLocalSite;')(
     { set href(v) { w.href = v; } },
     { setItem: (k, v) => { w.flag = [k, v]; } },
     { open: (u) => w.opened.push(u), mimic: { openLocalSite: (p) => { w.mimic.push(p); return true; } } },
+    doc, () => {}, () => {},
   );
   return { w, open: fn };
 }
 const click = (o = {}) => ({ type: 'click', button: 0, preventDefault() {}, ...o });
 
 describe('wpOpenLocalSite', () => {
-  it('a plain click opens the page in this window and leaves the way back', () => {
+  it('a plain click loads the page into the middle pane, rail kept, and lights its rail button', () => {
     const { w, open } = world();
+    open('flags', click());
+    expect(w.href).toBeNull();                       // the window itself does not navigate
+    expect(w.src).toBe('/local/flags/?embed=1');      // the frame does; the page hides its own top bar there
+    expect(w.active).toEqual(['localpage', 'wpLocalFlags']);
+    expect(w.mimic).toEqual([]);
+  });
+
+  it('with no frame on the page it still opens in this window and leaves the way back', () => {
+    const { w, open } = world({ pane: false });
     open('flags', click());
     expect(w.href).toBe('/local/flags/');
     expect(w.flag).toEqual(['wpLocalFromDash', '1']);
-    expect(w.mimic).toEqual([]);
   });
 
   it('the ↗ button, Ctrl / Shift / Cmd click and a middle click open its own window', () => {

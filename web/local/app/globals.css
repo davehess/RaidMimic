@@ -11,3 +11,5 @@
   a { color: #58a6ff; }
   a:hover { text-decoration: underline; }
 }
+/* In the dashboard's middle pane the rail is the navigation (layout.tsx sets html.wp-embed). */
+html.wp-embed .wp-local-head { display: none; }
