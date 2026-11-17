@@ -22,6 +22,14 @@ anonymised aggregates only) applies unchanged and is a requirement on everything
 
 ## 2. Can another guild share our database today? Not safely.
 
+> **Re-measured 2026-11-17 (§609); the table below is the 2026-10-28 baseline.** `guild_id` is now on 143 of 205 public
+> tables (one value, `'wolfpack'`, everywhere); the 37 `using true` policies are gone from guild tables (only `eqemu_*` and
+> catalog tables keep them) and 85 of 126 policies filter by guild via `my_guild_ids()`; the guild RLS key is live
+> (`bot_kv.guild_rls_status`: key_ok, flag_on, 2026-11-17); the `hub_*` registry is applied (16 tables, 1 guild, 0
+> memberships) and `hub_guilds.discord_guild_id` maps a server to a guild. Uploads use per-user tokens, not one shared token.
+> Still true: the natural keys below, 16 functions with a `'wolfpack'` literal, `'wolfpack'` column defaults, 209 unscoped
+> service-role calls (`scripts/guild-scope-baseline.json`), and one guild per bot process (§12).
+
 | Layer | Today | Why it blocks a second guild |
 |---|---|---|
 | Guild tag on rows | 90 of 139 guild tables have `guild_id` (49 default to `'wolfpack'`). **49 guild-data tables have none**: `contributions`, `encounter_players`, `loot_drops`, `wishlists`, `audit_log`, `combat_events`, the `opendkp_*` set, `wolfpack_members`, `wolfpack_roles`, `officer_notes`, `mimic_sessions`, `rh_signups`, … | Their rows cannot be told apart by guild at all. |
@@ -617,3 +625,49 @@ needed), and an opt-in for the receiving guild. Shape: a pure `utils/raidGuild.j
 roster in it, against a threshold); after the primary write and after the upload is acknowledged, a second `recordParse`
 under the other guild with guest semantics; best-effort. The rule, the opt-in and what is sent are the guild lead's picks
 (Desk card `two-guild-filing`).
+
+## 12. A Discord bot for other guilds: what it takes (2026-11-17, §609)
+
+The guild lead: *"what do we need to make sure the RaidMimic discord bot works for other guilds"*, after picking a shared,
+read-only bot for the Discord event import (§608). Measured the same day (code, live database, Discord's docs):
+
+**Why Wolf Pack's bot cannot simply be added to another server.** It is one server per process by design:
+- Commands register to one server only (`index.js` `registerCommands`, `Routes.applicationGuildCommands(clientId,
+  DISCORD_GUILD_ID)`), so a second server gets none.
+- 15 reads of `DISCORD_GUILD_ID` in `index.js` (more in `utils/` and `commands/`), about 10
+  `client.guilds.cache.first()` that pick an arbitrary server once there are two, and no `interaction.guildId` checks.
+- `SUPABASE_GUILD_ID || 'wolfpack'` about 47 times: a second server's actions would be written as Wolf Pack's.
+- About 50 channel and thread ids come from settings (`*_THREAD_ID`, `*_CHANNEL_ID`, `state.channelSlots`); the
+  provisioner (`utils/discordProvisioner.js`) stores them per guild but runs for one guild per process.
+- Role names (`ALLOWED_ROLE_NAMES`, `OFFICER_ROLE_NAMES`), OpenDKP credentials, the raid schedule constants and Wolf Pack
+  wording are process-wide.
+- It asks for the `GuildMembers` intent, which Discord must approve once a bot is in 100 servers.
+
+**Discord's rules for a bot many servers add** (docs.discord.com; the verification and policy articles must be re-read in
+the Developer Portal before acting):
+- Day 1: privacy and terms URLs in the Developer Portal (`/privacy` and `/terms` exist and are served on the raidmimic
+  hosts); an install link `scope=bot applications.commands`, `integration_type=0`; to learn which server installed it, a
+  code grant (`response_type=code`, `redirect_uri`, `state`), then confirm the server over REST before binding it to a
+  guild (`hub_guilds.discord_guild_id`).
+- Minimal permissions for "read events, post in one channel": View Channel, Send Messages, Embed Links, Read Message
+  History, Create Public Threads, Send Messages in Threads = **309237730304**. Reading events needs no Manage Events; a
+  voice or stage event is visible only if the bot can view that channel. Never send another guild today's provisioning
+  integer (2252135193504768: Manage Roles, Manage Events, …).
+- Global slash commands for the shared bot (guild-scoped stay for Wolf Pack's own); 100 commands per scope.
+- Verification opens past 75 servers and is required at 100 (owner identity, privacy and terms, a reason for any
+  privileged intent). Own the app through a Discord Developer Team. Unverified, it stops joining at 100.
+- Privileged intents (`GuildMembers`, `MessageContent`, `GuildPresences`) need approval past 100: the shared bot should use
+  none. Officer roles come from Discord sign-in instead.
+- Rate limits: 50 requests a second per bot, and a ban after 10,000 401/403/429 in ten minutes. Poll events per guild no
+  faster than every 5 minutes with jitter, and stop polling a server that answers 403.
+- When a server removes the bot (`guildDelete`): stop at once, purge that guild's imported data on a timer.
+- Sharding only at 2,500 servers.
+
+**What the database already has, and lacks:** see the 2026-11-17 note under §2. Before a second guild's bot data lands:
+the natural keys (`bosses_local(npc_id)`, `wishlists`, `wolfpack_members(discord_id)`, `wolfpack_roles(role_id)`), and
+dropping the `'wolfpack'` column defaults once writers pass a guild.
+
+**Recommendation (Desk card `rm-bot`):** a small new Raid Mimic Discord app beside Wolf Pack's bot, multi-server from day
+one: it resolves the guild per interaction and per event from `hub_guilds.discord_guild_id`, registers global commands,
+asks for no privileged intent and only the permissions above, and does the import plus raid cards first. Wolf Pack's bot
+does not change. A guild that later wants the full feature set gets its own copy (§9 option C).
