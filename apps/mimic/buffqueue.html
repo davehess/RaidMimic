@@ -488,6 +488,8 @@
   //   ⚠ T.of Hate  — SK carrying T. of Hate Recourse (Savagery overwrites it).
   function stateChips(r){
     var bits = '';
+    // Died in the last 30 minutes and still nearly bare: the bot sorts these first after same-zone (bot 4.1.6, §617).
+    if (r.rebuff_after_death)     bits += '<span class="chip rec" title="Died recently and is still nearly unbuffed — rebuff first">💀</span>';
     if (r.inferred)               bits += '<span class="chip inferred" title="Buffs inferred from observed casts — this raider isn\'t running Mimic">🔍</span>';
     if (r.out_of_range)           bits += '<span class="chip oor" title="Likely out of range — same zone but >~200 units away. Advisory only: position updates at heartbeat cadence, so move closer before relying on it.">📍</span>';
     if (r.avatar_buff)            bits += '<span class="chip avatar" title="'+esc(r.avatar_buff)+' is active">🪶</span>';

@@ -14057,6 +14057,14 @@ function _maybeUploadRaidRoster(sample) {
     // tab "raid (type 5)" section — the guild lead 2026-07-15). Updated on EVERY
     // pipe fire, before the upload debounce below, so the local view stays
     // live even between heartbeat uploads.
+    // A raider's health swinging is when the buff queue matters (§617): a drop of 10 points or more since the last pipe
+    // fire puts the queue check back on its fast cadence for a while.
+    try {
+      if (_lastRaidPipe && Array.isArray(_lastRaidPipe.members)) {
+        const before = new Map(_lastRaidPipe.members.map(m => [String(m.name).toLowerCase(), Number(m.hp_pct)]));
+        if (compact.some(m => { const b = before.get(String(m.name).toLowerCase()); const n = Number(m.hp_pct); return Number.isFinite(b) && Number.isFinite(n) && b - n >= 10; })) _buffQueueFast();
+      }
+    } catch (e) { void e; }
     _lastRaidPipe = { at: Date.now(), members: compact };
     // Refresh the local raid-member lookup that trigger actions consult via
     // require_raid_member. Lowercased names only — matched against captured
@@ -58489,13 +58497,27 @@ const SNAPPY_WINDOW  = 60_000;
 // every 1.5s, so 2s still means most ticks reuse the cache rather than
 // re-fetching every single one. Override via WP_BUFF_QUEUE_TTL_MS.
 const BUFF_QUEUE_TTL_MS = parseInt(process.env.WP_BUFF_QUEUE_TTL_MS, 10) || 2000;
+// Change-driven (the guild lead, 2026-11-17: "We don't need to check those that often. We're more concerned with when things
+// change… when someone's health is fluxuating that's a sign we need to pay attention to them. Also when someone died they
+// need to be rebuffed"; DECISIONS §617). The queue was ~45% of the bot's raid-night data out: >30 KB to every raider every
+// 2 s. Now, on top of gzip: the bot's ETag (bot 4.1.6) makes an unchanged answer a ~200-byte 304, and the check slows to
+// 6 s while nothing happens, back to 2 s for 20 s after a raider's HP
+// drops 10 points or more, your own death or rez, or a dispel of your buffs. Overlay ticks keep reading the cache.
+const BUFF_QUEUE_IDLE_TTL_MS = parseInt(process.env.WP_BUFF_QUEUE_IDLE_TTL_MS, 10) || 6000;
+const BUFF_QUEUE_FAST_WINDOW = 20_000;
+let _buffQueueFastUntil = 0;
+function _buffQueueFast(now) { _buffQueueFastUntil = Math.max(_buffQueueFastUntil, (now == null ? Date.now() : now) + BUFF_QUEUE_FAST_WINDOW); }
+function _buffQueueTtl(now) {
+  if (now < _buffQueueSnappyUntil) return SNAPPY_TTL_MS;
+  return now < _buffQueueFastUntil ? BUFF_QUEUE_TTL_MS : BUFF_QUEUE_IDLE_TTL_MS;
+}
 function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
   const opts = _uploadOpts;
   if (!opts || !opts.botUrl || !opts.token) return;
   const key = String(bufferClass || '').trim().toLowerCase() + '|' + String(bufferCharacter || '').trim().toLowerCase();
   if (_buffQueueInflight.has(key)) return;
   const cached = _buffQueueCache.get(key);
-  const ttl = (Date.now() < _buffQueueSnappyUntil) ? SNAPPY_TTL_MS : BUFF_QUEUE_TTL_MS;
+  const ttl = _buffQueueTtl(Date.now());
   if (cached && (Date.now() - cached.at) < ttl) return;
   _buffQueueInflight.add(key);
   const qs = [];
@@ -58509,17 +58531,24 @@ function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
       method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search,
       // Accept-Encoding: the bot gzips this reply when asked (bot 4.1.3, utils/gzipReply.js; the guild lead's
       // hosting-sizes "gzip-now" pick). An older bot ignores the header and answers plain, which the end handler reads too.
-      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}`, 'Accept-Encoding': 'gzip' },
+      // If-None-Match: bot 4.1.6 tags the answer and sends 304 when nothing that matters changed (§617).
+      headers: Object.assign(
+        { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}`, 'Accept-Encoding': 'gzip' },
+        (cached && cached.etag) ? { 'If-None-Match': cached.etag } : {}),
       timeout: 8000,
     }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
         _buffQueueInflight.delete(key);
+        // 304: our copy is still the answer, so it is current again.
+        if (res.statusCode === 304 && cached) { cached.at = Date.now(); return; }
         try {
           let buf = Buffer.concat(chunks);
           if (/gzip/i.test(String(res.headers['content-encoding'] || ''))) buf = zlib.gunzipSync(buf);
-          const j = JSON.parse(buf.toString('utf8')); _buffQueueCache.set(key, { at: Date.now(), payload: j }); _noteRaidSplit(j);
+          const j = JSON.parse(buf.toString('utf8'));
+          _buffQueueCache.set(key, { at: Date.now(), payload: j, etag: res.statusCode === 200 ? (res.headers.etag || null) : null });
+          _noteRaidSplit(j);
         }
         catch { _buffQueueCache.set(key, { at: Date.now(), payload: { buff_queue: [], debuff_queue: [] } }); }
       });
@@ -62690,6 +62719,14 @@ const DISPEL_SETTLE_MS        = 1_500;    // after the last removal, wait for th
 const DISPEL_SELF_SETTLE_MS   = 2_500;    // Zeal's buff slots lag the log by a poll
 const DISPEL_SELF_COOLDOWN_MS = 8_000;    // one callout per dispel
 const DISPEL_QUIET_MS         = 10_000;   // after zoning or dying nothing counts: buffs and mobs go away on their own
+// Your own death and rez (the guild lead, 2026-11-17: "When you die we shouldn't announce the the user (X/Y/Z Dispelled,
+// rebuff) because they already know that. The same when they accept a rez."). Dead, you can lie on the floor for minutes
+// before a rez or a respawn, so a death stays quiet until one of those (or this long); the rez itself, its zone-in and
+// the "Resurrection Effects" buff that follows it each start a fresh quiet window.
+const DISPEL_DEAD_QUIET_MS    = 30 * 60_000;
+const DISPEL_REZ_QUIET_MS     = 60_000;
+const DISPEL_REZ_RX           = /^You regain some experience from resurrection\.$/;
+const DISPEL_REZ_BUFF_RX      = /^resurrection effects?$/i;   // spells 756 / 757 in the catalog
 const _dispelState = {
   lines: new Map(),   // charLower → [{ at, arrived, mob (lower) | null, you }]  the dispel spells' own landing lines
   mine:  new Map(),   // charLower → [{ at, arrived, spell, hits:[{ tk, sk, entry }] }]  worn-off lines for a debuff of ours
@@ -62761,8 +62798,8 @@ function _dispelSelfOpen(cl, arrived) {
   p.lastAt = Math.max(p.lastAt, arrived);
   return p;
 }
-function _dispelQuiet(cl, atMs) {
-  _dispelState.quiet.set(cl, atMs + DISPEL_QUIET_MS);
+function _dispelQuiet(cl, atMs, ms = DISPEL_QUIET_MS) {
+  _dispelState.quiet.set(cl, atMs + ms);
   _dispelState.mine.delete(cl); _dispelState.self.delete(cl); _dispelState.lines.delete(cl); _dispelState.fades.delete(cl);
 }
 // One log line. Live lines only; every kind of evidence is only noted here and decided in flushDispelWatch.
@@ -62777,7 +62814,16 @@ function noteDispelLine(line, character, nowMs) {
   if (Math.abs(now - at) > DISPEL_LIVE_MS) return;
   const cl = String(character).toLowerCase();
   // A zone change (the one zone-line parser, CHAT_ZONE_RX) or a death: buffs and mobs go away on their own after these.
-  if (/^LOADING, PLEASE WAIT|^You died\.$|^You have been slain by /.test(body) || CHAT_ZONE_RX.test(line)) { _dispelQuiet(cl, at); return; }
+  // Your own death: quiet until a rez or a respawn (each of which starts its own window below). The buff queue re-reads
+  // sooner too, since a death is exactly when buffs change.
+  if (/^You died\.$|^You have been slain by /.test(body)) { _dispelQuiet(cl, at, DISPEL_DEAD_QUIET_MS); _buffQueueFast(now); return; }
+  if (DISPEL_REZ_RX.test(body)) { _dispelQuiet(cl, at, DISPEL_REZ_QUIET_MS); _buffQueueFast(now); return; }
+  if (/^LOADING, PLEASE WAIT/.test(body) || CHAT_ZONE_RX.test(line)) {
+    // A zone-in while dead is the rez or the respawn: a minute of quiet for the buffs to settle, not the full death window.
+    const dead = (_dispelState.quiet.get(cl) || 0) > at + DISPEL_REZ_QUIET_MS;
+    _dispelQuiet(cl, at, dead ? DISPEL_REZ_QUIET_MS : DISPEL_QUIET_MS);
+    return;
+  }
   if ((_dispelState.quiet.get(cl) || 0) > at) return;
   const keep = (map, v) => { const a = map.get(cl) || []; a.push(v); while (a.length && now - a[0].arrived > 10_000) a.shift(); map.set(cl, a); };
   if (DISPEL_YOU_TEXTS.has(body)) {
@@ -62811,6 +62857,12 @@ function _dispelNoteZealDiff(character, prev, next, nowMs) {
   const cl = String(character).toLowerCase();
   const now = nowMs == null ? Date.now() : nowMs;
   if ((_dispelState.quiet.get(cl) || 0) > now) return;
+  // A rez in the same zone may print no zone line: its "Resurrection Effects" buff arriving is the tell (§617).
+  if (nb.some(b => b && b.name && DISPEL_REZ_BUFF_RX.test(String(b.name).trim()))
+      && !pb.some(b => b && b.name && DISPEL_REZ_BUFF_RX.test(String(b.name).trim()))) {
+    _dispelQuiet(cl, now, DISPEL_REZ_QUIET_MS);
+    return;
+  }
   const nowNames = new Set(nb.filter(b => b && b.name).map(b => _dispelNorm(b.name)));
   const prevNames = new Set(pb.filter(b => b && b.name).map(b => _dispelNorm(b.name)));
   const added = nb.some(b => b && b.name && !prevNames.has(_dispelNorm(b.name)));
@@ -71081,6 +71133,7 @@ async function _partyRoute(req, res) {
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
   // Raid Mimic party (2026-11-15): see the block above module.exports.
+  _buffQueueTtl, _buffQueueFast, _maybeUploadRaidRoster, _resetBuffQueueFastForTest: () => { _buffQueueFastUntil = 0; },
   MiniWebSocket, createPartyClient, partyBuildPub, partyMembersList, _partyMembers, _partyShareState, _setRaidPipeForTest: (v) => { _lastRaidPipe = v; }, PARTY_AUTO_SOLO_MS, PARTY_MAX_MEMBERS, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
   _partyResetForTest: () => { if (_partyClientInst) _partyClientInst.destroy(); _partyClientInst = null; },
   _partySetFileForTest: (f) => { _partyFile = f || PARTY_FILE; },
