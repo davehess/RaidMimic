@@ -573,6 +573,11 @@ moment it is taken.
   picking a side is how you lose work.
 - It pushes with `GITHUB_TOKEN`, which by design does not trigger `on: push`
   workflows — so a sync never cuts a spurious `-beta.N` and never double-runs CI.
+- ⚠ **`GITHUB_TOKEN` may not change workflow files, so a commit on `main` that touches `.github/workflows/` fails the
+  sync** ("refusing to allow a GitHub App to create or update workflow … without `workflows` permission"; 2026-11-17,
+  the `environment: signing` line). Nothing alerts anyone, and every later sync fails behind it. The session that changes a
+  workflow on `main` merges `main` into `beta` and `beta` into `alpha` by hand in the same sitting (its own push may
+  change workflows), then checks the next sync run is green.
 - **This does not make a `beta → main` branch merge safe.** Beta still carries
   the park and in-flight Mimic work, so graduations stay file-level promotions.
   The sync removes the *drift*, not the *direction*.
