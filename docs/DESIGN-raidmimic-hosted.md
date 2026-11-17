@@ -79,6 +79,7 @@ Status: **built** / **partly** / **designed** / **missing**. Who: **G** the new 
 | 2 | Create the guild (name, Discord server, time zone, raid nights) | `hub_guilds` designed and written, not applied; no create/join/invite pages | designed | G |
 | 3 | Invite people and set officers | `hub_invites` / `hub_memberships` designed; roles today come from Wolf Pack's role names held in two places | designed | G |
 | 4 | Add the bot to their Discord | Permission integer and `/setup discord status / provision / export` exist; the layout builder (`bootProvision`) is tied to one server per bot process. Open call: one shared bot or one per guild | partly | G invites; U decides |
+| 4a | Import their raids from the server's Discord events (the guild lead, 2026-11-17; §608) | Wolf Pack's bot already reads its own server's scheduled events (`utils/raidEvents.js`); no import, no listing table yet. Desk card `discord-import` (recommended: review, then add) | proposed | G reviews; U builds |
 | 5 | Members link Mimic to the guild | Device-code link (`utils/mimicLink.js`) exists, but a session carries no guild, Mimic's server address defaults to ours, and ~20 links point at wolfpack.quest | partly | each member; A |
 | 6 | Uploads count for the right guild | One shared agent token and one process-wide guild — every upload is Wolf Pack's | missing | A |
 | 7 | Bosses and timers | 158 generic Quarm bosses + `/addboss`; PoP lock date hardcoded; raid nights per guild in `guild/config.json` | partly | G |
