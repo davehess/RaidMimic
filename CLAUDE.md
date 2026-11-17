@@ -183,6 +183,7 @@ rather than installed per-machine.
 |---|---|---|
 | **`impeccable`** (pbakaus) | 23 design commands + 59 deterministic anti-pattern detectors; a `PostToolUse` hook scans UI files after every Edit/Write and a `Stop` hook runs a deep pass | Apache-2.0 |
 | **`ponytail`** (DietrichGebert) | "Laziest solution that works" — YAGNI ladder, stdlib/native/existing-dep before new code | MIT |
+| **`react-next-rules`** (Vercel, added 2026-11-17, §606) | 20 of Vercel's React/Next performance rules for `web/` (parallel reads, `React.cache`, bundle, hydration), pinned at a commit, no hooks, no fetching | MIT |
 
 ⚠ **`frontend-design` WINS over impeccable where they disagree.** That skill
 carries this platform's *real* tokens and the constraints generic design advice
