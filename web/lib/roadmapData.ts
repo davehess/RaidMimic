@@ -39,13 +39,15 @@ export const releases: Release[] = [
   {
     key: 'buff-queue-on-change-2026-11-17',
     title: 'Buff queue: the dead first, and quieter',
-    version: 'Bot 4.1.6 · Agent 4.0.99',
+    version: 'Bot 4.1.6 · Agent 4.0.101',
     channel: 'beta',
     date: '2026-11-17',
     headline: 'Raiders who just died go to the top of the buff queue, and the queue checks for changes instead of re-downloading everything every two seconds.',
     features: [
       { name: 'Rebuff the dead first', blurb: 'A raider who died in the last half hour and is still unbuffed gets a 💀 and sits at the top, right after the raiders in your zone.' },
       { name: 'Checks when it matters', blurb: 'The queue checks every few seconds while things are calm, and right away when a raider\'s health drops, you die or you take a rez. It uses far less data.' },
+      { name: 'A tidier dashboard menu', blurb: 'The side menu folds into Setup, Live, Raid, Recap and Diagnostics, and Inventory, PoP flags, My fights and My replay open in the middle with the menu still beside them.' },
+      { name: 'The KILL tag sets the target', blurb: 'When the main assist tags with "@" (`/tag rsgs @^r^KILL`), the tag moves to each new target and the target bars follow it.' },
     ],
     fixes: [
       'No more "Buffs dispelled — rebuff" after your own death or after you accept a rez.',
