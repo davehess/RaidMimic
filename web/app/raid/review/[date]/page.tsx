@@ -48,7 +48,7 @@ import NightSummary, { type NightStats } from '@/components/NightSummary';
 import LootBlock, { type LootRow } from '@/components/LootBlock';
 import { FightTimeline, type TLEvent } from '@/components/FightTimeline';
 import { GUILD_TAG } from '@/lib/guild';
-import { IconBlades, IconCallout, IconDeath, IconTimer, ICON_INLINE } from '@/components/PlateIcons';
+import { IconCrest, IconCallout, IconDeath, IconTimer, ICON_INLINE } from '@/components/PlateIcons';
 
 import { pageMetadata } from '@/lib/pageMetaData';
 
@@ -562,7 +562,7 @@ export default async function RaidNightReview({ params }: { params: Promise<{ da
           {timeline.length > 0 && (
             <section className="bg-panel border border-border rounded-lg p-4">
               <h3 className="text-sm text-gold mb-3 flex items-center gap-2">
-                <IconBlades className={ICON_INLINE} /><span>Kills timeline</span>
+                <IconCrest className={ICON_INLINE} /><span>Kills timeline</span>
                 <span className="text-dim text-xs">· {kills.length} kill{kills.length === 1 ? '' : 's'} in the order they happened</span>
               </h3>
               <ol className="space-y-1">
