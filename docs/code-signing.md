@@ -1,11 +1,18 @@
 # Code signing — Raid Mimic (Windows)
 
-> ## STATUS (2026-11-17): identity validation reported finished; steps 4 to 7 left.
+> ## STATUS (2026-11-17, later): SIGNING WORKS. The first signed build is alpha `v3.1.0-alpha.1679`.
 >
-> Our side is built and **inert**: with the six settings below absent, the build is
-> the unsigned build it has always been and CI stays green. The moment they exist,
-> every Windows build (stable, beta, alpha) signs and verifies itself.
-> Nothing is signed yet. The account (`RaidMimic`, Basic, East US) exists and the guild lead reported the
+> The re-run of release run 44019038960 signed the app, the installer and the uninstaller, the verify
+> step read all of them as `Valid`, and `latest.yml`'s sha512 matched the signed installer. The first
+> attempt failed with `403 Forbidden` from the signing endpoint until the app registration was given
+> **Artifact Signing Certificate Profile Signer** on the profile (step 5); a re-run a few minutes after
+> the role was added went through. Every Windows build (stable, beta, alpha) now signs from its next push.
+> ⚠ **The certificate names a person, not the project.** It is an individual-validation certificate, so
+> the publisher Windows shows (and the release notes' "code-signed by …" line prints) is the guild lead's
+> legal name. Dropping the name from the release notes is a one-line change; the Windows prompt keeps it
+> unless the account is re-validated as an organisation. Open on the Decision Desk.
+>
+> What follows is the record of how it was set up. The account (`RaidMimic`, Basic, East US) exists and the guild lead reported the
 > individual identity validation finished on 2026-11-17; the certificate profile, app registration and the
 > six GitHub settings (steps 4 to 6) are the guild lead's. Since 2026-11-17 the release job names the GitHub
 > environment `signing` (DECISIONS §562), so the settings go there, limited to main, beta and alpha.
