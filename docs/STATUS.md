@@ -554,7 +554,7 @@ next touch one rather than assuming a missing row means a missing doc.
   client plus our platform" needs the author first (`docs/DESIGN-raidmimic-hosted.md` §8b). The note asks the author (a third party)
   about a licence for their client code or an upload hook. The draft is in the session scratchpad and is sent by the guild lead; it is
   not committed (the repo names no one). Mimic absorbs maps and tradeskills on its own meanwhile (option B).
-- **⚠ Needs the guild lead — the Stripe account (2026-10-31, §495).** Billing is monthly only ($25 a guild, first month free, one-click
+- **⚠ Needs the guild lead — the Stripe account (2026-10-31, §495).** Billing is monthly only ($25 a guild, no free month since 2026-11-17 §612, one-click
   cancel, `pause_collection` after 30 days with no raid upload, individuals free). Nothing is built: it needs a Stripe account, Payment
   Links / Billing for the one monthly price, and then a session builds the webhook that sets `hub_guilds.plan` and the pause state.
   Stripe Tax only if a state makes it a question. Step 6 of the hosted order of work (`docs/DESIGN-raidmimic-hosted.md` §7j).

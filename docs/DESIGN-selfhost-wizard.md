@@ -721,7 +721,7 @@ and the same never-refetch guarantee.
   affordable. Until it is built the §3 "Threat data retention" rule stands, and its archive gate needs the Tower watermark
   written by the nightly merge itself (§494: it had been set by hand and went stale). The wizard must ask where raw feeds live.
 - **2026-10-31 — billing is monthly only, nothing up front, and pauses itself when the guild stops raiding** (§495, supersedes
-  §385's annual option and §487's Personal tier). $25 a month per guild, first month free, cancel in one click, Stripe
+  §385's annual option and §487's Personal tier). $25 a month per guild (no free month since 2026-11-17, §612: registering is the free part), cancel in one click, Stripe
   `pause_collection` when the guild has had no raid upload for 30 days (resumes on the next upload with a notice to
   officers); individuals pay nothing (local-first, the free column); tips stay on GitHub Sponsors and Ko-fi. Rail: Stripe
   Payment Links / Billing with a webhook setting `hub_guilds.plan` and the pause state (a Stripe account the operator owns
