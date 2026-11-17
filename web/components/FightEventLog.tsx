@@ -47,8 +47,10 @@ function dotColor(r: FightEventRow): string {
 }
 
 export function FightEventLog({
-  startedAt, durationSec, deaths, events = [], fires = [],
+  startedAt, durationSec, deaths, events = [], fires = [], embedded = false,
 }: {
+  /** Inside the parse page's Timeline tab: no card of its own, and the list starts open. */
+  embedded?: boolean;
   startedAt: string;
   durationSec: number | null;
   deaths: TLDeath[];
@@ -111,8 +113,8 @@ export function FightEventLog({
   );
 
   return (
-    <section className="bg-panel border border-border rounded-lg p-4 md:p-5">
-      <details className="group">
+    <section className={embedded ? 'px-3' : 'bg-panel border border-border rounded-lg p-4 md:p-5'}>
+      <details className="group" open={embedded}>
         <summary className="cursor-pointer select-none text-sm text-orange flex items-center gap-2 flex-wrap [&::-webkit-details-marker]:hidden list-none">
           <span className="inline-block transition-transform group-open:rotate-90" aria-hidden>▸</span>
           <span>🕒 Fight timeline</span>
@@ -120,7 +122,7 @@ export function FightEventLog({
             {dur ? `${dur} · ` : ''}
             {nDeaths} death{nDeaths === 1 ? '' : 's'} · {nEvents} raid event{nEvents === 1 ? '' : 's'} · {nFires} callout{nFires === 1 ? '' : 's'}
             {log.noiseHidden > 0 && <> · {log.noiseHidden} range-check callout{log.noiseHidden === 1 ? '' : 's'} hidden</>}
-            {' — open for the full list'}
+            {embedded ? '' : ' — open for the full list'}
           </span>
         </summary>
 
