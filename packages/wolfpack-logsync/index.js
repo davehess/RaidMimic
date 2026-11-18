@@ -50122,15 +50122,19 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
 // with only chat+rsay and the first live test (two `a Darkpaw warrior`s tagged
 // Bardy and Cano, NOT in a raid) captured nothing at all. So: find the header,
 // take the payload from there to end-of-line, and read the speaker off whatever
-// prefix precedes it. The `ZEALTAG | ` header is machine-generated and can't
-// collide with human chat, which is what makes the loose match safe.
+// prefix precedes it.
+// The header alone is not a tag: this hook runs on the raw line, before the
+// channel filters, so the prefix must be one of Zeal's transports (raid, group,
+// or a numbered/ZT tag channel). Text on any other channel is chat, not a tag.
+const _TAG_TRANSPORT_RX = /(?:^|\s)(?:tells? the raid|tells? the group|tell your (?:raid|party)|(?:tells?|say to) zt[^\s,]*:\d+),\s*['"]?\s*$|^\[(?:R|P|\d+)\]\s+\[[A-Za-z]+\]:\s*$/i;
 function _tagLineParts(line, selfCharacter) {
   let idx = line.indexOf('ZEALTAG | ');
   if (idx === -1) idx = line.indexOf('ZT | ');
   if (idx === -1) return null;
   // Quoted shape closes with the quote; abbreviated shape just ends.
-  const payload = line.slice(idx).replace(/\s*['"]\s*$/, '').trim();
+  const payload = line.slice(idx).replace(/\s*['"]\s*$/, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200).trim();
   let prefix = line.slice(0, idx).replace(/^\[[^\]]*\]\s*/, '');   // drop the EQ timestamp
+  if (!_TAG_TRANSPORT_RX.test(prefix)) return null;
   let tagger = null;
   // Abbreviated form ends `…[Sender]: ` — Zeal already substitutes the real
   // name for "You" there (abbreviateChat), so trust it as-is.
