@@ -1,0 +1,1396 @@
+[
+ {
+  "key": "PoP",
+  "label": "Planes of Power",
+  "zones": [
+   {
+    "slug": "plane-of-justice",
+    "name": "Plane of Justice",
+    "bosses": [
+     {
+      "id": "the_seventh_hammer",
+      "name": "The Seventh Hammer"
+     },
+     {
+      "id": "the_ancient_crawler",
+      "name": "The Ancient Crawler"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-disease",
+    "name": "Plane of Disease",
+    "bosses": [
+     {
+      "id": "grummus",
+      "name": "Grummus"
+     },
+     {
+      "id": "ture",
+      "name": "Ture"
+     },
+     {
+      "id": "rallius_rattican",
+      "name": "Rallius Rattican"
+     },
+     {
+      "id": "aramin_the_spider_guardian",
+      "name": "Aramin the Spider Guardian"
+     }
+    ]
+   },
+   {
+    "slug": "crypt-of-decay",
+    "name": "Crypt of Decay",
+    "bosses": [
+     {
+      "id": "bertoxxulous",
+      "name": "Bertoxxulous"
+     },
+     {
+      "id": "banord_paffa",
+      "name": "Banord Paffa"
+     },
+     {
+      "id": "carprin_deatharn",
+      "name": "Carprin Deatharn"
+     },
+     {
+      "id": "spectre_of_corruption",
+      "name": "Spectre of Corruption"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-nightmare",
+    "name": "Plane of Nightmare",
+    "bosses": [
+     {
+      "id": "mujaki_the_ravager",
+      "name": "Mujaki the Devourer"
+     },
+     {
+      "id": "terris_thule",
+      "name": "Terris-Thule"
+     },
+     {
+      "id": "terror_matriarch",
+      "name": "Terror Matriarch"
+     },
+     {
+      "id": "the_bullyrag_bat",
+      "name": "The Bullyrag Bat"
+     },
+     {
+      "id": "seilaen",
+      "name": "Seilaen"
+     },
+     {
+      "id": "untel_dak",
+      "name": "Untel`Dak"
+     },
+     {
+      "id": "vhaksiz_the_shade",
+      "name": "Vhaksiz the Shade"
+     }
+    ]
+   },
+   {
+    "slug": "bastion-of-thunder",
+    "name": "Bastion of Thunder",
+    "bosses": [
+     {
+      "id": "agnarr_storm_lord",
+      "name": "Agnarr the Storm Lord"
+     },
+     {
+      "id": "gaukr_sandstorm",
+      "name": "Gaukr Sandstorm"
+     },
+     {
+      "id": "hreidar_lynhillig",
+      "name": "Hreidar Lynhillig"
+     },
+     {
+      "id": "laef_windfall",
+      "name": "Laef Windfall"
+     },
+     {
+      "id": "oreen_wavecrasher",
+      "name": "Oreen Wavecrasher"
+     },
+     {
+      "id": "auliffe_chaoswind",
+      "name": "Auliffe Chaoswind"
+     },
+     {
+      "id": "brynju_thunderclap",
+      "name": "Brynju Thunderclap"
+     },
+     {
+      "id": "kuanbyr_hailstorm",
+      "name": "Kuanbyr Hailstorm"
+     },
+     {
+      "id": "eindride_icestorm",
+      "name": "Eindride Icestorm"
+     },
+     {
+      "id": "charassis_corrupter",
+      "name": "Charassis the Corrupter"
+     },
+     {
+      "id": "emmerik_skyfury",
+      "name": "Emmerik Skyfury"
+     },
+     {
+      "id": "evynd_firestorm",
+      "name": "Evynd Firestorm"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-storms",
+    "name": "Plane of Storms",
+    "bosses": [
+     {
+      "id": "askr_the_lost",
+      "name": "Askr the Lost"
+     },
+     {
+      "id": "neffiken_lord_of_kelekvor",
+      "name": "Neffiken, Lord of Kelek`Vor"
+     },
+     {
+      "id": "gurebk_lord_of_krendic",
+      "name": "Gurebk, Lord of Krendic"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-valor",
+    "name": "Plane of Valor",
+    "bosses": [
+     {
+      "id": "aerin_dar",
+      "name": "Aerin`Dar"
+     },
+     {
+      "id": "the_sleep_walker",
+      "name": "The Sleep Walker"
+     },
+     {
+      "id": "rahlgon",
+      "name": "Rahlgon"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-innovation",
+    "name": "Plane of Innovation",
+    "bosses": [
+     {
+      "id": "manaetic_prototype_ix",
+      "name": "Manaetic Prototype IX"
+     },
+     {
+      "id": "manaetic_prototype_x",
+      "name": "Manaetic Prototype X"
+     },
+     {
+      "id": "manaetic_prototype_xi",
+      "name": "Manaetic Prototype XI"
+     },
+     {
+      "id": "manaetic_behemoth",
+      "name": "Manaetic Behemoth"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-torment",
+    "name": "Plane of Torment",
+    "bosses": [
+     {
+      "id": "saryrn",
+      "name": "Saryrn"
+     },
+     {
+      "id": "maareq_the_prophet",
+      "name": "Maareq the Prophet"
+     },
+     {
+      "id": "salczek_the_fleshgrinder",
+      "name": "Salczek the Fleshgrinder"
+     },
+     {
+      "id": "the_acolyte_of_affliction",
+      "name": "The Acolyte of Affliction"
+     },
+     {
+      "id": "sorrowsong",
+      "name": "Sorrowsong"
+     },
+     {
+      "id": "ta_grusch_the_abomination",
+      "name": "Ta`Grusch the Abomination"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-fire",
+    "name": "Plane of Fire",
+    "bosses": [
+     {
+      "id": "fennin_ro",
+      "name": "Fennin Ro"
+     },
+     {
+      "id": "blazzax_the_omnifiend",
+      "name": "Blazzax the Omnifiend"
+     },
+     {
+      "id": "general_reparm",
+      "name": "General Reparm"
+     },
+     {
+      "id": "quavonis_firetail",
+      "name": "Quavonis Firetail"
+     },
+     {
+      "id": "magmaton",
+      "name": "Magmaton"
+     },
+     {
+      "id": "arch_mage_yozanni",
+      "name": "Arch Mage Yozanni"
+     },
+     {
+      "id": "pyronis",
+      "name": "Pyronis"
+     },
+     {
+      "id": "babnoxis_the_spider_queen",
+      "name": "Babnoxis the Spider Queen"
+     },
+     {
+      "id": "criare_sunmane",
+      "name": "Criare Sunmane"
+     },
+     {
+      "id": "jaxoliz_dawneyes",
+      "name": "Jaxoliz Dawneyes"
+     },
+     {
+      "id": "general_druav_flamesinger",
+      "name": "General Druav Flamesinger"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-air",
+    "name": "Plane of Air",
+    "bosses": [
+     {
+      "id": "xegony",
+      "name": "Xegony the Queen of Air"
+     },
+     {
+      "id": "sigismond_windwalker",
+      "name": "Sigismond Windwalker"
+     },
+     {
+      "id": "rinturion_windblade",
+      "name": "Rinturion Windblade"
+     },
+     {
+      "id": "queen_silandria",
+      "name": "Queen Silandria"
+     },
+     {
+      "id": "baltaldor_the_cursed",
+      "name": "Baltaldor the Cursed"
+     },
+     {
+      "id": "gakamenial_fir_disralsi",
+      "name": "Gakamenial Fir`Disralsi"
+     },
+     {
+      "id": "arch_mage_alchtonion",
+      "name": "Arch Mage Alchtonion"
+     },
+     {
+      "id": "lossenmachar",
+      "name": "Lossenmachar"
+     },
+     {
+      "id": "calebgrothiel",
+      "name": "Calebgrothiel"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-earth",
+    "name": "Plane of Earth",
+    "bosses": [
+     {
+      "id": "rathe_council",
+      "name": "The Rathe Council"
+     },
+     {
+      "id": "tantisala_jaggedtooth",
+      "name": "Tantisala Jaggedtooth"
+     },
+     {
+      "id": "warlord_gintolaken",
+      "name": "Warlord Gintolaken"
+     },
+     {
+      "id": "war_chieftan_awisano",
+      "name": "War Chieftan Awisano"
+     },
+     {
+      "id": "war_chieftan_birak",
+      "name": "War Chieftan Birak"
+     },
+     {
+      "id": "war_chieftan_galronar",
+      "name": "War Chieftan Galronar"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-water",
+    "name": "Plane of Water",
+    "bosses": [
+     {
+      "id": "coirnav",
+      "name": "Coirnav the Avatar of Water"
+     },
+     {
+      "id": "krziik_the_mighty",
+      "name": "Krziik the Mighty"
+     },
+     {
+      "id": "ofossaa_the_enlightened",
+      "name": "Ofossaa the Enlightened"
+     },
+     {
+      "id": "hydrotha",
+      "name": "Hydrotha"
+     },
+     {
+      "id": "grioihin_the_wise",
+      "name": "Grioihin the Wise"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-tactics",
+    "name": "Plane of Tactics",
+    "bosses": [
+     {
+      "id": "tallon_zek",
+      "name": "Tallon Zek"
+     },
+     {
+      "id": "vallon_zek",
+      "name": "Vallon Zek"
+     },
+     {
+      "id": "rallos_zek_warlord",
+      "name": "Rallos Zek the Warlord"
+     },
+     {
+      "id": "glykus_helmir",
+      "name": "Glykus Helmir"
+     },
+     {
+      "id": "tagrin_maldric",
+      "name": "Tagrin Maldric"
+     },
+     {
+      "id": "the_diaku_overseer",
+      "name": "The Diaku Overseer"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-time",
+    "name": "Plane of Time",
+    "bosses": [
+     {
+      "id": "quarm",
+      "name": "Quarm"
+     }
+    ]
+   },
+   {
+    "slug": "temple-of-marr",
+    "name": "Temple of Marr",
+    "bosses": [
+     {
+      "id": "lord_mithaniel_marr",
+      "name": "Lord Mithaniel Marr"
+     },
+     {
+      "id": "ralthazor_champion_of_marr",
+      "name": "Ralthazor, Champion of Marr"
+     },
+     {
+      "id": "halon_of_marr",
+      "name": "Halon of Marr"
+     },
+     {
+      "id": "edium_guardian_of_marr",
+      "name": "Edium, Guardian of Marr"
+     }
+    ]
+   },
+   {
+    "slug": "tower-of-solusek-ro",
+    "name": "Tower of Solusek Ro",
+    "bosses": [
+     {
+      "id": "solusek_ro",
+      "name": "Solusek Ro"
+     },
+     {
+      "id": "arlyxir",
+      "name": "Arlyxir"
+     },
+     {
+      "id": "jiva",
+      "name": "Jiva"
+     },
+     {
+      "id": "xuzl",
+      "name": "Xuzl"
+     },
+     {
+      "id": "guardian_of_dresolik",
+      "name": "Guardian of Dresolik"
+     }
+    ]
+   },
+   {
+    "slug": "halls-of-honor",
+    "name": "Halls of Honor",
+    "bosses": [
+     {
+      "id": "an_undead_inhabitant",
+      "name": "An Undead Inhabitant"
+     },
+     {
+      "id": "a_rabid_wrulon",
+      "name": "A Rabid Wrulon"
+     },
+     {
+      "id": "a_recuso_degenerate",
+      "name": "A Recuso Degenerate"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "Luclin",
+  "label": "Shadows of Luclin",
+  "zones": [
+   {
+    "slug": "ssraeshza-temple",
+    "name": "Ssraeshza Temple",
+    "bosses": [
+     {
+      "id": "emperor_ssraeshza",
+      "name": "Emperor Ssraeshza"
+     },
+     {
+      "id": "high_priest_ssraeshza",
+      "name": "High Priest of Ssraeshza"
+     },
+     {
+      "id": "arch_lich_rhagzadune",
+      "name": "Arch Lich Rhag`Zadune"
+     },
+     {
+      "id": "vyzhDra_exiled",
+      "name": "Vyzh`dra the Exiled"
+     },
+     {
+      "id": "vyzhDra_cursed",
+      "name": "Vyzh`dra the Cursed"
+     },
+     {
+      "id": "xerkizh_creator",
+      "name": "Xerkizh The Creator"
+     },
+     {
+      "id": "rhag_zhezum",
+      "name": "Rhag`Zhezum"
+     },
+     {
+      "id": "rhag_mozdezh",
+      "name": "Rhag`Mozdezh"
+     },
+     {
+      "id": "blood_ssraeshza",
+      "name": "Blood of Ssraeshza"
+     },
+     {
+      "id": "a_glyph_covered_serpent",
+      "name": "a glyph covered serpent"
+     }
+    ]
+   },
+   {
+    "slug": "sanctus-seru",
+    "name": "Sanctus Seru",
+    "bosses": [
+     {
+      "id": "lord_inquisitor_seru",
+      "name": "Lord Inquisitor Seru"
+     },
+     {
+      "id": "praesertum_matpa",
+      "name": "Praesertum Matpa"
+     },
+     {
+      "id": "praesertum_bikun",
+      "name": "Praesertum Bikun"
+     },
+     {
+      "id": "praesertum_rhugol",
+      "name": "Praesertum Rhugol"
+     },
+     {
+      "id": "praesertum_vantorus",
+      "name": "Praesertum Vantorus"
+     }
+    ]
+   },
+   {
+    "slug": "grieg-s-end",
+    "name": "Grieg's End",
+    "bosses": [
+     {
+      "id": "grieg_veneficus",
+      "name": "Grieg Veneficus"
+     },
+     {
+      "id": "servitor_luclin",
+      "name": "Servitor of Luclin"
+     },
+     {
+      "id": "praetorian_myral",
+      "name": "Praetorian Myral"
+     },
+     {
+      "id": "prast_ianitor",
+      "name": "Prast Ianitor"
+     }
+    ]
+   },
+   {
+    "slug": "katta-castellum",
+    "name": "Katta Castellum",
+    "bosses": [
+     {
+      "id": "lcea_katta",
+      "name": "Lcea Katta"
+     },
+     {
+      "id": "nathyn_illuminious",
+      "name": "Nathyn Illuminious"
+     }
+    ]
+   },
+   {
+    "slug": "the-deep",
+    "name": "The Deep",
+    "bosses": [
+     {
+      "id": "thought_horror_overfiend",
+      "name": "Thought Horror Overfiend"
+     },
+     {
+      "id": "burrower_parasite",
+      "name": "A Burrower Parasite"
+     }
+    ]
+   },
+   {
+    "slug": "akheva-ruins",
+    "name": "Akheva Ruins",
+    "bosses": [
+     {
+      "id": "insanity_crawler",
+      "name": "The Insanity Crawler"
+     },
+     {
+      "id": "shei_vinitras",
+      "name": "Shei Vinitras"
+     },
+     {
+      "id": "itraer_vius",
+      "name": "The Itraer Vius"
+     },
+     {
+      "id": "va_dyn",
+      "name": "The Va`Dyn"
+     },
+     {
+      "id": "xaui_tatrua",
+      "name": "Xaui Tatrua"
+     },
+     {
+      "id": "xi_vius",
+      "name": "Xi Vius"
+     },
+     {
+      "id": "vius_tatrua",
+      "name": "Vius Tatrua"
+     }
+    ]
+   },
+   {
+    "slug": "the-umbral-plains",
+    "name": "The Umbral Plains",
+    "bosses": [
+     {
+      "id": "netherbian_swarmlord",
+      "name": "Netherbian Swarmlord"
+     },
+     {
+      "id": "rumblecrush",
+      "name": "Rumblecrush"
+     },
+     {
+      "id": "doomshade",
+      "name": "Doomshade"
+     },
+     {
+      "id": "zelnithak",
+      "name": "Zelnithak"
+     }
+    ]
+   },
+   {
+    "slug": "vex-thal",
+    "name": "Vex Thal",
+    "bosses": [
+     {
+      "id": "aten_ha_ra",
+      "name": "Aten Ha Ra"
+     },
+     {
+      "id": "kaas_thox_xi_aten_ha_ra_north",
+      "name": "Kaas Thox Xi Aten Ha Ra (North)"
+     },
+     {
+      "id": "kaas_thox_xi_aten_ha_ra_south",
+      "name": "Kaas Thox Xi Aten Ha Ra (South)"
+     },
+     {
+      "id": "va_xi_aten_ha_ra",
+      "name": "Va Xi Aten Ha Ra"
+     },
+     {
+      "id": "thall_va_kelun",
+      "name": "Thall Va Kelun"
+     },
+     {
+      "id": "diabo_xi_va_temariel",
+      "name": "Diabo Xi Va Temariel"
+     },
+     {
+      "id": "thall_xundraux_diabo",
+      "name": "Thall Xundraux Diabo"
+     },
+     {
+      "id": "diabo_xi_xin_thall",
+      "name": "Diabo Xi Xin Thall"
+     },
+     {
+      "id": "kaas_thox_xi_ans_dyek",
+      "name": "Kaas Thox Xi Ans Dyek"
+     },
+     {
+      "id": "va_dyn_khar",
+      "name": "Va Dyn Khar"
+     },
+     {
+      "id": "diabo_xi_xin",
+      "name": "Diabo Xi Xin"
+     },
+     {
+      "id": "diabo_xi_va",
+      "name": "Diabo Xi Va"
+     },
+     {
+      "id": "thall_va_xakra_south",
+      "name": "Thall Va Xakra (South)"
+     },
+     {
+      "id": "thall_va_xakra_north",
+      "name": "Thall Va Xakra (North)"
+     },
+     {
+      "id": "eom_centien_xakra",
+      "name": "Eom Centien Xakra"
+     },
+     {
+      "id": "eom_centien",
+      "name": "Eom Centien"
+     },
+     {
+      "id": "eom_va_liako_xakra",
+      "name": "Eom Va Liako Xakra"
+     },
+     {
+      "id": "eom_va_liako",
+      "name": "Eom Va Liako"
+     },
+     {
+      "id": "eom_liako_xakra",
+      "name": "Eom Liako Xakra"
+     },
+     {
+      "id": "eom_liako",
+      "name": "Eom Liako"
+     },
+     {
+      "id": "eom_thall_xakra",
+      "name": "Eom Thall Xakra"
+     },
+     {
+      "id": "eom_thall",
+      "name": "Eom Thall"
+     },
+     {
+      "id": "eom_senshali_xakra",
+      "name": "Eom Senshali Xakra"
+     },
+     {
+      "id": "eom_senshali",
+      "name": "Eom Senshali"
+     },
+     {
+      "id": "eom_zethon_xakra",
+      "name": "Eom Zethon Xakra"
+     },
+     {
+      "id": "eom_zethon",
+      "name": "Eom Zethon"
+     }
+    ]
+   },
+   {
+    "slug": "acrylia-caverns",
+    "name": "Acrylia Caverns",
+    "bosses": [
+     {
+      "id": "an_escaped_burrower",
+      "name": "An Escaped Burrower"
+     },
+     {
+      "id": "a_summoned_burrower",
+      "name": "A Summoned Burrower"
+     },
+     {
+      "id": "a_restless_burrower",
+      "name": "A Restless Burrower"
+     }
+    ]
+   },
+   {
+    "slug": "echo-caverns",
+    "name": "Echo Caverns",
+    "bosses": [
+     {
+      "id": "general_jared_blaystich",
+      "name": "General Jared Blaystich"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "Velious",
+  "label": "Scars of Velious",
+  "zones": [
+   {
+    "slug": "velketor-s-labyrinth",
+    "name": "Velketor's Labyrinth",
+    "bosses": [
+     {
+      "id": "velketor_the_sorcerer",
+      "name": "Velketor the Sorcerer"
+     },
+     {
+      "id": "lord_doljonijiarnimorinar",
+      "name": "Lord Doljonijiarnimorinar"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-growth",
+    "name": "Plane of Growth",
+    "bosses": [
+     {
+      "id": "tunare",
+      "name": "Tunare"
+     },
+     {
+      "id": "grahl_strongback",
+      "name": "Grahl Strongback"
+     },
+     {
+      "id": "sarik_the_fang",
+      "name": "Sarik the Fang"
+     },
+     {
+      "id": "galiel_spirithoof",
+      "name": "Galiel Spirithoof"
+     },
+     {
+      "id": "ail_the_elder",
+      "name": "Ail the Elder"
+     },
+     {
+      "id": "rumbleroot",
+      "name": "Rumbleroot"
+     },
+     {
+      "id": "treah_greenroot",
+      "name": "Treah Greenroot"
+     },
+     {
+      "id": "fayl_everstrong",
+      "name": "Fayl Everstrong"
+     },
+     {
+      "id": "prince_thirneg",
+      "name": "Prince Thirneg"
+     },
+     {
+      "id": "keeper_of_the_glades",
+      "name": "keeper of the glades"
+     },
+     {
+      "id": "undogo_digolo",
+      "name": "Undogo Digolo"
+     }
+    ]
+   },
+   {
+    "slug": "kael-drakkel",
+    "name": "Kael Drakkel",
+    "bosses": [
+     {
+      "id": "king_tormax",
+      "name": "King Tormax"
+     },
+     {
+      "id": "avatar_of_war",
+      "name": "The Avatar of War"
+     },
+     {
+      "id": "derakor_vindicator",
+      "name": "Derakor the Vindicator"
+     },
+     {
+      "id": "statue_of_rallos_zek",
+      "name": "The Statue of Rallos Zek"
+     }
+    ]
+   },
+   {
+    "slug": "icewell-keep",
+    "name": "Icewell Keep",
+    "bosses": [
+     {
+      "id": "dain_frostreaver",
+      "name": "Dain Frostreaver IV"
+     },
+     {
+      "id": "royal_scribe_kaavin",
+      "name": "Royal Scribe Kaavin"
+     }
+    ]
+   },
+   {
+    "slug": "skyshrine",
+    "name": "Skyshrine",
+    "bosses": [
+     {
+      "id": "lord_yelinak",
+      "name": "Lord Yelinak"
+     }
+    ]
+   },
+   {
+    "slug": "iceclad-ocean",
+    "name": "Iceclad Ocean",
+    "bosses": [
+     {
+      "id": "stormfeather",
+      "name": "Stormfeather"
+     },
+     {
+      "id": "lodizal",
+      "name": "Lodizal"
+     }
+    ]
+   },
+   {
+    "slug": "cobalt-scar",
+    "name": "Cobalt Scar",
+    "bosses": [
+     {
+      "id": "kelorek_dar",
+      "name": "Kelorek`Dar"
+     }
+    ]
+   },
+   {
+    "slug": "western-wastes",
+    "name": "Western Wastes",
+    "bosses": [
+     {
+      "id": "klandicar",
+      "name": "Klandicar"
+     },
+     {
+      "id": "sontalak",
+      "name": "Sontalak"
+     },
+     {
+      "id": "melalafen",
+      "name": "Melalafen"
+     },
+     {
+      "id": "harla_dar",
+      "name": "Harla Dar"
+     },
+     {
+      "id": "mraaka",
+      "name": "Mraaka"
+     }
+    ]
+   },
+   {
+    "slug": "dragon-necropolis",
+    "name": "Dragon Necropolis",
+    "bosses": [
+     {
+      "id": "zlandicar",
+      "name": "Zlandicar"
+     },
+     {
+      "id": "queen_raltaas",
+      "name": "Queen Raltaas"
+     },
+     {
+      "id": "vaniki",
+      "name": "Vaniki"
+     },
+     {
+      "id": "neb",
+      "name": "Neb"
+     }
+    ]
+   },
+   {
+    "slug": "the-wakening-land",
+    "name": "The Wakening Land",
+    "bosses": [
+     {
+      "id": "wuoshi",
+      "name": "Wuoshi"
+     }
+    ]
+   },
+   {
+    "slug": "sleeper-s-tomb",
+    "name": "Sleeper's Tomb",
+    "bosses": [
+     {
+      "id": "nanzata_warder",
+      "name": "Nanzata the Warder"
+     },
+     {
+      "id": "ventani_warder",
+      "name": "Ventani the Warder"
+     },
+     {
+      "id": "tukaarak_warder",
+      "name": "Tukaarak the Warder"
+     },
+     {
+      "id": "hraashna_warder",
+      "name": "Hraashna the Warder"
+     },
+     {
+      "id": "final_arbiter",
+      "name": "The Final Arbiter"
+     },
+     {
+      "id": "progenitor",
+      "name": "The Progenitor"
+     }
+    ]
+   },
+   {
+    "slug": "temple-of-veeshan",
+    "name": "Temple of Veeshan",
+    "bosses": [
+     {
+      "id": "lord_vyemm",
+      "name": "Lord Vyemm"
+     },
+     {
+      "id": "aaryonar",
+      "name": "Aaryonar"
+     },
+     {
+      "id": "lendiniara_keeper",
+      "name": "Lendiniara the Keeper"
+     },
+     {
+      "id": "dozekar_the_cursed",
+      "name": "Dozekar the Cursed"
+     },
+     {
+      "id": "ikatiar_venom",
+      "name": "Ikatiar the Venom"
+     },
+     {
+      "id": "lord_feshlak",
+      "name": "Lord Feshlak"
+     },
+     {
+      "id": "dagarn_destroyer",
+      "name": "Dagarn the Destroyer"
+     },
+     {
+      "id": "eashen_sky",
+      "name": "Eashen of the Sky"
+     },
+     {
+      "id": "lord_kreizenn",
+      "name": "Lord Kreizenn"
+     },
+     {
+      "id": "lady_nevederia",
+      "name": "Lady Nevederia"
+     },
+     {
+      "id": "vulak_aerr",
+      "name": "Vulak`Aerr"
+     },
+     {
+      "id": "quellod_earthspirit",
+      "name": "Quellod Earthspirit"
+     },
+     {
+      "id": "vyldin_flamereaver",
+      "name": "Vyldin Flamereaver"
+     },
+     {
+      "id": "yrrindor_emerald_claw",
+      "name": "Yrrindor Emerald Claw"
+     },
+     {
+      "id": "cyndor_lightningfang",
+      "name": "Cyndor Lightningfang"
+     },
+     {
+      "id": "beldion_icewind",
+      "name": "Beldion Icewind"
+     },
+     {
+      "id": "malteor_flamecaller",
+      "name": "Malteor Flamecaller"
+     },
+     {
+      "id": "zyerek_onyxblood",
+      "name": "Zyerek Onyxblood"
+     },
+     {
+      "id": "kalkar_of_the_maelstrom",
+      "name": "Kalkar of the Maelstrom"
+     },
+     {
+      "id": "wel_wnas",
+      "name": "Wel`Wnas"
+     },
+     {
+      "id": "nir_tan",
+      "name": "Nir`Tan"
+     },
+     {
+      "id": "gra_vloren",
+      "name": "Gra`Vloren"
+     },
+     {
+      "id": "lurian",
+      "name": "Lurian"
+     },
+     {
+      "id": "kedrak",
+      "name": "Kedrak"
+     },
+     {
+      "id": "kal_vunar",
+      "name": "Kal`Vunar"
+     },
+     {
+      "id": "hsrek",
+      "name": "Hsrek"
+     },
+     {
+      "id": "carx_vean",
+      "name": "Carx`Vean"
+     },
+     {
+      "id": "mazrien",
+      "name": "Mazrien"
+     },
+     {
+      "id": "bryrym",
+      "name": "Bryrym"
+     },
+     {
+      "id": "vukuz",
+      "name": "Vukuz"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "Kunark",
+  "label": "Ruins of Kunark",
+  "zones": [
+   {
+    "slug": "ruins-of-sebilis",
+    "name": "Ruins of Sebilis",
+    "bosses": [
+     {
+      "id": "trakanon",
+      "name": "Trakanon"
+     }
+    ]
+   },
+   {
+    "slug": "karnor-s-castle",
+    "name": "Karnor's Castle",
+    "bosses": [
+     {
+      "id": "venril_sathir",
+      "name": "Venril Sathir"
+     }
+    ]
+   },
+   {
+    "slug": "howling-stones",
+    "name": "Howling Stones",
+    "bosses": [
+     {
+      "id": "drusella_sathir",
+      "name": "Drusella Sathir"
+     }
+    ]
+   },
+   {
+    "slug": "the-hole",
+    "name": "The Hole",
+    "bosses": [
+     {
+      "id": "master_yael",
+      "name": "Master Yael"
+     },
+     {
+      "id": "nortlav_scalekeeper",
+      "name": "Nortlav the Scalekeeper"
+     }
+    ]
+   },
+   {
+    "slug": "skyfire-mountains",
+    "name": "Skyfire Mountains",
+    "bosses": [
+     {
+      "id": "talendor",
+      "name": "Talendor"
+     }
+    ]
+   },
+   {
+    "slug": "emerald-jungle",
+    "name": "Emerald Jungle",
+    "bosses": [
+     {
+      "id": "severilous",
+      "name": "Severilous"
+     }
+    ]
+   },
+   {
+    "slug": "timorous-deep",
+    "name": "Timorous Deep",
+    "bosses": [
+     {
+      "id": "faydedar",
+      "name": "Faydedar"
+     }
+    ]
+   },
+   {
+    "slug": "veeshan-s-peak",
+    "name": "Veeshan's Peak",
+    "bosses": [
+     {
+      "id": "phara_dar",
+      "name": "Phara Dar"
+     },
+     {
+      "id": "nexona",
+      "name": "Nexona"
+     },
+     {
+      "id": "hoshkar",
+      "name": "Hoshkar"
+     },
+     {
+      "id": "silverwing",
+      "name": "Silverwing"
+     },
+     {
+      "id": "xygoz",
+      "name": "Xygoz"
+     },
+     {
+      "id": "druushk",
+      "name": "Druushk"
+     }
+    ]
+   },
+   {
+    "slug": "chardok",
+    "name": "Chardok",
+    "bosses": [
+     {
+      "id": "overking_bathezid",
+      "name": "Overking Bathezid"
+     },
+     {
+      "id": "queen_velazul_dizok",
+      "name": "Queen Velazul Di`zok"
+     },
+     {
+      "id": "prince_selrach_dizok",
+      "name": "Prince Selrach Di`zok"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "key": "Classic",
+  "label": "Classic",
+  "zones": [
+   {
+    "slug": "nagafen-s-lair",
+    "name": "Nagafen's Lair",
+    "bosses": [
+     {
+      "id": "lord_nagafen",
+      "name": "Lord Nagafen"
+     },
+     {
+      "id": "magi_rokyl",
+      "name": "Magi Rokyl"
+     },
+     {
+      "id": "warlord_skarlon",
+      "name": "Warlord Skarlon"
+     },
+     {
+      "id": "king_tranix",
+      "name": "King Tranix"
+     }
+    ]
+   },
+   {
+    "slug": "permafrost-caverns",
+    "name": "Permafrost Caverns",
+    "bosses": [
+     {
+      "id": "lady_vox",
+      "name": "Lady Vox"
+     }
+    ]
+   },
+   {
+    "slug": "kedge-keep",
+    "name": "Kedge Keep",
+    "bosses": [
+     {
+      "id": "phinigel_autropos",
+      "name": "Phinigel Autropos"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-fear",
+    "name": "Plane of Fear",
+    "bosses": [
+     {
+      "id": "cazic_thule",
+      "name": "Cazic Thule"
+     },
+     {
+      "id": "dracoliche",
+      "name": "a dracoliche"
+     },
+     {
+      "id": "fright",
+      "name": "Fright"
+     },
+     {
+      "id": "dread",
+      "name": "Dread"
+     },
+     {
+      "id": "terror",
+      "name": "Terror"
+     }
+    ]
+   },
+   {
+    "slug": "plane-of-hate",
+    "name": "Plane of Hate",
+    "bosses": [
+     {
+      "id": "innoruuk",
+      "name": "Innoruuk"
+     },
+     {
+      "id": "maestro_of_rancor",
+      "name": "Maestro of Rancor"
+     },
+     {
+      "id": "lord_of_ire",
+      "name": "Lord of Ire"
+     },
+     {
+      "id": "ashenbone_broodmaster",
+      "name": "Ashenbone Broodmaster"
+     }
+    ]
+   }
+  ]
+ }
+]

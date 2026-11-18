@@ -9,10 +9,11 @@ import { ROOT, readSource, stripJs, stripSql } from './_source-slice.js';
 import path from 'node:path';
 import {
   upcomingRaids, scheduleFor, buildMyRaids, cleanLabel, validateEntry, dateKeyIn, monthCells, parseMonth, shiftMonth,
-  MAX_GUILD_ENTRIES, targetKeyOf,
+  MAX_GUILD_ENTRIES, targetKeyOf, targetLabel,
 } from '../web/lib/myRaids.ts';
 import { saveEntry, removeEntry, setTarget, linkCharacter, linkCharacters } from '../web/lib/myRaidsWrite.ts';
 import { FLAG_TARGETS } from '../web/lib/flagTargets.ts';
+import { RAID_CATALOG, parseTargetKeys, zoneKey, bossKey, MAX_TARGET_KEYS } from '../web/lib/raidTargets.ts';
 import { isRaidmimicOpenPath } from '../web/lib/raidmimicHost.ts';
 import { metaForPath } from '../web/lib/pageMeta.ts';
 import { SELF_TABLES } from '../web/lib/selfData.ts';
@@ -372,5 +373,61 @@ describe('the wiring', () => {
       expect(spec.select).not.toContain('*');
     }
     expect(SELF_TABLES.find(s => s.table === 'hub_characters').select).toContain('player_guild_id');
+  });
+});
+
+describe('the raid target picker: zones and bosses by expansion, several to a night', () => {
+  const NOW = Date.UTC(2026, 10, 15, 12);
+  const sundayKey = '2026-11-15';
+  const MINE = { id: E1, player_id: 'player-a' };
+  it('lists expansions newest first, PoP to Classic, and every zone and boss once', () => {
+    expect(RAID_CATALOG.map(e => e.key)).toEqual(['PoP', 'Luclin', 'Velious', 'Kunark', 'Classic']);
+    const catalog = JSON.parse(readSource(path.join(ROOT, 'data/bosses.json')));
+    const ids = RAID_CATALOG.flatMap(e => e.zones.flatMap(z => z.bosses.map(b => b.id)));
+    expect([...ids].sort()).toEqual(catalog.map(b => b.id).sort());
+    for (const e of RAID_CATALOG) for (const z of e.zones) {
+      for (const b of z.bosses) expect(catalog.find(c => c.id === b.id).zone).toBe(z.name);
+    }
+    const zones = RAID_CATALOG.flatMap(e => e.zones);
+    expect(new Set(zones.map(z => z.slug)).size).toBe(zones.length);
+  });
+  it('every existing flag target key still resolves', () => {
+    for (const t of FLAG_TARGETS) expect(parseTargetKeys(t.key), t.key).toEqual([t.key]);
+    expect(targetLabel('saryrn')).toBe('Saryrn');
+  });
+  it('names a list "Zone A + Boss B" and refuses anything not in the catalog', () => {
+    const z = RAID_CATALOG[0].zones[0];
+    const b = RAID_CATALOG[4].zones[0].bosses[0];
+    expect(targetLabel(`${zoneKey(z)},${bossKey(b)},saryrn`)).toBe(`${z.name} + ${b.name} + Saryrn`);
+    expect(targetLabel('saryrn,nope')).toBeNull();
+    expect(parseTargetKeys('b:not_a_boss')).toBeNull();
+    expect(parseTargetKeys(`${zoneKey(z)},${zoneKey(z)}`)).toBeNull();
+    expect(parseTargetKeys('')).toBeNull();
+    expect(parseTargetKeys(Array(MAX_TARGET_KEYS + 1).fill(zoneKey(z)).join(','))).toBeNull();
+  });
+  it('a multi-key save validates every key; one bad key saves nothing', async () => {
+    const z = RAID_CATALOG[0].zones[0];
+    const b = RAID_CATALOG[1].zones[0].bosses[0];
+    const { db, ops } = stubDb({ guilds: [MINE] });
+    const list = `${zoneKey(z)},${bossKey(b)}`;
+    expect((await setTarget(db, 'player-a', E1, '2026-11-18', list)).ok).toBe(true);
+    expect(writes(ops)[0].payload.target_key).toBe(list);
+    expect((await setTarget(db, 'player-a', E1, '2026-11-18', `${list},b:nope`)).ok).toBe(false);
+    expect(writes(ops)).toHaveLength(1);
+  });
+  it('a saved list shows on the raid row, with the gate verdicts from its first flag target', () => {
+    const list = `${zoneKey(RAID_CATALOG[0].zones[0])},saryrn`;
+    const r = buildMyRaids(BASE({
+      targetsByEntryDate: { [targetKeyOf(E1, sundayKey)]: list },
+      characters: [{ name: 'Aldenmar', flags: [], playerGuildId: null }],
+    }), NOW).find(x => x.dateKey === sundayKey);
+    expect(r.targetKey).toBe(list);
+    expect(r.targetSource).toBe('mine');
+    expect(r.perCharacter).toHaveLength(1);
+  });
+  it('the migration lifts the 40-character limit that one comma list would break', () => {
+    const sql = stripSql(src('supabase/migrations/20261118000100_hub_player_targets_many.sql'));
+    expect(sql).toMatch(/hub_player_targets_target_key_check/);
+    expect(sql).toMatch(/between 1 and 400/);
   });
 });
