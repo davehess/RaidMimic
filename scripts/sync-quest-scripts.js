@@ -25,8 +25,7 @@
  *   QUESTS_FORCE     '1' re-uploads every file even if the sha is unchanged
  *
  * Licence note: the upstream repo is GPL-3.0, which expressly permits
- * redistribution. This is NOT the docs/pq-companion case (unlicensed → study
- * and reimplement, never copy).
+ * redistribution.
  */
 'use strict';
 

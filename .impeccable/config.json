@@ -72,8 +72,8 @@
         "files": [
           "test/raidmimic-landing-variants.test.js"
         ],
-        "createdAt": "2026-11-09T16:25:52.843Z",
-        "reason": "session 2026-11-09: '<img' is a regex/string inside a vitest assertion, not rendered markup"
+        "createdAt": "2026-11-17T16:41:05.043Z",
+        "reason": "session: L291 is a test title string ('plain <img src> strings'), not markup"
       }
     ]
   }

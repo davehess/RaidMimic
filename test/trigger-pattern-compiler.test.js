@@ -1,7 +1,7 @@
 // test/trigger-pattern-compiler.test.js — compileTriggerPattern, the unified
 // GINA / EQLogParser / native trigger-pattern pipeline.
 //
-// Background (pq-companion comparison, analysis 01, 2026-08-07): the old pair
+// Background (GINA compatibility review, 2026-08-07): the old pair
 // of translators left 92 of 583 corpus patterns throwing at compile, all 311
 // ^-anchored imports structurally dead (we match the RAW timestamped line;
 // GINA/EQLP strip the timestamp first), {s1}/{s2} renumbered by position so

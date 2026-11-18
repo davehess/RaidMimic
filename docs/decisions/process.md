@@ -21,13 +21,6 @@ features against the newest shape rather than the oldest deployed Mimic.
 bump makes it no-op with a green check. Cost us the v2.3.3 stable build, which
 had to be recovered by `workflow_dispatch`.
 
-## 2026-08-07/9 — pq-companion
-*2026-08-07 · DECISIONS-2026-08-07.md · Study other project, reimplement, never copy*
-
-**Study and reimplement; never copy.** The repo has no license — all rights
-reserved. Five analyses live in `docs/pq-companion/`, and five agent fixes
-shipped from them (3.5.44–3.5.48).
-
 ---
 
 ## 2026-08-07/8 — Branches — beta stops drifting (2026-08-09)
@@ -849,7 +842,7 @@ is ephemeral. It is a desktop-session job.
   (`_scanSkinWindowSizes`, `uiClearRects.js` `skinSizeFor`); UI Studio "Move it in game" shows `/raidbars position L T
   [R B]` and `/assistbar position L T` with Copy.
 - **Agent 3.8.33:** the guild trigger list moved off `/api/state` to `/api/guild-triggers?rev=` (poll about 540 KB down
-  to about 4 KB at 500 rows). **3.8.34:** PQ Companion trigger pack import beside GINA / EQLogParser. **3.8.35:** Map
+  to about 4 KB at 500 rows). **3.8.34:** third-party trigger pack import beside GINA / EQLogParser. **3.8.35:** Map
   engaged = hurt (any live mob under 100%, lowest first), per-spawn health memory fed every Zeal frame and shown with
   its age, kite totals, "killed?" marks for ambiguous same-name deaths, targeting a corpse or a "dead" /tag (chat, rsay,
   gsay, prettyprint off) confirms the kill and starts the respawn timer; limit: Mimic forwards Zeal snapshots every 300
@@ -1263,21 +1256,18 @@ without exposing all of the decisions publicly"*.
   - **Untested:** whether Claude in the phone app can open the doc by voice
     request. The fallback is the phone's own read-aloud on the open doc.
 
-## §94 — Companion suite review, round two: settings pages, bandolier, spell sets, maps, the gear finder (2026-09-29)
-*2026-09-29 · DECISIONS-2026-09-21.md · Companion app review, ideas to borrow*
+## §94 — Gap list: settings pages, bandolier, spell sets, maps, the gear finder (2026-09-29)
+*2026-09-29 · DECISIONS-2026-09-21.md · Product gap list*
 
-The guild lead kept sending screenshots of the same app: *"bandolier builder looks really clean as are
-spellsets"*, its Settings pages (audio, accessibility, navigation, overlays, spell timers, DPS meters,
-Discord, maps, advanced), its raid summary, and *"THIS GEAR UPGRADE FINDER IS INTERESTING"* / *"Overview
-tells me what gear scores i could replace"*.
-- **All of it is in the review doc** (a claude.ai doc in the guild lead's artifacts, "Companion suite review —
-  what we don't have yet"; the other app is not named there by request). **Counts now: 28 missing, 38
-  partial, 19 covered.** Each item was checked on all four surfaces.
+The guild lead asked for a gap list across settings pages (audio, accessibility, navigation, overlays, spell timers, DPS
+meters, Discord, maps, advanced), a bandolier builder, spell sets, a raid summary and a gear upgrade finder (*"Overview
+tells me what gear scores i could replace"*).
+- **Counts: 28 missing, 38 partial, 19 covered.** Each item was checked on all four surfaces.
 - **The gaps worth knowing about first:**
   - **A client version check.** Our Client versions card shows the eqgame.dll build from `/zeal version`
     but compares it with nothing. A check against known-good builds would have flagged §88's wrong
     eqgame.dll.
-  - **The gear upgrade finder** (L), written up in the doc's closer look:
+  - **The gear upgrade finder** (L):
     - by slot, and an overview of each slot's best upgrade by score;
     - class weights (off / low / med / high / crit) with rules for the attack, haste, mana-regen and
       weapon-damage caps; filters.

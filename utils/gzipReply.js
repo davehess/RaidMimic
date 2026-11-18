@@ -2,7 +2,8 @@
 // "gzip-now"). The bot moves ~36-41 GB out a week; /poll, raid-buff-queue and live-damage are the heavy repeaters.
 // Only when `Accept-Encoding` names gzip, and not for a body under 1 KB (the header costs more than it saves). Anyone
 // who did not ask gets the plain body, so an agent that predates gzip is untouched. `Vary` is always set so a cache
-// never serves the compressed copy to a caller that cannot read it. None of these three routes carries an ETag.
+// never serves the compressed copy to a caller that cannot read it. raid-buff-queue also passes an ETag in `headers` and
+// answers 304 itself when it matches (2026-11-17, §617); /poll and live-damage carry none.
 const zlib = require('zlib');
 
 const MIN_GZIP_BYTES = 1024;

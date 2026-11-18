@@ -1,11 +1,8 @@
 // /opendkp — a PUBLIC live counter of every request Wolf Pack sends OpenDKP.
 //
-// WHY THIS IS OPEN ACCESS (the guild lead, 2026-08-26): "moncs is ready to unblock us,
-// so I need a live counter site that's open access." On 2026-08-25 our traffic
-// cost OpenDKP's owner real money and got our IP blocked at his WAF. He is
-// about to lift that on our word. "Trust us, it's fixed" is not a reasonable
-// thing to ask of someone who is paying the bill, and he is not in our Discord,
-// so any page behind our sign-in is useless to the one person who needs it.
+// WHY THIS IS OPEN ACCESS: the point of the page is that anyone, including people outside our
+// Discord, can check what we send to OpenDKP rather than take our word for it. A page behind
+// our sign-in would be useless to exactly those readers.
 //
 // This page therefore has NO auth check — deliberately, and it is the only
 // member-facing surface that doesn't. What it exposes is exactly and only:
@@ -40,7 +37,7 @@ function fmtBytes(n: number) {
 }
 
 // Series colors — the validated categorical order from the writeup, so the
-// graphs here and the ones Moncs was shown read as the same system.
+// graphs here and the ones in the writeup read as the same system.
 const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#8b949e'];
 
 type Summary = {
@@ -70,7 +67,7 @@ export default async function OpenDkpPage() {
   // against a true 2,074 / 115.9 MB.
   //
   // It under-reported by ~36%, IN OUR FAVOUR, on the one page whose whole
-  // purpose is that OpenDKP's operator need not take our word for our traffic.
+  // purpose is that no reader need take our word for our traffic.
   // Wrong in the flattering direction is worse here than being down. Raising
   // the limit would only move the cliff; the RPC removes it.
   const [{ data: summaryRaw, error: summaryErr }, { data: tuneRows }] = await Promise.all([

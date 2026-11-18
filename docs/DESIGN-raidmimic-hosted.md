@@ -218,12 +218,12 @@ gap splitter. Two guilds on the same mob are two rows that never meet. For the m
 ### 7d. Extensible inputs: the agent is the only parser, and that is the bottleneck
 
 All parsing happens in the agent on the member's PC; the bot receives structured events and keeps only aggregates. A whole
-log file uploaded on the web, a PQ Companion export, or a Zeal spawn stream from another tool all need the same thing: **the
+log file uploaded on the web, a parse export from another tool, or a Zeal spawn stream from another tool all need the same thing: **the
 agent's parser as a library** (`packages/wolfpack-logsync/index.js` is one 35k-line file the bot already reads for its version).
 Order of work: (1) split the parse functions (`shouldKeep`, the event parser, the encounter builder) into a module the bot can
 `require`; (2) `POST /api/log-upload` runs it server-side in `--once` mode on an uploaded file, same privacy filter, same
-payload shape, `source='log_upload'`; (3) PQ Companion: its trigger packs already import (`test/pqc-import.test.js`); its parse
-export was studied (`docs/pq-companion/04`) and is a second reader for the same module; (4) spawn ids: the field in 7c.3, with
+payload shape, `source='log_upload'`; (3) other tools: third-party trigger packs already import (`test/pqc-import.test.js`); a parse
+export would be a second reader for the same module; (4) spawn ids: the field in 7c.3, with
 any source allowed to fill it. `contributions.raw_parse->source` already tells the sources apart, and agent data wins when both
 exist (CLAUDE.md, chat-extracted parses).
 
@@ -279,11 +279,11 @@ Supabase redirect list allows wolfpack.quest only; `mimicLink` carries no guild.
 - The Mimic link code is minted by the guild the player picks (§475), and the agent's bearer carries `guild_id`, which is what
   makes per-request scoping (§3 step 6) possible.
 
-### 7h. OpenDKP: a partnership, not a scraper
+### 7h. OpenDKP: per-guild keys and a change feed
 
 Today: one officer login, `noauth` reads with a static client id, 47 wired functions, the mirror in `opendkp_*`, and an unsent
 three-tier ask (`docs/DESIGN-opendkp-audit-cursor.md`: `?count=`, `?since=<AuditId>`, entity ids on audits). For many guilds the
-same traffic multiplies by N, which is exactly what the OpenDKP owner objected to in August. The partnership ask, in order:
+same traffic multiplies by N, which is exactly what the upstream maintainer objected to in August. The ask, in order:
 (1) send the audit-cursor ask, framed as "N guilds, one well-behaved client"; (2) a per-guild API key issued by OpenDKP to the
 guild, stored per `guild_id` (never one shared officer password); (3) a webhook from OpenDKP on auction close and tick, which
 retires polling altogether; (4) in return, Raid Mimic pushes attendance ticks and loot winners to OpenDKP for guilds that want it.
@@ -307,16 +307,16 @@ Raid-Helper, and the DKP push. Both are small once the guild seam exists; neithe
 4. Server key + `fight_id` + spawn id on the payload (7c). Unblocks: the merge, and honest instance separation.
 5. Validation signals 1–5 and the flags table (7e). Unblocks: trusting merged numbers.
 6. Billing rail (§385's $25 flat per guild). Unblocks: the easy mode.
-7. Parser as a library, log upload, PQ Companion reader (7d). Unblocks: raiders without Mimic.
+7. Parser as a library, log upload, a second parse reader (7d). Unblocks: raiders without Mimic.
 8. OpenDKP per-guild keys and the audit cursor (7h). Unblocks: other guilds' DKP.
 9. Anonymized server stats (7f) and the raid flow's two missing joints (7i).
 
-## 8. Self-hosted instances, PQ Companion, the /who directory, and the per-user bound (2026-10-31)
+## 8. Self-hosted instances, the /who directory, and the per-user bound (2026-10-31)
 
-The guild lead, after picking §7's A/A: *"help people with their installs, see what a merger with pqcompanion would look like
-client wise … how could hosted instances work with our instance? … could we take a who inventory and gate who observations by
-guild that has observed? unique rows per name … what would be a good one time fee or monthly per user fee? … we need to bound
-how much data we store per user."* DECISIONS §485–§486.
+The guild lead, after picking §7's A/A: *"help people with their installs … how could hosted instances work with our
+instance? … could we take a who inventory and gate who observations by guild that has observed? unique rows per name …
+what would be a good one time fee or monthly per user fee? … we need to bound how much data we store per user."*
+DECISIONS §485–§486.
 
 ### 8a. Federation: a self-hosted guild and the hub
 
@@ -338,29 +338,6 @@ A guild that runs its own bot and database (the self-host wizard) joins the shar
 - What already looks like this: the agent's encounter upload (structured fight in, bearer out), guest sessions (a parse and
   nothing else), `/share/raid/<token>` (token-scoped read of one window), the one-way eqemu mirror. `utils/openHub.js` is the
   dormant gate; the directory and the `latest-version` redirect in `DESIGN-open-hub.md` §0/§8 are unbuilt.
-
-### 8b. PQ Companion: what a merger would look like, and why B first
-
-PQ Companion (jasonsoprovich/pq-companion) is a Go backend + Electron/React client with three bundled SQLite files, a GINA /
-EQNag / EQLogParser trigger engine (RE2 regex, so ~95 of 583 GINA patterns import disabled), spell timers, a combat parser with
-DPS/HPS/threat overlays, live maps from client files with Zeal position, a local item/spell/NPC explorer, tradeskills, and since
-our August review: PoP flags, a charm-pet finder, an upgrade finder, bandolier/macros and config backup. v0.31.1 on 2026-10-28,
-about a minor version a week; **no licence file** (all rights reserved; "free and always will be"); **no plugin API** beyond
-trigger-pack import/export and the Zeal pipe; no guild layer of any kind. Everything we have that it lacks is the platform
-side: the shared raid record and merged parses, the session/replay, guild triggers, the tracker and attendance, PoP flags and
-lockouts as a guild view, loot/DKP/wishlists, the website; plus the client pieces that depend on a platform feed (buff queue,
-cross-client Target Info, Command Center) and the ones that do not (Canvas, charm/pet/CH chain, UI Studio).
-
-| Shape | What it is | Build / maintain / runtime / change | Verdict |
-|---|---|---|---|
-| **A — PQC stays the client, gains "upload to Raid Mimic"** | our parser as a library inside their app, or an upload hook they add | high and author-dependent / high (their weekly cadence) / two apps unless they embed us / very high (their roadmap) | only with the author; no licence or plugin seam exists |
-| **B — Mimic stays the client, absorbs what we may** | trigger packs (done), maps re-implemented from the `.txt` packs (~280 lines), tradeskills from server formulas; never their code | moderate (maps) / ours / unchanged / low | **do now** |
-| **C — one merged client, one name** | joint project with shared governance and a licence | highest (Go/RE2 vs our JS agent) / shared / lighter if one app / hardest | only after A's conversation |
-
-"Our platform plus their client plus features only we had" is shape A: a PQC user keeps their overlays and gains the shared
-parses, the website, guild triggers and loot/DKP, and does not get Mimic's overlays (the client half is theirs). It is a
-conversation before it is a build: a short note to the author asking about a licence or an upload hook costs nothing and is
-what makes A or C possible. Until then, B.
 
 **Helping people with their installs.** Exists: the setup walkthrough, "Set up for me" (the EQ-config writer), Zeal detection
 with the three documented failure signatures (ENOENT / EPERM compat mode / instant close), the 🩺 Diagnostics tab with crash
@@ -678,3 +655,35 @@ dropping the `'wolfpack'` column defaults once writers pass a guild.
 one: it resolves the guild per interaction and per event from `hub_guilds.discord_guild_id`, registers global commands,
 asks for no privileged intent and only the permissions above, and does the import plus raid cards first. Wolf Pack's bot
 does not change. A guild that later wants the full feature set gets its own copy (§9 option C).
+
+**Superseded in part 2026-11-17 (§616): one process, two Discord apps.** The guild lead: *"Can we architect this into the
+current bot then so we don't have to keep doing both? anything new can be done via RaidMimic instead of RaidBosses, with
+the exception of the boards which are barely used"*. The Raid Mimic app stays a separate Discord application (its own
+token, global commands, no privileged intent, the permissions above); what changes is where it runs and who it serves:
+- **It runs inside the current bot service**, not a new one. Hosted guilds' uploads already reach this process (§11), so a
+  second service would split one guild's data path across two boxes without making either safer.
+- **Wolf Pack is just another guild to it.** Every new feature is built once, multi-guild, on the Raid Mimic app, and Wolf
+  Pack's server installs that app beside RaidBosses. Nothing new is built on RaidBosses.
+- **RaidBosses keeps** the boards (barely used, so not ported) and the Wolf Pack jobs that need a live Discord login and
+  privileged intents the shared app must never ask for: member join/leave onboarding and the 6-hour member sync
+  (`GuildMembers`), the patch-notes mirror and the Suno mover (`MessageContent`), the forum-thread hook, voice. It keeps its
+  login lease (§562) and its restart gap.
+- **Raid Mimic never logs in.** Discord sends its slash commands and buttons to an Interactions Endpoint URL on the bot's
+  existing public address (Ed25519 signature check with Node's `crypto`, no dependency); it posts through Discord's REST
+  API with its own token. That route is answered **in standby too**, because it needs no login, so a deploy shows no gap on
+  Raid Mimic clicks. Agent uploads keep today's handover (the one-replica rule in CLAUDE.md is unchanged).
+- **The seam.** New code lives in its own folder (`raidmimic/`), with `index.js` only mounting the route and starting its
+  scheduler. The folder resolves the guild per interaction from `hub_guilds.discord_guild_id` and never reads
+  `DISCORD_GUILD_ID`, `SUPABASE_GUILD_ID`, `'wolfpack'` or `state.json`; a test enforces that. The real copy of anything
+  lives in the database, never only in memory (§615 addendum). Kept that way, the folder can move to its own service later
+  in a day if one guild's load ever needs it.
+- **Scheduled posts** (raid cards, timers) run only on the lease holder and take a database claim row per post, so neither
+  a handover nor a retry posts twice.
+- **Moving an existing Wolf Pack command** happens when it is next changed: the Raid Mimic version ships and the RaidBosses
+  registration is deleted in the same change, so there are never two of one command (Desk `bot-cutover` follow-up). A job
+  that edits a standing message (a bot can edit only its own posts) reposts once under Raid Mimic; the boards are exempt
+  because they stay.
+- **Gaps to design around:** no gateway means no `guildDelete` event, so a server removing the app is learned from a 403
+  on the next poll or post (then stop and start the purge timer); the shared process means one guild's crash or memory
+  climb is every guild's (the `[mem]` line and `/health` already watch it; the folder gets its own kill switch in the
+  tuning map).

@@ -433,8 +433,7 @@ const TRANSFORMS = {
     // castoutdoor/hotzone/canlevitate/canbind/zone_exp_multiplier were in the
     // upstream table all along and we never picked them, so "can I bind here?"
     // was unanswerable from a mirror that already had the row (found 2026-08-13
-    // diffing our zone surface against pq-companion's — see
-    // docs/pq-companion/06-data-provenance-and-gaps.md §2).
+    // diffing our zone surface against the upstream table).
     const r = pick(cols, row, ['short_name', 'long_name', 'zoneidnumber', 'expansion', 'file', 'safe_x', 'safe_y', 'safe_z', 'min_status', 'note',
       'castoutdoor', 'hotzone', 'canlevitate', 'canbind', 'zone_exp_multiplier', ...ZONE_LOOK_COLS]);
     if (!r.short_name) return null;
@@ -1149,10 +1148,8 @@ if (require.main !== module) return;
   }
 
   // ── Validation gates ──────────────────────────────────────────────────────
-  // Adapted from pq-companion's data-release job, which runs 14 row-count and
-  // 10 FK checks and FAILS THE BUILD on a mismatch
-  // (docs/pq-companion/06-data-provenance-and-gaps.md §6). We had no equivalent,
-  // and have already shipped two bugs of exactly the shape this catches:
+  // Row-count and FK checks that FAIL THE BUILD on a mismatch. We had no
+  // equivalent, and have already shipped two bugs of exactly the shape this catches:
   //   • six tables that no migration created, so the repo could not rebuild its
   //     own schema and nobody noticed for months;
   //   • npc_spells/npc_spells_entries parsed and transformed correctly but left

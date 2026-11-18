@@ -250,7 +250,7 @@ must therefore ask or verify.
 
 ### Third-party API citizenship (outbound call budgets)
 - **2026-08-25 — every third-party API the platform calls gets an outbound
-  budget at its HTTP primitives** (the Moncs/OpenDKP incident: one uncached
+  budget at its HTTP primitives** (the OpenDKP rate-limit incident: one uncached
   7s dashboard poll = 1,678 calls / 1.1 GB in an afternoon on someone ELSE'S
   AWS bill, and our IP blocked). The pattern (see `utils/opendkp.js`):
   per-service kill switch (`OPENDKP_HALT`), sliding per-minute budget
@@ -473,13 +473,12 @@ and the same never-refetch guarantee.
   beside the 97 MB catalog, so unlike that one it does NOT force an on-prem
   decision — it fits a hosted tier comfortably. The wizard should fetch it by
   default and say what it is for: verifying that a trigger watches text which
-  actually exists. GPL-3.0 permits redistribution; do not confuse it with the
-  unlicensed `pq-companion` material.
-- **A competitor ships the whole catalog as one SQLite file inside the
-  installer** (`docs/pq-companion/06-data-provenance-and-gaps.md` §1) — offline,
-  zero latency, frozen at build time, every user downloading the lot. Ours is a
+  actually exists. GPL-3.0 permits redistribution.
+- **The whole catalog could instead ship as one SQLite file inside the
+  installer** — offline, zero latency, frozen at build time, every user
+  downloading the lot. Ours is a
   shared Postgres: fresh, tiny on the client, useless without network. **A
-  self-hosting guild on a flaky box may genuinely prefer their shape**, so the
+  self-hosting guild on a flaky box may genuinely prefer that shape**, so the
   wizard must not present the server-side answer as self-evidently correct.
 
 ### Identity & auth

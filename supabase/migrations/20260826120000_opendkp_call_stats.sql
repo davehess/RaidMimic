@@ -1,11 +1,11 @@
 -- opendkp_call_stats — a public, live counter of every request we send OpenDKP.
 --
--- WHY (the guild lead, 2026-08-26): "moncs is ready to unblock us, so I need a live
+-- WHY (the guild lead, 2026-08-26): "the upstream maintainer is ready to unblock us, so I need a live
 -- counter site that's open access on wolfpack.quest." After an incident where
 -- our traffic cost a third party real money, "trust us, it's fixed" is not a
--- reasonable ask. He gets a URL that shows what we are actually sending, in his
--- own vocabulary (the endpoint shapes his API Gateway log groups by), and can
--- watch it himself the moment he lifts the IP block.
+-- reasonable ask. They get a URL that shows what we are actually sending, in their
+-- own vocabulary (the endpoint shapes their API Gateway log groups by), and can
+-- watch it themselves the moment the IP block lifts.
 --
 -- Minute buckets, not a row per call. A row per call would reproduce our own
 -- incident in miniature — the write amplification that started this whole

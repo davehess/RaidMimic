@@ -22,9 +22,7 @@
 -- ⚠ Still UPSTREAM scripts, not a live-server dump — Quarm may run local edits.
 -- Treat as the best available reference, never as proof of live behaviour.
 --
--- Licence: GPL-3.0, which expressly permits redistribution. This is NOT the
--- docs/pq-companion situation (that repo is unlicensed → study and reimplement,
--- never copy). Do not conflate the two.
+-- Licence: GPL-3.0, which expressly permits redistribution.
 create table if not exists public.eqemu_quest_scripts (
   path         text primary key,                  -- 'ssratemple/encounters/Emperor.lua'
   zone_short   text not null,                     -- joins eqemu_zone.short_name
@@ -60,8 +58,8 @@ do $$ begin
 end $$;
 
 -- Zone attributes we never mirrored. Found by diffing our eqemu_zone against
--- what pq-companion surfaces from the same upstream table (2026-08-13): they
--- show these on a zone page and we could not, because the sync never picked the
+-- the upstream table (2026-08-13): the upstream table carries them and we could
+-- not show them on a zone page, because the sync never picked the
 -- columns. Cheap to carry, and `expansion` alone has been doing too much work.
 alter table public.eqemu_zone add column if not exists cast_outdoor        smallint;
 alter table public.eqemu_zone add column if not exists hotzone             smallint;

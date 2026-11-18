@@ -1,6 +1,6 @@
 // test/gina-import.test.js — GINA import field mapping + .gtp (PKZIP) reading.
 //
-// From pq-companion analysis 01 (§3.8/§3.9): our .gtp import was advertised
+// From a GINA compatibility review (2026-08-07): our .gtp import was advertised
 // and broken (PKZIP fed to a gzip-only path), and GINA's <TimerDuration> —
 // the COUNTDOWN length — was imported as cooldown_seconds, turning a 450s
 // raid timer into a 450s mute with no timer at all.

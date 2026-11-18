@@ -511,7 +511,7 @@ hosted, but cheap enough to cover costs to start"*; *"truly free can be a limite
 - **Nothing is sold under the eqmimic name.** eqmimic.quest is the free directory (§388); anything paid goes through
   Raid Mimic.
 - **Why:** the guild lead, on charging at all: *"feels like justifying domain names and server costs is going to be the
-  extent of this, and pqcompanion is free"*. A free per-player tool already covers the solo side, so the only thing worth
+  extent of this"*. Free per-player tools already cover the solo side, so the only thing worth
   running as a service is the shared layer, and that bill belongs to the guild. A $1/month per-player plan was the first
   idea (2026-10-20) and was dropped: card fees eat up to 43% of it, and it charges players of someone else's game.
 - **Next:** nothing built; pricing is §386, data model §387, the interest form is in §393.

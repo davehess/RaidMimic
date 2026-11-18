@@ -103,10 +103,6 @@
 > and "your user base is too small" were the two things that shut every previous
 > door. GA in USA, Canada and Europe; individual **public-trust** certificates
 > require the applicant be in the **US or Canada**.
->
-> **Live precedent, same audience as ours:** `jmoyers/everquest-companion`, an
-> Electron EQ Legends companion, ships an installer signed this way — publisher
-> "Joshua Moyers", via a custom electron-builder sign hook.
 
 ## The case as it stands on 2026-09-18 (rebuilt — the OSI blocker is gone)
 
@@ -191,10 +187,9 @@ Two smaller notes from reading their build config:
    plug in**. That is the practical reason this beats Certum Open Source
    (~$80/yr) despite costing more: post-2023 key-storage rules put OV certs on a
    physical HSM token, which a GitHub Actions runner cannot use.
-4. `release-mimic.yml` gains the signing step back, ideally behind the same
-   fail-open shape pq-companion uses — secrets present → signed; absent → build
-   proceeds unsigned, CI stays green
-   (`docs/pq-companion/06-data-provenance-and-gaps.md` §5).
+4. `release-mimic.yml` gains the signing step back, ideally behind a
+   fail-open shape — secrets present → signed; absent → build
+   proceeds unsigned, CI stays green.
 
 **Still the guild lead's decision, not a task to pick up.** It costs money and requires
 personal identity verification. What has changed is that it is now *possible*;

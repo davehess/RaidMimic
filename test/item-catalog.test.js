@@ -68,6 +68,26 @@ describe('item catalog endpoint', () => {
     expect(cache.body).toBe(body);
   });
 
+  it('keeps the same ETag across rebuilds when the rows are the same (fetched_at aside, §617)', async () => {
+    // fetched_at in the hashed body made every 12 h rebuild and every redeploy a new tag, so agents re-downloaded.
+    const rows = [{ item_id: 1, item_name: 'a', era: 'classic' }, { item_id: 2, item_name: 'b', era: 'kunark' }];
+    const supabase = { selectAllPaged: async () => rows };
+    const build = async () => {
+      let cache = null;
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('require', 'mimicLink', '_ITEM_CATALOG_TTL_MS', 'setCache',
+        `let _itemCatalogCache = null;\n${handler}\nreturn async (req, res) => { await _handleAgentItemCatalog(req, res, true); setCache(_itemCatalogCache); };`)(
+        (m) => (m === 'crypto' ? crypto : supabase), {}, 1000, (c) => { cache = c; });
+      await fn({ headers: {} }, { writeHead: () => {}, end: () => {} });
+      return cache;
+    };
+    const a = await build();
+    await new Promise((r) => setTimeout(r, 5));
+    const b = await build();
+    expect(a.body).not.toBe(b.body);   // the timestamps differ…
+    expect(a.etag).toBe(b.etag);       // …the tag does not
+  });
+
   it('reads the view, so the era join stays in Postgres', () => {
     expect(handler).toMatch(/item_catalog_droppable/);
     expect(handler).toMatch(/selectAllPaged\('item_catalog_droppable'/);   // paged — the view is 11k rows

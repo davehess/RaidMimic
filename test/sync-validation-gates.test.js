@@ -8,9 +8,8 @@
 // Neither was caught by CI, a healthcheck, or a human, because silence is what
 // success looks like too.
 //
-// pq-companion's data-release job runs row-count and FK checks that fail the
-// build (docs/pq-companion/06-data-provenance-and-gaps.md §6). These tests pin
-// our version of that: the floors exist, they cover the tables whose silent
+// Row-count and FK checks that fail the build. These tests pin
+// that: the floors exist, they cover the tables whose silent
 // emptiness would actually hurt, a MISSING table counts as failure rather than
 // an exemption, and a failure exits non-zero.
 //

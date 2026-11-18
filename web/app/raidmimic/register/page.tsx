@@ -45,7 +45,7 @@ export default function RaidmimicRegisterPage() {
         <h1 className="mt-1 text-3xl leading-tight text-text">Register your guild</h1>
         {/* Free to register, said first and plainly (the guild lead, 2026-11-17: "make it very clear that registering up
             front is free and only the hosting bits cost money"; no free month, §612). */}
-        <div className="mt-4 rounded-md border-l-4 border-green bg-panel px-4 py-3 text-sm leading-6 text-text" data-free-note>
+        <div className="mt-4 rounded-md border border-green/60 bg-panel px-4 py-3 text-sm leading-6 text-text" data-free-note>
           <p className="font-semibold text-green">Registering is free.</p>
           <p className="mt-1">
             No sign-in, no card, no commitment. Only hosting costs money: Pro · Guild is ${GUILD_PRICE} a month, once guild

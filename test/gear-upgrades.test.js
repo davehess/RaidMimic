@@ -1,4 +1,4 @@
-// test/gear-upgrades.test.js — the gear upgrade finder (/me/upgrades; DECISIONS §383, companion gap §94).
+// test/gear-upgrades.test.js — the gear upgrade finder (/me/upgrades; DECISIONS §383, gap list §94).
 //
 // The scoring is pure (web/lib/gearUpgrades.ts + the tuning table web/lib/gearWeights.ts), so these are BEHAVIOUR
 // tests: build items, rank, assert what is suggested. Two source-text checks hold the privacy contract (the

@@ -211,7 +211,7 @@ describe('_syncListEndpoint write path', () => {
   });
 });
 
-// ── Early break (2026-08-25, the Moncs incident) ─────────────────────────────
+// ── Early break (2026-08-25, the rate-limit incident) ─────────────────────────────
 // The endpoints have no "since" filter, so before this the walk pulled every
 // page every run — OpenDKP re-serialised its whole 48k-row audit table 48×/day
 // for three months. Pages are newest-first, so a page with nothing above our

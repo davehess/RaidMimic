@@ -1,7 +1,7 @@
 // test/buff-duration-formula.test.js — _durTicksForLevel against EQMac's
 // CalcBuffDuration_formula semantics.
 //
-// From the pq-companion comparison (2026-08-07): formula 6 carries a +2 term
+// From a duration-formula review (2026-08-07): formula 6 carries a +2 term
 // we never implemented, and EQMac integer division is FLOOR, not ceil. On our
 // live catalog f6/base-35 is 25 spells — essentially the entire slow line —
 // so every slow timer ran 12s short at L60 and the #130 tracker called "Slow
