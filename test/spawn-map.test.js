@@ -1459,8 +1459,8 @@ describe('pather routes', () => {
     expect(again.all.dotsBtn.classList.contains('on')).toBe(false);
     again.all.dotsBtn.listeners.click.forEach(f => f());
     expect(again.S.cfg.show.dots).toBe(true);
-    const tools = sliceBlock(MAP_HTML, '<div id="tools">', '</div>');
-    expect(tools.indexOf('id="dotsBtn"')).toBeLessThan(tools.indexOf('id="aggroBtn"'));   // next to ◯
+    const col = sliceBlock(MAP_HTML, '<div id="btnCol">', '</div>');   // the fixed left column since 2026-11-17 (§628)
+    expect(col.indexOf('id="dotsBtn"')).toBeLessThan(col.indexOf('id="aggroBtn"'));   // next to ◯
   });
   it('Raiders on the toolbar hides and shows the raid and group name labels in one click, saved; dots and mob names stay (2026-10-14)', async () => {
     // the guild lead: "map should have a quick hide raiders labels too"
@@ -1677,8 +1677,8 @@ describe('pather routes', () => {
     expect(H.toolDock(400, 590, 800, 600)).toBe('bottom');
     expect(H.toolDock(790, 300, 800, 600)).toBe('right');
     expect(H.toolDock(400, 5, 800, 600)).toBe('top');
-    expect(H.toolBox('top', 0, 300, 24, 800, 600, 6)).toEqual({ left: 30, top: 6 });   // where it always sat
-    expect(H.toolBox('left', 0, 40, 200, 800, 600, 6)).toEqual({ left: 6, top: 30 });  // clear of the ✥
+    expect(H.toolBox('top', 0, 300, 24, 800, 600, 6)).toEqual({ left: 74, top: 6 });   // right of the fixed button column (§628)
+    expect(H.toolBox('left', 0, 40, 200, 800, 600, 6)).toEqual({ left: 74, top: 30 });  // clear of the ✥ and the column
     expect(H.toolBox('right', 1, 40, 200, 800, 600, 6)).toEqual({ left: 754, top: 394 });
     expect(H.toolBox('bottom', 0.5, 300, 24, 800, 600, 6)).toEqual({ left: 250, top: 570 });
     // "if we're using something like Solidarity of Vision could we have a 'Follow Target' mode"; "give me the distance
@@ -1733,7 +1733,7 @@ describe('pather routes', () => {
   it('the Levels and Spawn height sliders live in the settings panel; Labels stays a toolbar button', () => {
     const tools = sliceBlock(MAP_HTML, '<div id="tools">', '</div>');
     expect(tools).toMatch(/id="labelsBtn"/);
-    expect(tools).toMatch(/id="cfgBtn"/);
+    expect(sliceBlock(MAP_HTML, '<div id="btnCol">', '</div>')).toMatch(/id="cfgBtn"/);   // ⚙ is in the fixed left column
     expect(tools).not.toMatch(/id="levels"|id="spawnLevels"/);
     const panel = sliceBlock(MAP_HTML, '<div id="cfg" hidden data-wp-interact>', '<div class="foot">');
     expect(panel).toMatch(/id="levels"/);

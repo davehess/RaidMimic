@@ -33,7 +33,7 @@ const DOT_IDS = ['mdLabels', 'mdRaiders', 'mdTimers', 'mdRing', 'mdZoomIn', 'mdZ
 
 describe('Mini switch', () => {
   it('is a button in the Map toolbar', () => {
-    const tools = BODY.slice(BODY.indexOf('<div id="tools">'), BODY.indexOf('<button class="tb" id="sideBtn"'));
+    const tools = BODY.slice(BODY.indexOf('<div id="btnCol">'), BODY.indexOf('<button class="tb" id="sideBtn"'));   // the fixed left column (§628)
     expect(tools).toMatch(/<button class="tb" id="miniBtn" type="button"/);
   });
 
