@@ -74,6 +74,6 @@ describe('sectionOfPath', () => {
     expect(g.pages.filter(p => pageIsCurrent(g, p, '/guilds/new')).map(p => p.label)).toEqual(['Start a guild']);
     expect(g.pages.filter(p => pageIsCurrent(g, p, '/guilds/abc')).map(p => p.label)).toEqual(['Your guilds']);
     const r = sectionOfPath('/demo/events/needs');
-    expect(r.pages.filter(p => pageIsCurrent(r, p, '/demo/events/needs')).map(p => p.label)).toEqual(['Needs board']);
+    expect(r.pages.filter(p => pageIsCurrent(r, p, '/demo/events/needs')).map(p => p.label)).toEqual(['Needs board, demo']);
   });
 });

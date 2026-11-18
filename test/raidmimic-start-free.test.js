@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, stripJs } from './_source-slice.js';
 import * as F from '../web/lib/raidmimicStartFree.ts';
-import { GUILD_PRICE, priceLabel } from '../web/lib/raidmimicStory.ts';
+import { EARLY_GUILD_PRICE, priceLabel } from '../web/lib/raidmimicStory.ts';
 
 const src = (p) => stripJs(fs.readFileSync(path.join(ROOT, p), 'utf8'));
 
@@ -18,7 +18,7 @@ describe('Free to start', () => {
   });
 
   it('says the planned guild price the landing page says, and that nothing is charged until a plan is chosen', () => {
-    expect(F.START_FREE.planned).toContain(priceLabel(GUILD_PRICE));
+    expect(F.START_FREE.planned).toContain(priceLabel(EARLY_GUILD_PRICE));
     expect(F.START_FREE.promise).toBe('Nothing is charged until you choose a plan.');
     expect(F.FREE_ROWS.length).toBeGreaterThan(0);
     expect(F.PAID_ROWS.every(r => r.gives.length > 0)).toBe(true);
