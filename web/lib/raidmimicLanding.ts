@@ -110,7 +110,7 @@ export const CTA = {
     'No account and nothing to buy. Tell us your guild, your game and roughly how many raiders. ' +
     'Leave a Discord name in the form if you want a reply.',
   button: 'Register interest',
-  note: 'Opens a short form on eqmimic.quest.',
+  note: 'Opens a short form on raidmimic.com.',
 };
 
 /**

@@ -11,7 +11,7 @@ import RegisterForm from './RegisterForm';
 import HostFrame from '@/components/RaidmimicFrame';
 import HomePanelGate from '../_landing/HomePanelGate';
 import { DOWNLOAD_URL, STORY_BUTTON } from '@/lib/raidmimicPlayer';
-import { GUILD_PRICE } from '@/lib/raidmimicStory';
+import { GUILD_PRICE_SENTENCE } from '@/lib/raidmimicStory';
 
 const TITLE = 'Register your guild';
 const DESCRIPTION =
@@ -48,7 +48,7 @@ export default function RaidmimicRegisterPage() {
         <div className="mt-4 rounded-md border border-green/60 bg-panel px-4 py-3 text-sm leading-6 text-text" data-free-note>
           <p className="font-semibold text-green">Registering is free.</p>
           <p className="mt-1">
-            No sign-in, no card, no commitment. Only hosting costs money: Pro · Guild is ${GUILD_PRICE} a month, once guild
+            No sign-in, no card, no commitment. Only hosting costs money: Pro · Guild is {GUILD_PRICE_SENTENCE}, once guild
             hosting opens, and only if you choose it. The overlays stay free.
           </p>
         </div>
