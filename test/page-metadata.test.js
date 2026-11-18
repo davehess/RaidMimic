@@ -19,7 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, stripJs } from './_source-slice.js';
+import { ROOT, stripJs, sliceBlock } from './_source-slice.js';
 import {
   metaForPath, lookupFor, feedbackMeta, entityMeta, characterMeta, characterName, pvpMeta, raidReviewMeta,
   cleanEntityName, SITE_NAME, DEFAULT_DESCRIPTION, ADMIN_FALLBACK_TITLE,
@@ -327,6 +327,21 @@ describe('the Discord crawler path serves what this file checks', () => {
     const route = stripJs(read('web/app/api/embed-meta/route.ts'));
     expect(route).toMatch(/await metaForPathWithData\(path\)/);
     expect(route).not.toMatch(/\bmetaForPath\(/);
+  });
+  it('a raidmimic.com link unfurls as Raid Mimic, on its own address, without the [beta] marker (the guild lead, 2026-11-18)', () => {
+    const route = stripJs(read('web/app/api/embed-meta/route.ts'));
+    expect(route).toMatch(/const rm = isRaidmimicHost\(req\.headers\.get\('host'\)\)/);
+    expect(route).toMatch(/const site = rm \? 'Raid Mimic' : SITE_NAME/);
+    expect(route).toMatch(/rm \? meta\.title\.replace\(\/\^\\\[beta\\\]\\s\*\/i, ''\)/);
+    expect(route).toMatch(/og:site_name" content="\$\{site\}"/);
+    expect(route).toMatch(/const url = `\$\{origin\}\$\{path\}`/);
+    expect(route).not.toMatch(/https:\/\/wolfpack\.quest\$\{path\}/);
+  });
+  it('raidmimic.com has its own 404, linking only to raidmimic.com pages', () => {
+    const nf = stripJs(read('web/app/not-found.tsx'));
+    const rmBranch = sliceBlock(nf, 'if (isRaidmimicHost(headers().get(\'host\'))) {', '\n  }\n');
+    expect(rmBranch).toMatch(/href="\/guilds"/);
+    expect(rmBranch).not.toMatch(/wolfpack|\/me"|\/parses|\/boards/);
   });
   it('the middleware still rewrites preview crawlers to it', () => {
     const mw = stripJs(read('web/middleware.ts'));

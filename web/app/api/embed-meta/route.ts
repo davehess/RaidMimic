@@ -12,6 +12,7 @@
 import { NextRequest } from 'next/server';
 import { SITE_NAME } from '@/lib/pageMeta';
 import { metaForPathWithData } from '@/lib/pageMetaData';
+import { isRaidmimicHost, isRaidmimicBetaHost, RAIDMIMIC_ORIGIN } from '@/lib/raidmimicHost';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,17 +22,24 @@ function escHtml(s: string): string {
 
 export async function GET(req: NextRequest) {
   const path = req.nextUrl.searchParams.get('path') || '/';
-  const { title, description, image } = await metaForPathWithData(path);
-  const fullTitle = title === SITE_NAME ? title : `${title} — ${SITE_NAME}`;
-  const url = `https://wolfpack.quest${path}`;
+  const meta = await metaForPathWithData(path);
+  // A link on raidmimic.com unfurls as Raid Mimic, on its own address, with no [beta] marker (raidmimic.com dropped the
+  // markers, §613). The rewrite keeps the request's Host, so the crawler's host is the link's host.
+  const rm = isRaidmimicHost(req.headers.get('host'));
+  const site = rm ? 'Raid Mimic' : SITE_NAME;
+  const origin = rm ? (isRaidmimicBetaHost(req.headers.get('host')) ? 'https://b.raidmimic.com' : RAIDMIMIC_ORIGIN) : 'https://wolfpack.quest';
+  const title = rm ? meta.title.replace(/^\[beta\]\s*/i, '') : meta.title;
+  const { description, image } = meta;
+  const fullTitle = title === site || title === SITE_NAME ? site : `${title} — ${site}`;
+  const url = `${origin}${path}`;
   // A page with a picture gets the big card; the rest keep the small one.
-  const img = image ? `https://wolfpack.quest${image}` : null;
+  const img = image ? `${origin}${image}` : null;
   const html = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
 <title>${escHtml(fullTitle)}</title>
 <meta name="description" content="${escHtml(description)}">
-<meta property="og:site_name" content="${SITE_NAME}">
+<meta property="og:site_name" content="${site}">
 <meta property="og:title" content="${escHtml(fullTitle)}">
 <meta property="og:description" content="${escHtml(description)}">
 <meta property="og:url" content="${escHtml(url)}">
