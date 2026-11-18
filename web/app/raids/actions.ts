@@ -11,7 +11,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { discordIdOf } from '@/lib/lockout';
 import { makeLimiter } from '@/lib/popRecitalSave';
 import { profileOf } from '@/lib/hubRegistry';
-import { saveEntry, removeEntry, setTarget, linkCharacter, type WriteResult } from '@/lib/myRaidsWrite';
+import { saveEntry, removeEntry, setTarget, linkCharacters, type WriteResult } from '@/lib/myRaidsWrite';
 
 const allowed = makeLimiter(40, 10 * 60_000);
 
@@ -66,6 +66,11 @@ export async function setRaidTarget(formData: FormData): Promise<void> {
   await run(pid => setTarget(supabaseAdmin(), pid, str(formData, 'id'), str(formData, 'date'), str(formData, 'target')));
 }
 
-export async function setCharacterGuild(formData: FormData): Promise<void> {
-  await run(pid => linkCharacter(supabaseAdmin(), pid, str(formData, 'name'), str(formData, 'id')));
+/** Save the characters' guilds in place: returns the result instead of redirecting, so the page does not reload. */
+export async function setCharacterGuilds(rows: { name: string; id: string }[]): Promise<WriteResult> {
+  const p = await player();
+  if ('error' in p) return { ok: false, error: p.error };
+  const r = await linkCharacters(supabaseAdmin(), p.playerId, rows);
+  if (r.ok) revalidatePath('/raids');
+  return r;
 }

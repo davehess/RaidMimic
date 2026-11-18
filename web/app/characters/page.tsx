@@ -95,13 +95,15 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
 
         <section id="your-characters" aria-label="Your characters" className="mt-6 space-y-3">
           {mine.length === 0 && <p className="text-sm text-dim">No characters yet.</p>}
-          {mine.map(c => (
-            <article key={c.name} className={CARD}>
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 className="text-lg text-text"><Link href={`/characters/${encodeURIComponent(c.name)}`} className="text-text hover:text-gold">{c.name}</Link></h2>
+          {/* Every character collapsed, most flags first (the guild lead, 2026-11-17). */}
+          {[...mine].sort((a, b) => b.flagCount - a.flagCount || a.name.localeCompare(b.name)).map(c => (
+            <details key={c.name} className={`group ${CARD}`}>
+              <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span aria-hidden className="text-dim transition-transform group-open:rotate-90">▸</span>
+                <span className="text-lg text-text">{c.name}</span>
                 <span className="text-xs text-dim">{c.flagCount} flag{c.flagCount === 1 ? '' : 's'}{c.lastExport ? ` · export of ${c.lastExport.slice(0, 10)}` : ''}</span>
                 {c.proof === 'contested' && <span className="rounded border border-orange/50 px-2 text-xs text-orange">name claimed by another player too</span>}
-              </div>
+              </summary>
 
               <FlagsBody c={c} />
 
@@ -115,7 +117,7 @@ export default async function CharactersPage({ searchParams }: { searchParams?: 
               </p>
 
               <RemoveButton name={c.name} />
-            </article>
+            </details>
           ))}
         </section>
       </div>
