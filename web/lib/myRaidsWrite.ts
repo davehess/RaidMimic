@@ -82,3 +82,13 @@ export async function linkCharacter(db: Db, playerId: string, name: unknown, ent
   if (error) return FAIL;
   return data && data.length ? { ok: true } : { ok: false, error: 'That character is not in your list.' };
 }
+
+/** Tie several characters at once (one Save for the whole list). Stops at the first refusal; at most 200 rows. */
+export async function linkCharacters(db: Db, playerId: string, rows: unknown): Promise<WriteResult> {
+  if (!Array.isArray(rows) || rows.length > 200) return { ok: false, error: 'Nothing to save.' };
+  for (const r of rows) {
+    const res = await linkCharacter(db, playerId, (r as { name?: unknown })?.name, (r as { id?: unknown })?.id);
+    if (!res.ok) return res;
+  }
+  return { ok: true };
+}
