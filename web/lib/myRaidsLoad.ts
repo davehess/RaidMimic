@@ -49,7 +49,9 @@ export async function loadMyRaids(discordId: string): Promise<MyRaidsData> {
     const mine = await loadMine(discordId);
     const { data: links } = await admin.from('hub_characters').select('name_lc, player_guild_id').eq('player_id', playerId).limit(200);
     const linkOf = new Map((links ?? []).map(l => [String(l.name_lc), (l.player_guild_id as string | null) ?? null]));
-    const characters: MyCharacter[] = mine.map(c => ({ name: c.name, flags: c.keys, playerGuildId: linkOf.get(c.name.toLowerCase()) ?? null }));
+    const characters: MyCharacter[] = mine.map(c => ({ name: c.name, flags: c.keys, playerGuildId: linkOf.get(c.name.toLowerCase()) ?? entries[0]?.id ?? null }));
+    // One guild by default (the guild lead, 2026-11-17: "we should assume people are part of a single guild unless they set it
+    // otherwise"): a character with no saved guild belongs to the player's first one; only an exception is ever set.
 
     const guildIds = Array.from(new Set(entries.map(e => e.guildId).filter((x): x is string => !!x)));
     const guildSchedules: Record<string, unknown> = {};

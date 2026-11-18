@@ -276,6 +276,8 @@ let setupMode = false;
 // ── Config ────────────────────────────────────────────────────────────────
 function defaultConfig() {
   return {
+    overlayHotkeys: { map: 'CommandOrControl+M' },   // per-overlay keys (dashboard Overlays tab); the Map starts on Ctrl+M (see loadConfig)
+    mapHotkeyDefaulted: true,
     eqPath: null,            // legacy single-folder (kept for back-compat read)
     eqPaths: [],             // multi-folder picker — every EQ install to tail
     eqPathsExcluded: [],     // auto-detected paths the user explicitly unchecked
@@ -501,6 +503,15 @@ function loadConfig() {
       if (raw.charProfiles && typeof raw.charProfiles === 'object') {
         for (const p of Object.values(raw.charProfiles)) { if (p && p.show && typeof p.show === 'object') p.show.showCanvas = false; }
       }
+    }
+    // Ctrl+M toggles the Map (the guild lead, 2026-11-17: "Ctrl + M as default for opening the map"; DECISIONS §628). The
+    // per-overlay hotkeys have no defaults, so the default is written into cfg.overlayHotkeys once, and the flag keeps it
+    // from coming back after the raider clears or changes it (the dashboard, the tray label and the clash check all read
+    // that one map). A key the raider already gave the Map is left alone.
+    if (raw.mapHotkeyDefaulted !== true) {
+      const oh = (raw.overlayHotkeys && typeof raw.overlayHotkeys === 'object') ? raw.overlayHotkeys : {};
+      if (typeof oh.map !== 'string') raw.overlayHotkeys = Object.assign({}, oh, { map: 'CommandOrControl+M' });   // same literal as defaultConfig()
+      raw.mapHotkeyDefaulted = true;
     }
     return Object.assign(defaultConfig(), raw);
   } catch { return defaultConfig(); }

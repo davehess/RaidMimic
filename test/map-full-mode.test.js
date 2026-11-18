@@ -287,7 +287,7 @@ describe('the Map page in Window and Full mode', () => {
     await tick();
     expect(g.S.mode).toBe('full');
     expect(g.doc.body.classList.contains('full')).toBe(true);
-    click(g.all.fullWinBtn);
+    click(g.all.modeBtn);   // the same column button reads "▢ Window" in Full mode
     expect(m.setMapMode).toHaveBeenLastCalledWith('window');
     await tick();
     expect(g.S.mode).toBe('window');
@@ -362,8 +362,9 @@ describe('the Map page in Window and Full mode', () => {
     expect(MAP_HTML).toMatch(/<select id="cfgMode">/);
     expect(MAP_HTML).toMatch(/<input type="checkbox" id="cfgAvoid">/);
     expect(MAP_HTML).toMatch(/camp or zone/);                   // the note: EverQuest saves window positions then
-    expect(sliceBlock(MAP_HTML, '<div id="fullCtl">', '</div>')).toMatch(/id="fullWinBtn"[\s\S]*id="fullCfgBtn"/);
-    expect(stripJs(MAP_HTML)).toMatch(/\(_unlocked && S\.mode !== 'full'\)/);   // Full is click-through: unlocking does not wall off the game
+    // Full mode keeps its way back to Window and to the settings in the left column (§628), one set of buttons, no duplicate.
+    expect(sliceBlock(MAP_HTML, '<div id="btnCol">', '</div>')).toMatch(/id="modeBtn"[\s\S]*id="cfgBtn"/);
+    expect(MAP_HTML).not.toMatch(/id="fullCtl"|id="fullWinBtn"|id="fullCfgBtn"/);    expect(stripJs(MAP_HTML)).toMatch(/\(_unlocked && S\.mode !== 'full'\)/);   // Full is click-through: unlocking does not wall off the game
     expect(stripJs(MAP_HTML)).toMatch(/S\.sideMode === 'grow' && S\.mode !== 'full'/);   // the timers column never widens a screen-sized window
   });
 });

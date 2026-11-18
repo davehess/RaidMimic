@@ -16,7 +16,10 @@ import HostFrame from '@/components/RaidmimicFrame';
 import { COMMON_ZONES, DAY_NAMES, relativeTime } from '@/lib/guildSettings';
 import { buildMyRaids, monthCells, monthParam, parseMonth, shiftMonth, targetLabel, TARGET_CHOICES, MAX_GUILD_ENTRIES, LABEL_MAX, type MyRaid } from '@/lib/myRaids';
 import { loadMyRaids } from '@/lib/myRaidsLoad';
-import { saveGuild, removeGuild, setRaidTarget, setCharacterGuild } from './actions';
+import { saveGuild, removeGuild, setRaidTarget } from './actions';
+import CharacterGuilds from './CharacterGuilds';
+import { EVENTS, GUILD, DEMO_BAR, targetByKey } from '@/lib/demoGuild';
+import { demoBase } from '../raidmimic/demo/_parts/DemoShell';
 
 const TITLE = 'My raids';
 const DESCRIPTION = 'Your upcoming raids on Raid Mimic: the days each of your guilds raids, the target for each night, and which of your characters is ready or still needs a flag for it.';
@@ -79,6 +82,28 @@ function RaidRow({ raid, nowMs }: { raid: MyRaid; nowMs: number }) {
       )}
       {!raid.targetKey && <p className="m-0 mt-3 text-xs text-dim">Pick a target.</p>}
     </li>
+  );
+}
+
+// The demo, kept apart from the player's own data (the guild lead, 2026-11-17: "it should show demo data until you sign in, then
+// it should show your own information and a separate demo section"). Signed out it is all there is; signed in it is a labelled
+// block at the foot of the page. Invented guild, static, nothing read or saved.
+function DemoSection() {
+  const base = demoBase();
+  return (
+    <section aria-label="Demo" className="mt-10 rounded-lg border border-dashed border-border bg-panel p-4">
+      <h2 className="m-0 text-lg text-text">Demo <span className="ml-1 rounded border border-border px-2 align-middle text-xs text-dim">sample guild</span></h2>
+      <p className="mt-1 text-sm text-dim">{DEMO_BAR}. {GUILD.name} raids {GUILD.nights}.</p>
+      <ul className="m-0 mt-3 list-none space-y-1 p-0 text-sm">
+        {EVENTS.map(e => (
+          <li key={e.id} className="text-text">{e.day} {e.time} <span className="text-dim">· {targetByKey(e.target)?.label ?? e.target}</span></li>
+        ))}
+      </ul>
+      <p className="m-0 mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <a href={`${base}/raid`} className="inline-flex min-h-11 items-center">Next raid, demo</a>
+        <a href={`${base}/events`} className="inline-flex min-h-11 items-center">Events, demo</a>
+      </p>
+    </section>
   );
 }
 
@@ -179,6 +204,7 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
           <h1 className="text-2xl text-gold">{TITLE}</h1>
           <p className="mt-2 text-sm text-dim">Sign in with Discord to see your upcoming raids.</p>
           <div className="mt-4"><SignInButton next="/raids" /></div>
+          <DemoSection />
         </div>
       </HostFrame>
     );
@@ -243,24 +269,19 @@ export default async function RaidsPage({ searchParams }: { searchParams?: { vie
           <h2 className="m-0 text-lg text-text">My characters’ guilds</h2>
           {data.characters.length === 0 && <p className="mt-2 text-sm text-dim"><a href="/characters">Load a character</a> first.</p>}
           {data.characters.length > 0 && data.entries.length === 0 && <p className="mt-2 text-sm text-dim">Add a guild above first.</p>}
-          {data.characters.length > 0 && data.entries.length > 0 && (
-            <ul className="m-0 mt-3 list-none space-y-2 p-0">
-              {data.characters.map(c => (
-                <li key={c.name}>
-                  <form action={setCharacterGuild} className="flex flex-wrap items-center gap-2">
-                    <input type="hidden" name="name" value={c.name} />
-                    <label htmlFor={`cg-${c.name}`} className="min-w-28 text-sm text-text">{c.name}</label>
-                    <select id={`cg-${c.name}`} name="id" defaultValue={c.playerGuildId ?? ''} className={FIELD}>
-                      <option value="">None</option>
-                      {data.entries.map(e => <option key={e.id} value={e.id}>{e.guildName}</option>)}
-                    </select>
-                    <button type="submit" className={BTN}>Save</button>
-                  </form>
-                </li>
-              ))}
-            </ul>
+          {data.characters.length > 0 && data.entries.length === 1 && (
+            <p className="mt-2 text-sm text-dim">All your characters raid with {data.entries[0].guildName}.</p>
+          )}
+          {data.characters.length > 0 && data.entries.length > 1 && (
+            <>
+              <p className="mt-1 text-sm text-dim">Everyone raids with {data.entries[0].guildName} unless you change it here.</p>
+              <CharacterGuilds guilds={data.entries.map(e => ({ id: e.id, name: e.guildName }))}
+                rows={data.characters.map(c => ({ name: c.name, guildId: c.playerGuildId ?? data.entries[0].id }))} />
+            </>
           )}
         </section>
+
+        <DemoSection />
       </div>
     </HostFrame>
   );

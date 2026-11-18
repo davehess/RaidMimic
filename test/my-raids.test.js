@@ -11,7 +11,7 @@ import {
   upcomingRaids, scheduleFor, buildMyRaids, cleanLabel, validateEntry, dateKeyIn, monthCells, parseMonth, shiftMonth,
   MAX_GUILD_ENTRIES, targetKeyOf,
 } from '../web/lib/myRaids.ts';
-import { saveEntry, removeEntry, setTarget, linkCharacter } from '../web/lib/myRaidsWrite.ts';
+import { saveEntry, removeEntry, setTarget, linkCharacter, linkCharacters } from '../web/lib/myRaidsWrite.ts';
 import { FLAG_TARGETS } from '../web/lib/flagTargets.ts';
 import { isRaidmimicOpenPath } from '../web/lib/raidmimicHost.ts';
 import { metaForPath } from '../web/lib/pageMeta.ts';
@@ -275,6 +275,15 @@ describe('the writes are scoped to the signed-in player', () => {
     expect((await linkCharacter(db, 'player-a', 'Aldenmar', E1)).ok).toBe(true);
     expect(writes(ops)[0].filters).toEqual(expect.arrayContaining([['player_id', 'player-a'], ['name_lc', 'aldenmar']]));
     expect((await linkCharacter(db, 'player-c', 'Aldenmar', '')).ok).toBe(false);   // not their character: nothing matched
+  });
+  it('one Save links several characters, and stops at another player\'s entry', async () => {
+    const { db, ops } = stubDb({ guilds: [MINE, HERS], characters: [{ player_id: 'player-a', name_lc: 'aldenmar' }, { player_id: 'player-a', name_lc: 'brackwyn' }] });
+    expect((await linkCharacters(db, 'player-a', [{ name: 'Aldenmar', id: E1 }, { name: 'Brackwyn', id: E1 }])).ok).toBe(true);
+    expect(writes(ops)).toHaveLength(2);
+    expect((await linkCharacters(db, 'player-a', [{ name: 'Aldenmar', id: E2 }])).ok).toBe(false);
+    expect(writes(ops)).toHaveLength(2);
+    expect((await linkCharacters(db, 'player-a', 'not a list')).ok).toBe(false);
+    expect((await linkCharacters(db, 'player-a', Array(201).fill({ name: 'Aldenmar', id: E1 }))).ok).toBe(false);
   });
   it('sets and clears a target only from the catalog and a real date', async () => {
     const { db, ops } = stubDb({ guilds: [MINE] });
