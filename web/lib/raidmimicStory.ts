@@ -79,16 +79,33 @@ export const featureById = (id: FeatureId): Feature => {
 };
 
 // ─── Money ──────────────────────────────────────────────────────────────────────────────────────────
-// ONE paid plan: Pro · Guild, $25 a month, monthly only (DECISIONS §495; no free month since 2026-11-17, §612: registering is the
+// ONE paid plan: Pro · Guild, in two sizes since 2026-11-18 (below; it was $25, DECISIONS §495), monthly only (no free month since 2026-11-17, §612: registering is the
 // free part, hosting is what is paid). The page sells what a guild learns from
 // its raids; storage is included while you pay and is never the reason given for a price (the guild lead, 2026-11-09, DECISIONS
 // §552). There is no individual plan (removed the same day).
-export const GUILD_PRICE = 25;
+// 2026-11-18 (the guild lead, §614 option A + early bird, DECISIONS §640): Pro · Guild comes in two sizes, $5 a month with the
+// last GUILD_HISTORY_DAYS of raids and $10 with every raid kept, shown crossed out above the early-bird prices $3 and $6.
+// Merged parses (the point-in-time, after-the-fight kind) are in both. "if it blows up the budget i would like to raise that":
+// the terms' price-change rule (at a renewal, after notice) covers moving early birds to the list price.
+export const GUILD_PRICE = 5;
+export const GUILD_HISTORY_PRICE = 10;
+export const EARLY_GUILD_PRICE = 3;
+export const EARLY_GUILD_HISTORY_PRICE = 6;
+export const GUILD_HISTORY_DAYS = 90;
 export function priceLabel(price: number | null, per = 'month'): string {
   return price == null ? 'price at launch' : `$${price} / ${per}`;
 }
+/** The two Pro · Guild sizes, list price first, for every page that states a price. */
+export const GUILD_PRICES = [
+  { id: 'guild', was: GUILD_PRICE, now: EARLY_GUILD_PRICE, label: `last ${GUILD_HISTORY_DAYS} days of raids` },
+  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: 'every raid kept' },
+] as const;
+/** One line of text for prose: "$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10) with every raid kept". */
+export const GUILD_PRICE_SENTENCE =
+  `$${EARLY_GUILD_PRICE} a month (early bird; $${GUILD_PRICE} list) with the last ${GUILD_HISTORY_DAYS} days of raids, ` +
+  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with every raid kept`;
 
-export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string }
+export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string; prices?: typeof GUILD_PRICES }
 export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
   // lead, 2026-11-02, pick A, DECISIONS §526: "it's gotta be cheap for users to be able to get their popflags and mob kills
@@ -96,8 +113,9 @@ export const TIERS = (): Tier[] => [
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
     points: ['The overlays', 'Triggers', 'Your own parses', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
     coming: 'Syncing for players outside Wolf Pack is coming.' },
-  { id: 'guild', name: 'Pro · Guild', price: priceLabel(GUILD_PRICE), note: 'Monthly only.', tone: 'blue',
-    points: ['Shared raid reviews', 'Merged parses', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
+  { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
+    prices: GUILD_PRICES,
+    points: ['Shared raid reviews', 'Merged parses for every fight', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];
 

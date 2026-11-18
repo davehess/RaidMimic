@@ -1,7 +1,7 @@
 // The "Free to start" block at the top of the raidmimic.com onboarding pages (preview on beta, web/lib/raidmimicStartFree.ts).
 // ?v=b: one short card, readable at a glance. ?v=c: a two-column table of what Free gives and what Pro gives. A server component; the words live in the lib file.
 import { FREE_ROWS, PAID_ROWS, START_FREE as W, type StartFreeVariant } from '@/lib/raidmimicStartFree';
-import { GUILD_PRICE, priceLabel } from '@/lib/raidmimicStory';
+import { EARLY_GUILD_PRICE, EARLY_GUILD_HISTORY_PRICE } from '@/lib/raidmimicStory';
 
 function Chip() {
   return (
@@ -47,7 +47,7 @@ export default function StartFree({ variant, pricingHref }: { variant: StartFree
           <Rows rows={FREE_ROWS} />
         </div>
         <div className="rounded-md border border-blue/50 bg-bg p-3">
-          <h3 className="m-0 text-sm text-blue">Pro · Guild · {priceLabel(GUILD_PRICE)} <span className="text-dim">(planned)</span></h3>
+          <h3 className="m-0 text-sm text-blue">Pro · Guild · ${EARLY_GUILD_PRICE} or ${EARLY_GUILD_HISTORY_PRICE} / month <span className="text-dim">(early bird, planned)</span></h3>
           <Rows rows={PAID_ROWS} />
         </div>
       </div>

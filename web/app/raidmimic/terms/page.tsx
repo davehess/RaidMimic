@@ -11,7 +11,7 @@ import type { Metadata } from 'next';
 import { isRaidmimicHost, raidmimicSeo } from '@/lib/raidmimicHost';
 import { CONTACT_EMAIL, CONTACT_HREF, LEGAL_META, MIN_AGE, TERMS_VERSION, YOUR_DATA_PATH, legalPaths } from '@/lib/legal';
 import { REPO_URL, RIGHTS_NOTICE } from '@/lib/raidmimicLanding';
-import { GUILD_PRICE } from '@/lib/raidmimicStory';
+import { GUILD_PRICE_SENTENCE } from '@/lib/raidmimicStory';
 import { B, Bullets, LEGAL_LINK, LegalShell, Section } from '../_legal/LegalParts';
 
 export function generateMetadata(): Metadata {
@@ -61,10 +61,11 @@ export default function RaidmimicTermsPage() {
       <Section title="Pro plans and billing">
         <p><B>Payments are coming. Nothing is charged today, and nothing here bills you until billing opens.</B> When it does:</p>
         <Bullets>
-          <li><B>Pro · Guild</B> is ${GUILD_PRICE} a month, monthly only. Registering a guild is free; only hosting is paid.</li>
+          <li><B>Pro · Guild</B> is {GUILD_PRICE_SENTENCE}, monthly only. Registering a guild is free; only hosting is paid.</li>
           <li>It renews every month until you cancel.</li>
           <li><B>Cancel any time, in one click.</B> You keep Pro until the end of the month you have paid for.</li>
-          <li>A price change takes effect at a renewal after we have told you, never in the middle of a paid month.</li>
+          <li>A price change takes effect at a renewal after we have told you, never in the middle of a paid month. That includes
+            an early-bird price moving to the list price.</li>
           <li>
             Going back to Free does not delete a guild’s records. Write to us if you want them removed. Refunds are on the{' '}
             <a href={p.refunds} className={LEGAL_LINK}>Refunds page</a>.

@@ -110,13 +110,18 @@ describe('the money', () => {
   it('priceLabel: a null price says "price at launch"', () => {
     expect(S.priceLabel(null)).toBe('price at launch');
   });
-  it('a number formats as dollars a month; the guild price is $25', () => {
+  it('a number formats as dollars a month; Pro · Guild is $5 / $10, shown crossed out above the early-bird $3 / $6 (§640)', () => {
     expect(S.priceLabel(7)).toBe('$7 / month');
-    expect(S.GUILD_PRICE).toBe(25);
+    expect([S.GUILD_PRICE, S.GUILD_HISTORY_PRICE, S.EARLY_GUILD_PRICE, S.EARLY_GUILD_HISTORY_PRICE]).toEqual([5, 10, 3, 6]);
     const t = S.TIERS();
     expect(t.map(x => x.id)).toEqual(['free', 'guild']);
-    expect(t.find(x => x.id === 'guild').price).toBe('$25 / month');
-    expect(t.find(x => x.id === 'guild').note).toBe('Monthly only.');   // no free month since 2026-11-17 (§612)
+    const g = t.find(x => x.id === 'guild');
+    expect(g.price).toBe('$3 / month');
+    expect(g.prices.map(p => [p.was, p.now])).toEqual([[5, 3], [10, 6]]);
+    expect(g.prices[0].label).toBe(`last ${S.GUILD_HISTORY_DAYS} days of raids`);
+    expect(g.points).toContain('Merged parses for every fight');
+    expect(g.note).toBe('Early-bird prices. Monthly only.');   // no free month since 2026-11-17 (§612)
+    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10 list) with every raid kept');
     expect(t.find(x => x.id === 'free').price).toBe('$0');
   });
   it('there is no individual tier or price (DECISIONS §552), and no live pricing copy sells storage or "costs us money"', () => {
@@ -126,9 +131,9 @@ describe('the money', () => {
     expect(live).not.toMatch(/costs? us money|cost money|Pro · Individual|or for you/i);
     expect(JSON.stringify([S.STORY_WORDS.pricingLead, S.TIERS(), F.START_FREE, F.PAID_ROWS])).not.toMatch(/storage/i);
   });
-  it('invents no other figure: the only dollar amounts in the words are $0 and the guild $25', () => {
+  it('invents no other figure: the only dollar amounts in the words are $0 and the guild early-bird $3', () => {
     const t = JSON.stringify(S.STORY_TEXT);
-    expect([...t.matchAll(/\$\d+(?:\.\d+)?/g)].map(m => m[0]).sort()).toEqual(['$0', '$25']);
+    expect([...t.matchAll(/\$\d+(?:\.\d+)?/g)].map(m => m[0]).sort()).toEqual(['$0', '$3']);
     expect(t).not.toMatch(/testimonial|customers|\d+ guilds|trusted by/i);
   });
   it('anything unbuilt is chipped “coming”: other guilds, cloud backup', () => {

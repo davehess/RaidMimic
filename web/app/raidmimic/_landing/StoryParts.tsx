@@ -74,7 +74,19 @@ export function Pricing({ setup, onHost = false }: { setup: string; onHost?: boo
           <li key={t.id} data-tier={t.id} className="min-w-0">
             <article className={`flex h-full flex-col rounded-md border border-t-[3px] border-border bg-panel p-4 ${EDGE[t.tone]}`}>
               <h3 className="text-lg text-[#f2ede1]">{t.name}</h3>
-              <p className="mb-0 mt-1 text-xl font-bold text-[#f2ede1]">{t.price}</p>
+              {t.prices ? (
+                <ul data-prices className="m-0 mt-1 list-none space-y-1 p-0">
+                  {t.prices.map(p => (
+                    <li key={p.id} className="flex flex-wrap items-baseline gap-x-2">
+                      <s className="text-sm text-dim">${p.was}</s>
+                      <span className="text-xl font-bold text-[#f2ede1]">${p.now} / month</span>
+                      <span className="text-xs text-dim">{p.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-0 mt-1 text-xl font-bold text-[#f2ede1]">{t.price}</p>
+              )}
               <p className="mb-0 mt-1 text-xs text-dim">{t.note}</p>
               {t.id === 'guild' && (
                 <p data-renewal className="mb-0 mt-1 text-xs text-dim">{W.renews} <a href={legal.refunds}>{W.refunds}</a></p>
