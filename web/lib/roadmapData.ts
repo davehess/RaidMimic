@@ -37,6 +37,24 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-guilds-prices-2026-11-18',
+    title: 'Raid Mimic: early-bird prices, saving in place, its own 404',
+    version: 'Web 2.2.18',
+    date: '2026-11-18',
+    headline: 'Pro · Guild is $5 a month, or $10 with every raid kept, and early birds pay $3 or $6. Your characters\' guilds save in one click.',
+    features: [
+      { name: 'Early-bird prices', blurb: 'Pro · Guild is $5 a month with the last 90 days of raids, or $10 with every raid kept. Early birds pay $3 or $6. Merged parses for every fight are in both.' },
+      { name: 'One Save for your characters', blurb: 'My raids saves every character\'s guild at once, without reloading the page, and assumes they all raid with your one guild unless you say otherwise.' },
+      { name: 'Demo kept apart', blurb: 'Signed out you see the demo guild; signed in you see your own raids, with the demo in its own box and its menu entries marked "demo".' },
+      { name: 'My characters, tidier', blurb: 'Every character starts folded, the one with the most flags first.' },
+    ],
+    fixes: [
+      'A private guild page on raidmimic.com shows a Raid Mimic "ask for an invite" page instead of Wolf Pack\'s 404.',
+      'Raid Mimic links shared in Discord say Raid Mimic, not WolfPack.quest.',
+      'The Register interest box says the form is on raidmimic.com.',
+    ],
+  },
+  {
     key: 'buff-queue-on-change-2026-11-17',
     title: 'Buff queue: the dead first, and quieter',
     version: 'Bot 4.1.6 · Agent 4.0.101',

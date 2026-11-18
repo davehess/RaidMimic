@@ -12,7 +12,7 @@ export const RAIDMIMIC_SECTIONS: readonly RaidmimicSection[] = [
   { key: 'flagging', label: 'Flagging', href: '/characters', prefixes: ['/characters', '/demo/flags', '/demo/capture'], pages: [
     { label: 'Your characters', href: '/characters' },
     { label: 'Flags demo', href: '/demo/flags' },
-    { label: 'Record for others', href: '/demo/capture' },
+    { label: 'Record for others, demo', href: '/demo/capture' },
   ] },
   // stay=1: "Your guilds" means "manage my Raid Mimic account", so it must not bounce a player to their guild's own site.
   { key: 'guild', label: 'Guild', href: GUILDS_STAY_PATH, prefixes: ['/guilds', '/register', '/setup'], pages: [
@@ -26,8 +26,8 @@ export const RAIDMIMIC_SECTIONS: readonly RaidmimicSection[] = [
     { label: 'My raids', href: '/raids' },
     // "Next", not "tonight": some guilds raid midday (the guild lead, 2026-11-15).
     { label: 'Next raid, demo', href: '/demo/raid' },
-    { label: 'Events', href: '/demo/events' },
-    { label: 'Needs board', href: '/demo/events/needs' },
+    { label: 'Events, demo', href: '/demo/events' },
+    { label: 'Needs board, demo', href: '/demo/events/needs' },
   ] },
   // No spectator page yet: this is the landing's "Replay & spectator" block (id="replay" in StoryParts).
   { key: 'spectator', label: 'Spectator', href: '/#replay', prefixes: [], pages: [{ label: 'Spectator', href: '/#replay' }] },
