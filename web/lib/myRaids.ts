@@ -10,7 +10,8 @@
 // answer the flag-event board gives, so the two cannot disagree.
 
 import { mergeSettings, toMinutes, validTimeZone, windowsAround, formatInZone, type GuildSettings } from './guildSettings';
-import { FLAG_TARGETS, flagTargetByKey, type FlagTarget } from './flagTargets';
+import { flagTargetByKey, type FlagTarget } from './flagTargets';
+import { parseTargetKeys, targetsLabel } from './raidTargets';
 import { verdictForTarget, type NeedVerdict } from './flagEventNeeds';
 import { gateReport } from './popGateStatus';
 import { POP_ZONE_BY_KEY } from './popFlags';
@@ -211,13 +212,14 @@ export function buildMyRaids(input: BuildInput, nowMs: number): MyRaid[] {
         ? input.publishedTargets.find(p => p.guildId === e.guildId && flagTargetByKey(p.targetKey) && dateKeyIn(p.startsMs, sched.tz) === dateKey)
         : undefined;
       const mineKey = input.targetsByEntryDate[targetKeyOf(e.id, dateKey)];
-      const targetKey = published ? published.targetKey : mineKey && flagTargetByKey(mineKey) ? mineKey : null;
-      const target = targetKey ? flagTargetByKey(targetKey) ?? null : null;
+      const targetKey = published ? published.targetKey : mineKey && parseTargetKeys(mineKey) ? mineKey : null;
+      // Ready / needs / not sure is the gate rule, so it is read for the first gate target in the list; a zone or boss has none.
+      const target = targetKey ? (parseTargetKeys(targetKey) ?? []).map(k => flagTargetByKey(k)).find(Boolean) ?? null : null;
       out.push({
         entryId: e.id, guildName: e.guildName, tz: sched.tz, startMs: w.startMs, endMs: w.endMs, dateKey,
         localDateLabel: dateLabelIn(w.startMs, sched.tz), timeLabel: formatInZone(w.startMs, sched.tz),
-        targetKey: target ? target.key : null,
-        targetSource: target ? (published ? 'guild' : 'mine') : null,
+        targetKey,
+        targetSource: targetKey ? (published ? 'guild' : 'mine') : null,
         perCharacter: target ? verdictsFor(target, chars) : [],
       });
     }
@@ -225,13 +227,10 @@ export function buildMyRaids(input: BuildInput, nowMs: number): MyRaid[] {
   return out.sort((a, b) => a.startMs - b.startMs || a.guildName.localeCompare(b.guildName));
 }
 
-/** A target's words for a raid row: its label, or nothing. */
+/** A target's words for a raid row: its label ("Zone A + Boss B" for a list), or nothing. */
 export function targetLabel(key: string | null): string | null {
-  return key ? flagTargetByKey(key)?.label ?? null : null;
+  return targetsLabel(key);
 }
-
-/** The pick list for "set your target": every catalog target. */
-export const TARGET_CHOICES = FLAG_TARGETS.map(t => ({ key: t.key, label: t.label }));
 
 // ── The calendar ─────────────────────────────────────────────────────────────────────────────────────────────
 

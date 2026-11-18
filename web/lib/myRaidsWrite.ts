@@ -3,7 +3,7 @@
 // that is not the player's is never updated, linked or deleted, whatever id the browser sent. Kept out of the 'use server' file
 // so a test can run them against a stub client.
 import { validateEntry, MAX_GUILD_ENTRIES, type EntryInput } from './myRaids';
-import { flagTargetByKey } from './flagTargets';
+import { parseTargetKeys } from './raidTargets';
 
 // The supabase client, loosely typed: the tests pass a stub with the same chain.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,7 +66,7 @@ export async function setTarget(db: Db, playerId: string, entryId: unknown, raid
     const { error } = await db.from('hub_player_targets').delete().eq('player_guild_id', entryId).eq('player_id', playerId).eq('raid_date', raidDate);
     return error ? FAIL : { ok: true };
   }
-  if (typeof targetKey !== 'string' || !flagTargetByKey(targetKey)) return { ok: false, error: 'Pick a target from the list.' };
+  if (!parseTargetKeys(targetKey)) return { ok: false, error: 'Pick a target from the list.' };
   const { error } = await db.from('hub_player_targets').upsert(
     { player_guild_id: entryId, player_id: playerId, raid_date: raidDate, target_key: targetKey }, { onConflict: 'player_guild_id,raid_date' });
   return error ? FAIL : { ok: true };

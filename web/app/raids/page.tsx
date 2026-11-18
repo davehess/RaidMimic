@@ -14,9 +14,10 @@ import { isRaidmimicHost } from '@/lib/raidmimicHost';
 import SignInButton from '@/components/SignInButton';
 import HostFrame from '@/components/RaidmimicFrame';
 import { COMMON_ZONES, DAY_NAMES, relativeTime } from '@/lib/guildSettings';
-import { buildMyRaids, monthCells, monthParam, parseMonth, shiftMonth, targetLabel, TARGET_CHOICES, MAX_GUILD_ENTRIES, LABEL_MAX, type MyRaid } from '@/lib/myRaids';
+import { buildMyRaids, monthCells, monthParam, parseMonth, shiftMonth, targetLabel, MAX_GUILD_ENTRIES, LABEL_MAX, type MyRaid } from '@/lib/myRaids';
 import { loadMyRaids } from '@/lib/myRaidsLoad';
-import { saveGuild, removeGuild, setRaidTarget } from './actions';
+import { saveGuild, removeGuild } from './actions';
+import TargetPicks from './TargetPicker';
 import CharacterGuilds from './CharacterGuilds';
 import { EVENTS, GUILD, DEMO_BAR, targetByKey } from '@/lib/demoGuild';
 import { demoBase } from '../raidmimic/demo/_parts/DemoShell';
@@ -51,16 +52,12 @@ function TargetPicker({ raid }: { raid: MyRaid }) {
     return <p className="m-0 text-sm"><span className="text-text">{targetLabel(raid.targetKey)}</span> <span className="text-xs text-dim">set by your guild</span></p>;
   }
   return (
-    <form action={setRaidTarget} className="flex flex-wrap items-center gap-2">
-      <input type="hidden" name="id" value={raid.entryId} />
-      <input type="hidden" name="date" value={raid.dateKey} />
-      <label className="sr-only" htmlFor={`t-${raid.entryId}-${raid.dateKey}`}>Target for {raid.localDateLabel}</label>
-      <select id={`t-${raid.entryId}-${raid.dateKey}`} name="target" defaultValue={raid.targetKey ?? ''} className={FIELD}>
-        <option value="">No target yet</option>
-        {TARGET_CHOICES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-      </select>
-      <button type="submit" className={BTN}>Set</button>
-    </form>
+    <details className="rounded border border-border bg-bg px-3">
+      <summary className="min-h-11 cursor-pointer text-sm leading-[2.75rem] text-text">
+        {targetLabel(raid.targetKey) ?? 'No target yet'} <span className="text-xs text-dim">change</span>
+      </summary>
+      <TargetPicks entryId={raid.entryId} date={raid.dateKey} initial={raid.targetKey} />
+    </details>
   );
 }
 

@@ -62,8 +62,14 @@ export async function removeGuild(formData: FormData): Promise<void> {
   await run(pid => removeEntry(supabaseAdmin(), pid, str(formData, 'id')));
 }
 
-export async function setRaidTarget(formData: FormData): Promise<void> {
-  await run(pid => setTarget(supabaseAdmin(), pid, str(formData, 'id'), str(formData, 'date'), str(formData, 'target')));
+/** Save the night's picks in place (keys joined into one list; none clears it). Returns the result, so the page does not reload. */
+export async function saveRaidTargets(entryId: string, date: string, keys: string[]): Promise<WriteResult> {
+  const p = await player();
+  if ('error' in p) return { ok: false, error: p.error };
+  const list = Array.isArray(keys) ? keys.map(String).join(',') : '';
+  const r = await setTarget(supabaseAdmin(), p.playerId, entryId, date, list);
+  if (r.ok) revalidatePath('/raids');
+  return r;
 }
 
 /** Save the characters' guilds in place: returns the result instead of redirecting, so the page does not reload. */
