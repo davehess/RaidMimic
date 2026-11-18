@@ -2,7 +2,7 @@
 // current item and the three best upgrades that exist in the current era, scored for the class, with where
 // each one drops or sells and whether it is already on that character's wishlist.
 //
-// The guild lead's pick from the Decision Desk (2026-10-19, DECISIONS §383; the companion gap of §94). New page,
+// The guild lead's pick from the Decision Desk (2026-10-19, DECISIONS §383; the gap list of §94). New page,
 // so it goes live with the [beta] tag (DECISIONS §135). First slice: the scoring model is web/lib/gearUpgrades.ts
 // and its tuning table is web/lib/gearWeights.ts.
 //

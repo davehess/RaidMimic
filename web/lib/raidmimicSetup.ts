@@ -21,10 +21,9 @@ export const LANDING_PATH_ON_HOST = '/';                 // raidmimic.com/
 export const LANDING_PATH_ON_WOLFPACK = '/raidmimic';    // the same page, on the Wolf Pack hosts
 
 // ─── Header ─────────────────────────────────────────────────────────────────────────────────────────
-export const TITLE = '[beta] Set up Raid Mimic';
+export const TITLE = 'Set up Raid Mimic';
 export const DESCRIPTION =
   'A step-by-step guide to setting up Mimic on your own PC for EverQuest on Project Quarm, with no guild needed: what you need, what works on your own, and how to join a raid.';
-export const BETA_NOTE = 'New page, a first draft, still being shaped.';
 
 export const HERO = {
   kicker: 'Set up Raid Mimic',
@@ -66,7 +65,7 @@ export const STEPS: Step[] = [
     items: [
       'Download the Windows installer from the newest release and run it.',
       'It is not code-signed: if Windows shows a blue SmartScreen warning, click More info, then Run anyway.',
-      'PQ Companion, GINA and EQLogParser can stay installed.',
+      'GINA and EQLogParser can stay installed.',
     ],
     link: { label: 'Open the latest release', href: RELEASES_URL },
     note: 'Install Mimic outside your EverQuest folder. If Zeal is not found later, fix this first.',

@@ -28,9 +28,9 @@ older dated logs are `<date>/<n>` (the n-th entry of that day's log).
 | Website & sign-in | [web.md](web.md) | 14 | wolfpack.quest pages, sign-in, link previews, admin pages, the beta site. |
 | Discord bot & community | [bot-discord.md](bot-discord.md) | 24 | Bot commands, Discord cards, feedback reports, onboarding, roster, Bristlebane. |
 | Hosting, database & costs | [infra-costs.md](infra-costs.md) | 34 | Supabase, Railway, Vercel, the home server, retention, the self-host wizard. |
-| Working rules & process | [process.md](process.md) | 46 | How sessions work, branches and releases, docs rules, tooling assessed. |
+| Working rules & process | [process.md](process.md) | 45 | How sessions work, branches and releases, docs rules, tooling assessed. |
 | Brand, media & marketing | [brand-media.md](brand-media.md) | 30 | Raid Mimic and eqmimic.quest pages, videos, posters, the mascot. |
-| Other games | [other-games.md](other-games.md) | 3 | World of Warcraft and anything outside EverQuest. |
+| Other games | [other-games.md](other-games.md) | 2 | World of Warcraft and anything outside EverQuest. |
 
 ## Index (newest first)
 
@@ -347,7 +347,7 @@ older dated logs are `<date>/<n>` (the n-th entry of that day's log).
 | §97 | 2026-09-29 | [mimic-overlays](mimic-overlays.md) | Command Center: 📋 on a deathroll (2026-09-29, Mimic beta `013e2e0c`, agent 3.7.47) |
 | §96 | 2026-09-29 | [loot-dkp](loot-dkp.md) | Essences of Power: the loot queue, and where it shows (2026-09-29, web beta `7b942d11`) |
 | §95 | 2026-09-29 | [pop-progression](pop-progression.md) | PoP checklist: the Essences of Power quest (2026-09-29, web 1.8.49) |
-| §94 | 2026-09-29 | [process](process.md) | Companion suite review, round two: settings pages, bandolier, spell sets, maps, the gear finder (2026-09-29) |
+| §94 | 2026-09-29 | [process](process.md) | Gap list: settings pages, bandolier, spell sets, maps, the gear finder (2026-09-29) |
 | §93 | 2026-09-29 | [mimic-app](mimic-app.md) | Mimic setup walkthrough: two layouts on beta (2026-09-29, Mimic beta `a9f2db26` + `bbfe59e6`, agent 3.7.46) |
 | §92 | 2026-09-29 | [mimic-overlays](mimic-overlays.md) | Timers canvas: 🧪 test rows per panel; the settings view stays on screen (2026-09-29, Mimic beta `7ebe2989`) |
 | §91 | 2026-09-29 | [mimic-app](mimic-app.md) | Copying a whole Mimic setup to another person's install — options, not built (2026-09-29) |
@@ -449,7 +449,6 @@ older dated logs are `<date>/<n>` (the n-th entry of that day's log).
 | §5 | 2026-09-22 | [gear-items](gear-items.md) | Faction page, time-bound — and the aggregate that made it impossible (2026-09-22) |
 | §4 | 2026-09-22 | [bot-discord](bot-discord.md) | NPC tells were reaching Discord DMs (2026-09-22) |
 | §450 | 2026-09-21 | [gear-items](gear-items.md) | Faction standing: bound it from cons + tracked hits, and account for temporary bonuses (future, 2026-10-27) |
-| §445 | 2026-09-21 | [other-games](other-games.md) | WoW parses: parses.gg exists and does the uploader half (open, the guild lead's pick, 2026-10-26) |
 | §424 | 2026-09-21 | [process](process.md) | The Decision Desk picks of 2026-10-23 (evening), and the mimic's "coming to life" story |
 | §420 | 2026-09-21 | [raid-review](raid-review.md) | The guild lead's picks, 2026-10-23 (afternoon) — and where they landed |
 | §403 | 2026-09-21 | [agent](agent.md) | Overnight 2026-10-21/22: local-first built, and the 3.0 cut prepared |
@@ -568,7 +567,7 @@ older dated logs are `<date>/<n>` (the n-th entry of that day's log).
 | 2026-08-27/6 | 2026-08-27 | [process](process.md) | ⚠ Two different people — the attribution rule was wrong for three weeks |
 | 2026-08-27/5 | 2026-08-27 | [loot-dkp](loot-dkp.md) | A real bug the investigation did turn up: `Number('') === 0` |
 | 2026-08-27/4 | 2026-08-27 | [loot-dkp](loot-dkp.md) | ⚠ UNEXPLAINED: one full sweep fired at ET midnight, and the model says it shouldn't have |
-| 2026-08-27/3 | 2026-08-27 | [loot-dkp](loot-dkp.md) | Why this matters for the API request to Moncs |
+| 2026-08-27/3 | 2026-08-27 | [loot-dkp](loot-dkp.md) | Why this matters for the API request to the upstream maintainer |
 | 2026-08-27/2 | 2026-08-27 | [loot-dkp](loot-dkp.md) | …and the bigger cost turned out to be the redeploys |
 | 2026-08-27/1 | 2026-08-27 | [loot-dkp](loot-dkp.md) | The full download runs on the raid calendar, not on a rolling timer |
 | 2026-08-26/7 | 2026-08-26 | [loot-dkp](loot-dkp.md) | "Is there an alternative in the APIs?" — checked the doc, mixed answer |
@@ -655,7 +654,6 @@ older dated logs are `<date>/<n>` (the n-th entry of that day's log).
 | 2026-08-07/8 | 2026-08-09 | [process](process.md) | Branches — beta stops drifting (2026-08-09) |
 | 2026-08-07/7 | 2026-08-09 | [triggers](triggers.md) | Triggers — the `{s}` timestamp swallow (2026-08-09) |
 | 2026-08-07/6 | 2026-08-09 | [loot-dkp](loot-dkp.md) | Loot bidding (2026-08-09) |
-| 2026-08-07/9 | 2026-08-07 | [process](process.md) | pq-companion |
 | 2026-08-07/5 | 2026-08-07 | [zeal](zeal.md) | Zeal `/tag` (#194) |
 | 2026-08-07/4 | 2026-08-07 | [agent](agent.md) | Mimic / agent |
 | 2026-08-07/3 | 2026-08-07 | [process](process.md) | Releases / process |

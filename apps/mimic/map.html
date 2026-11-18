@@ -1023,7 +1023,8 @@
     }
     return best;
   }
-  function upLabel(up) { return String(up.name).replace(/_/g, ' ').replace(/^[#!~]+/, '') + (up.spawn_id != null ? ' #' + up.spawn_id : ''); }
+  // A seen mob that is now a charm pet says so (agent 4.0.99, `charmed_by`; the guild lead, 2026-11-17).
+  function upLabel(up) { return String(up.name).replace(/_/g, ' ').replace(/^[#!~]+/, '') + (up.spawn_id != null ? ' #' + up.spawn_id : '') + (up.charmed_by ? ' · charmed' : ''); }
   // `off` (optional): glyphs switched off in ⚙ Map settings, as { '👁': true, … }.
   function pointBadges(p, off) {
     var seen = {}, out = [];
@@ -3296,6 +3297,7 @@
       for (var mi = 0; mi < movedPids.length; mi++) {
         var mp = S.byId[movedPids[mi]], mt = mp ? S.timerBy[String(mp.id)] : null;
         if (!mp || movedBy[movedPids[mi]] || (mt && timerState(mt, now) === 'wait')) continue;
+        if (S.seenBy[movedPids[mi]] && S.seenBy[movedPids[mi]].charmed_by) continue;   // a charm pet aggroes nothing
         var mup = upOn(mp.id, S.p, S.seenBy), mv = movedMob(mp, mup, S.seenBy[movedPids[mi]], S.p, S.trails, now, rt);
         if (mv) movedBy[movedPids[mi]] = { p: mp, up: mup, mv: mv };
       }
@@ -3303,6 +3305,7 @@
         var ap = vis[ai].p, at = S.timerBy[String(ap.id)];
         if (at && timerState(at, now) === 'wait') continue;
         if (movedBy[String(ap.id)]) continue;
+        if (S.seenBy[String(ap.id)] && S.seenBy[String(ap.id)].charmed_by) continue;   // charmed: no ring on its spawn point
         var aup = upOn(ap.id, S.p, S.seenBy), aun = upNpc(ap, aup);
         var acc = aup && S.p ? ccFor(S.p.cc, aup.name, aup.spawn_id, !!(S.p.target && (String(S.p.target.point_id) === String(ap.id) || (aup.spawn_id != null && aup.spawn_id === S.p.target.id)))) : null;
         ctx.globalAlpha = inLevelRange(ap.z, sz, range) ? 1 : 0.4;

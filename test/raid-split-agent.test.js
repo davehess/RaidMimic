@@ -35,7 +35,8 @@ describe('the agent remembers which raids the bot named', () => {
     expect(_raidSplitNow(Date.now())).toBe(null);
   });
   it('both proxies feed it', () => {
-    expect(AGENT).toMatch(/_buffQueueCache\.set\(key, \{ at: Date\.now\(\), payload: j \}\); _noteRaidSplit\(j\);/);
+    // The buff queue stores its ETag beside the payload since agent 4.0.97 (§617); the split is still fed from the body.
+    expect(AGENT).toMatch(/_buffQueueCache\.set\(key, \{ at: Date\.now\(\), payload: j, etag: [^}]+\}\);\s*_noteRaidSplit\(j\);/);
     expect(AGENT).toMatch(/_extTargetCache\.set\(key, \{ at: Date\.now\(\), payload: j \}\); _noteRaidSplit\(j\);/);
   });
 });

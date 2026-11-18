@@ -52,9 +52,9 @@ describe('the page', () => {
     expect(src).toMatch(/from '\.\.\/_legal\/LegalParts'/);
     for (const part of ['Section', 'Bullets', 'Rows']) expect(src, part).toMatch(new RegExp(`<${part}\\b`));
   });
-  it('carries the [beta] marker: in its title and card, and through the shared frame (NewPageTag)', () => {
-    expect(L.LEGAL_META.security.title).toBe('[beta] Raid Mimic security');
-    expect(read('web/app/raidmimic/_legal/LegalParts.tsx')).toMatch(/<NewPageTag\b/);
+  it('no beta marker any more (settled 2026-11-17, §613): a plain title and no tag in the shared frame', () => {
+    expect(L.LEGAL_META.security.title).toBe('Raid Mimic security');
+    expect(read('web/app/raidmimic/_legal/LegalParts.tsx')).not.toMatch(/<NewPageTag\b/);
   });
   it('links the one contact address from lib/legal.ts and hard-codes no address of its own', () => {
     expect(src).toMatch(/href=\{CONTACT_HREF\}/);

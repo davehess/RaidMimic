@@ -798,7 +798,7 @@ what is installed in the EQ folder. On import:
 ## §93 — Mimic setup walkthrough: two layouts on beta (2026-09-29, Mimic beta `a9f2db26` + `bbfe59e6`, agent 3.7.46)
 *2026-09-29 · DECISIONS-2026-09-21.md · Mimic setup walkthrough two layouts*
 
-The guild lead, reviewing another companion app's onboarding: *"i like the clickthrough. Build out a version
+The guild lead, on the setup flow: *"i like the clickthrough. Build out a version
 of this for mimic instead of the single setup view. It shouldn't look the same, and should show some of the
 optional setup pieces that we have for /me and the abilities that entails"*.
 - **`apps/mimic/welcome.html`, one step registry, two layouts.** They differ in shape, never in what they do:

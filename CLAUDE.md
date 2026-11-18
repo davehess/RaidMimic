@@ -128,6 +128,14 @@ character family."* Do not reconstruct it, do not re-derive it from
 `characters.main_name`, and do not write a replacement mapping anywhere in the
 repo. The database knows; the published repo does not need to.
 
+⚠ **Other projects and other people's installs stay out of the repo too** (the guild lead, 2026-11-17: *"Dont mention these
+in public docs, and we should go through and look for other places where other installs are mentioned"*; DECISIONS §618).
+No comparisons with another app, no partnership or merger talk, no account of a conversation with another project's
+developer, another guild's officers or a server's operators, and no third party's name or handle. That material goes in
+the private briefing. Plain technical references to tools we integrate with (Zeal, GINA, EQLogParser, OpenDKP, Discord,
+the hosting services) are fine. The 2026-11-17 sweep removed `docs/pq-companion/` and every such mention; git history
+still has them.
+
 **How to attribute instead:**
 
 | Who | Write |

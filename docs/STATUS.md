@@ -84,7 +84,7 @@ row here — `AI-CONTRIBUTOR-BRIEF.md`, `RESEARCH-HELPER.md`,
 `HANDOFF-2026-07-20-opus.md`, `audit-mob-specials.md`, `DESIGN-80-raid-night-review.md`,
 `-81-raid-guide`, `-dedup-and-mob-serialization`, `-intentional-deaths`,
 `-live-raid-review`, `-mob-serialization`, `-multi-raid`, `-outcome-backfill`,
-`-wpqdi`, plus `pq-companion/` and `release-cards/`. Most are real
+`-wpqdi`, plus `release-cards/`. Most are real
 and current; they were simply written faster than this table. Add a row when you
 next touch one rather than assuming a missing row means a missing doc.
 
@@ -555,15 +555,11 @@ next touch one rather than assuming a missing row means a missing doc.
   is still open. **Next slice, in draft: the bot reads the hub slug** (the chosen guild goes on the link code and the session, so the session's
   `guild_id` feeds §496's scoping, and `/auth/mimic-link` completes on that guild's site through the raidmimic sign-in); until then picking another
   guild changes the address Mimic talks to but the bot does not yet scope by it. Test `test/mimic-guild-picker.test.js`. Awaiting a try on the beta build.
-- **⚠ Needs the guild lead — send the PQ Companion note (2026-10-31, §487).** PQ Companion has no licence and no plugin API, so "their
-  client plus our platform" needs the author first (`docs/DESIGN-raidmimic-hosted.md` §8b). The note asks the author (a third party)
-  about a licence for their client code or an upload hook. The draft is in the session scratchpad and is sent by the guild lead; it is
-  not committed (the repo names no one). Mimic absorbs maps and tradeskills on its own meanwhile (option B).
 - **⚠ Needs the guild lead — the Stripe account (2026-10-31, §495).** Billing is monthly only ($25 a guild, no free month since 2026-11-17 §612, one-click
   cancel, `pause_collection` after 30 days with no raid upload, individuals free). Nothing is built: it needs a Stripe account, Payment
   Links / Billing for the one monthly price, and then a session builds the webhook that sets `hub_guilds.plan` and the pause state.
   Stripe Tax only if a state makes it a question. Step 6 of the hosted order of work (`docs/DESIGN-raidmimic-hosted.md` §7j).
-- **⚠ Needs the guild lead — hand the OpenDKP ask to the OpenDKP owner (2026-10-31, §485).** The audit-cursor ask
+- **⚠ Needs the guild lead — hand the OpenDKP ask to the upstream maintainer (2026-10-31, §485).** The audit-cursor ask
   (`docs/DESIGN-opendkp-audit-cursor.md`, status line refreshed 2026-10-31) is reframed for many guilds behind one client. It is a page
   the guild lead hands over; the repo carries no contact detail. Its traffic figures must be re-measured on the day it is sent (the doc's
   own warning). Unblocks other guilds' DKP (order of work step 8).
@@ -1988,7 +1984,7 @@ next touch one rather than assuming a missing row means a missing doc.
     read it yet. Test: `test/data-release-isolation.test.js`.
   - **✅ Self-host "load game data" step** (`scripts/selfhost-load-game-data.js`; guide in `docs/SELFHOSTING.md`; §392).
   - **🧪 Mimic beta:** Canvas 🔒 lock; Map outlines from the skin's real window sizes; UI Studio "Move it in game"
-    commands. **Agent 3.8.33** (trigger list off `/api/state`), **3.8.34** (PQ Companion import; empty import is an
+    commands. **Agent 3.8.33** (trigger list off `/api/state`), **3.8.34** (third-party trigger pack import; empty import is an
     error), **3.8.35** (Map: engaged = hurt, health memory, kite totals, "killed?", corpse / "dead" tag confirms a
     kill), **3.8.36** (Chat: own guild / raid lines never lost).
   - **⏳ Decided, not built:** Raid Mimic hosting model, price and data model (§385–§387), eqmimic.quest lookup
@@ -2284,7 +2280,7 @@ next touch one rather than assuming a missing row means a missing doc.
   the Tiny Gold Fist, one Fist per run (tier one); part 2, the four elemental essences in Kerasha's Sacred Bowl
   for the Jade Hoop and the four other rewards she cycles through (elemental planes). Checked against the
   quest scripts, the bowl recipe and the gods' loot tables. `test/pop-guide.test.js`. §95.
-- **⏳ Companion suite review, round two (docs artifact, 2026-09-29).** Settings pages, bandolier, spell sets,
+- **⏳ Gap list, round two (2026-09-29).** Settings pages, bandolier, spell sets,
   maps, raid summary and the gear upgrade finder added: 28 missing / 38 partial / 19 covered. Waiting on the
   guild lead to say which gaps to queue. §94.
 - **⏳ DPS HUD +pet breakdown (agent 3.7.45 beta `672ff15e` + bot 3.1.175, 2026-09-29).** The pet's share of an
@@ -2613,12 +2609,12 @@ next touch one rather than assuming a missing row means a missing doc.
   `_resolveCharacterIds` should read `characters.opendkp_id`, which the
   2026-08-30 decision made authoritative, instead of walking 12 pages upstream
   for an answer already mirrored locally.
-- **📨 The upstream ask to Moncs is REFRESHED and ready to send
+- **📨 The upstream ask to the upstream maintainer is REFRESHED and ready to send
   (`docs/DESIGN-opendkp-audit-cursor.md`, 2026-08-31).** Guild lead: *"we should give
   an upstream request that would find the outliers for a cheaper cost than the
   full rip."* It existed but was unsendable: its numbers were from 2026-08-27,
   before we cut our own traffic 60% (116 → 46 MB/day), and quoting stale figures
-  to someone who can read his own logs is the wrong kind of wrong.
+  to someone who can read their own logs is the wrong kind of wrong.
   Now a **ladder**, so declining the big ask still leaves an easy yes:
   **Tier 0** `?count=N` newest-first on `/audits` — a parameter he has ALREADY
   built on `/raids`; alone it takes 27.0 → ~0.1 MB/day, the single largest line.
@@ -3505,7 +3501,7 @@ next touch one rather than assuming a missing row means a missing doc.
   dropped everything newer. At 1,440 rows in the window the newest 440 were
   gone, starting with the most recent hour. Page said **0 calls last hour /
   1,330 per 24h / 91.3 MB**; truth was **49 / 2,074 / 115.9 MB**.
-  ⚠ **This is the page we pointed OpenDKP's operator at so he would not have to
+  ⚠ **This is the page we pointed the upstream maintainer at so they would not have to
   take our word for our traffic, and it was flattering us.** Wrong in that
   direction is worse than being down.
   Fixed by aggregating in Postgres — `opendkp_traffic_summary()` RPC, anon-
@@ -3549,10 +3545,9 @@ next touch one rather than assuming a missing row means a missing doc.
   on Mimic 2.1.0 was already running agent 3.6.2), which is the fast path.
 
 - **The agent no longer talks to OpenDKP at all — and the blindspot that hid it
-  (agent 3.6.2 · bot 3.1.87 · Mimic 2.6.2 · 2026-08-27).** Moncs: *"Do you
-  purposefully call /dkp once a minute? Looking back over the past 60 minutes,
-  it looks like theres about 54 calls from <residential-ip> calling it"* — a
-  RESIDENTIAL ip: one member's PC. Every open Mimic pulled the full
+  (agent 3.6.2 · bot 3.1.87 · Mimic 2.6.2 · 2026-08-27).** The upstream maintainer
+  asked whether we purposefully call /dkp once a minute: about 54 calls an hour
+  from a RESIDENTIAL address, one member's PC. Every open Mimic pulled the full
   472-character standings array once a minute to render one number.
   ⚠ **The blindspot, written up in `DESIGN-agent-third-party-calls.md` §1: a
   counter that watches one caller reads as "we're clean" when a second caller
@@ -3617,16 +3612,16 @@ next touch one rather than assuming a missing row means a missing doc.
   made the day-list fallback unreachable, and its test passed for the wrong
   reason.
   ⚠ OPEN: the weekly cadence is TEMPORARY — revert to `0,3,4` when OpenDKP
-  ships a `since` parameter. The API request to Moncs is written (framed as
+  ships a `since` parameter. The API request to the upstream maintainer is written (framed as
   "one full pull a week + deltas in between") but unsent. Next targets on the
   same surface: `/characters` (279 KB/pass) and the `/auctions` mirror
   (680 KB/pass).
 
 - **The OpenDKP incident: halt + fan-in cache + outbound governor (bot
-  3.1.71–3.1.72, 2026-08-25; Moncs: "high volume automated traffic … I've
-  currently blocked the ip address").** Root cause was NOT the 30-min sync:
+  3.1.71–3.1.72, 2026-08-25; OpenDKP flagged high-volume automated traffic
+  and blocked our IP address).** Root cause was NOT the 30-min sync:
   the Loot bidding panel's 7s dashboard poll went upstream uncached
-  (server-panel `auctions`/`my-bids`, + a getAuction() N+1) — his API Gateway
+  (server-panel `auctions`/`my-bids`, + a getAuction() N+1) — their API Gateway
   logs showed 1,678 calls / 1.1 GB in ~3.3h from ONE open dashboard; live
   since Mimic v2.0.0 (2026-07-19) when an escaping fix armed the timer.
   Shipped: `OPENDKP_HALT` kill switch at the `_get`/`_post` primitives
@@ -3636,7 +3631,7 @@ next touch one rather than assuming a missing row means a missing doc.
   early-break (15 pages → 1), outbound budget `OPENDKP_MAX_CALLS_PER_MIN` +
   429/Retry-After cooldown (3.1.72). Full story: DECISIONS-2026-08-25;
   budget-as-config for other deployments: DESIGN-selfhost-wizard §3.
-  ⚠ OPEN: halt stays ON until Moncs unblocks the Railway IP; flip
+  ⚠ OPEN: halt stays ON until the upstream maintainer unblocks the Railway IP; flip
   `OPENDKP_HALT=0` before Wed's raid for bidding. Queued for next Mimic beta:
   panel poll 7s→adaptive, agent standings cache 60s→5min, document.hidden
   back-off.
@@ -4004,7 +3999,7 @@ next touch one rather than assuming a missing row means a missing doc.
   trigger / parser line: `/tag` spawn-id capture, the EQLogParser trigger-parity
   set (agent 3.5.52 — multiple warning thresholds, captured durations, timer key
   capture, visible recast timer, exclude patterns, colour/pin/display-threshold),
-  and the five pq-companion-derived parser fixes (3.5.44–3.5.48). Its bot-side
+  and five parser fixes (3.5.44–3.5.48). Its bot-side
   half had already shipped straight to main on 2026-08-07 — **bot 3.1.31**, where
   the tag upload cap was keeping the OLDEST 24 tags and dropping the boss.
   **Version call (the guild lead): shipped as 2.3.4, not 2.4.0 — the park IS the
@@ -6321,8 +6316,8 @@ listed #202 as blocked when it had shipped.
 | **`opendkp_raids` / `_auctions` rewrite** | Still re-upserting themselves every sync (1.5M and 3.7M updates). Decision made, NOT implemented: re-upsert a closed raid only when its upstream `Version` moves; ticks/DKP/attendance corrections still flow |
 | **Other capped-query-as-a-set risks** | The bot 3.1.33 loot bug's shape is generic — **23 other `limit=####` queries in `index.js`**, none audited for whether they feed a *set* rather than a *list*. Cheap sweep, real payoff |
 | **Archived logs vanish from the backfill picker** | Log archiving is ON by default at 500 MB (idle 15 min, `WP_LOG_ROTATE_MB=0` disables) and archives rather than culls — but an archived log drops out of the smart-backfill picker until it is moved back. Archive, never cull, was the point |
-| **Zone map overlay** | Blocked on a 1–2h **in-game coordinate spike**: the docs say Zeal transposes x/y, the dashboard path disagrees, and only a live client settles it. `docs/pq-companion/03-zone-maps.md` |
-| **Report 04 P3–P5** | `docs/pq-companion/04-combat-parse-accuracy.md`, the three unshipped items: P3 bystander taunt-emote → per-player taunt threat (a `says` line — belongs in `PRIORITY_KEEP_PATTERNS`, watch the privacy filter), P4 wildcard-verb fallback for incoming damage (**must stay LAST** among damage patterns), P5 real hate for non-damaging detrimentals (`maxHP/15`) + miss hate + backstab cap |
+| **Zone map overlay** | **Shipped** (Mimic map overlay, 2026-10-12, DECISIONS §216/§239; `apps/mimic/map.html`). The axis question was settled in code: the agent swaps the Zeal pipe's x/y once at its edge and everything after works in the server frame. Next steps are DECISIONS §619 (doors, zone lines, 3D cut-away). |
+| **Parse accuracy P3–P5** | The three unshipped items: P3 bystander taunt-emote → per-player taunt threat (a `says` line — belongs in `PRIORITY_KEEP_PATTERNS`, watch the privacy filter), P4 wildcard-verb fallback for incoming damage (**must stay LAST** among damage patterns), P5 real hate for non-damaging detrimentals (`maxHP/15`) + miss hate + backstab cap |
 | **Fight timeline chart** | Data layer done; chart unbuilt, and it needs one call from the guild lead (class toggles vs player search — recommendation: both, one selection model). The two formerly in-flight pieces LANDED: agent `ramp` reached stable in 3.5.58 (Mimic 2.3.5, 2026-08-10) and bot `encounter_id`-at-close shipped in 3.1.34 |
 | **Both Zeal upstream asks unsent** | `zeal-spawn-id-request.md` still aims at the gauges (rewrite against `named_pipe.cpp` first) and `zeal-tag-spawn-id-collision.md` has never been sent. See Cold work #15 |
 | ~~Beta adoption near zero~~ | Addressed twice: graduated 2026-08-09 AND again 2026-08-10 (Mimic 2.3.5 / agent 3.5.58 — the whole Ssra fix batch went stable within a day instead of waiting on beta users who don't exist). `sync-beta.yml` now keeps beta = main + park continuously. **Standing posture: short beta lines, graduate fast** |

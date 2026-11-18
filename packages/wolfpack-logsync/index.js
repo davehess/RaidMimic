@@ -824,7 +824,7 @@ const MELEE_HIT_MAX = Math.max(6000, parseInt(process.env.WP_MELEE_HIT_MAX, 10) 
 // first word ("You flying" / "Torvahk round"), producing a phantom combatant
 // whose damage the multi-word anti-NPC filter then discards — monk specials
 // were credited to nobody and Harm Touch damage never parsed at all
-// (pq-companion comparison, analysis 04 §3-A).
+// (an earlier comparison with another parser).
 const SPECIAL_VERB_RX =
   '(?:harm\\s+touch(?:es)?|flying\\s+kicks?|round\\s+kicks?|dragon\\s+punch(?:es)?|' +
   'eagle\\s+strikes?|tiger\\s+claws?|tail\\s+rakes?|frenzies\\s+on|frenzy\\s+on)';
@@ -1817,6 +1817,13 @@ const PET_CLAIM_FRESH_MS = 15 * 60 * 1000;
 // class + duration to the session, driving the duration bar + class-aware warn.
 let _pendingCharmSpell = null;   // { cls, dur, owner, ts } | null
 const PENDING_CHARM_WINDOW_MS = 12_000;
+// The last charm each owner held in slot 16 (owner lower → { k: pet lower, at }), so a named pet can be re-adopted from
+// the pet window after its entry was dropped (2026-11-17).
+const _lastCharmPetByOwner = new Map();
+const LAST_CHARM_READOPT_MS = 15 * 60 * 1000;
+// A death report held off because the pet window still showed the pet: if the pet then leaves slot 16 within this
+// long, it died (dropped quietly); after it, a missing pet is a break as usual.
+const CHARM_MAYBE_DEAD_MS = 20_000;
 
 // ── Mob tick learner (the guild lead, 2026-09-26) ───────────────────────────
 // "charm overlay needs both server and mob tick on them (they're different,
@@ -2344,6 +2351,11 @@ function _reconcileGaugeCharms() {
       // gone and called a break 6s later while it was still charmed (FB-121, Giwin Mirakon).
       const open = _charmTickTracker.get(txt.toLowerCase());
       if (open && open.is_active && String(open.owner || '').toLowerCase() === ownerLower) return true;
+      // The same named pet this owner had charmed in the last 15 minutes is back in slot 16: re-adopt it. Once an entry
+      // was dropped (a same-name "slain" line, a missed gauge), a named pet had no way back in without a fresh cast, and
+      // the tracker said "no active charm" while the pet window still showed it (the guild lead, 2026-11-17).
+      const last = _lastCharmPetByOwner.get(ownerLower);
+      if (last && last.k === txt.toLowerCase() && now - last.at < LAST_CHARM_READOPT_MS) return true;
       return false;
     });
     if (!petG) continue;
@@ -2379,6 +2391,7 @@ function _reconcileGaugeCharms() {
       // ~6s and the countdown never visibly ran (a bard, 2026-09-26: "i didnt
       // see it on the regular or mini").
       cur.last_seen_at = now;
+      _lastCharmPetByOwner.set(ownerLower, { k, at: now });   // re-adopt window (filter above)
     }
   }
   // Drop pending entries whose pet is no longer in slot 16 (transient pulse).
@@ -2408,6 +2421,9 @@ function _reconcileGaugeCharms() {
     // case that actually matters. If false "charm break" calls reappear during
     // routine cycling, this is the number to raise.
     if ((!set || !set.has(k)) && (now - (info.last_seen_at || info.last_tick_at || 0)) > 6000) {
+      // A death we held off on because the pet window still named the pet (_slot16StillNames): it really died, so it
+      // goes quietly, as a death does, instead of a "charm break" call.
+      if (info.maybe_dead_at && now - info.maybe_dead_at < CHARM_MAYBE_DEAD_MS) { _charmTickTracker.delete(k); continue; }
       _bumpCharmTick(info.pet, info.owner, 'break', now);     // gauge dropped → break (alert fires now)
     }
   }
@@ -2725,8 +2741,25 @@ function checkCharmPetDeath(line, character) {
   const slainKey = slainName.toLowerCase();
   if (!_charmTickTracker.has(slainKey)) return false;
   if (killerName && isConfirmedPlayer(killerName)) return false;
+  // The owner's pet window still names this pet: the slain one is another of the same name (named mobs come in sets,
+  // "Diaku Armsman"), so keep ours. If it really was ours, slot 16 empties within seconds and the reconcile drops it
+  // quietly (maybe_dead_at). The guild lead, 2026-11-17: the tracker read "no active charm" with the pet still up.
+  const info = _charmTickTracker.get(slainKey);
+  if (info && info.is_active && _slot16StillNames(info.owner, info.pet || slainName)) { info.maybe_dead_at = Date.now(); return false; }
   _charmTickTracker.delete(slainKey);
   return true;
+}
+// Is `petName` still in `owner`'s Zeal pet window (gauge slot 16), on a fresh pipe frame?
+function _slot16StillNames(owner, petName, now = Date.now()) {
+  if (!owner || !petName) return false;
+  const ol = String(owner).toLowerCase(), want = String(petName).toLowerCase();
+  for (const ch of Object.keys(_zealState || {})) {
+    if (String(ch).toLowerCase() !== ol) continue;
+    const st = _zealState[ch];
+    if (!st || !Array.isArray(st.gauges) || (now - (st.updatedAt || 0)) > ZEAL_STALE_MS) return false;
+    return st.gauges.some(g => g && g.slot === 16 && String(g.text || '').toLowerCase() === want);
+  }
+  return false;
 }
 
 // ── /pet health report state (Quarm format) ─────────────────────────────────
@@ -3559,7 +3592,7 @@ function _durTicksForLevel(formula, capTicks, level) {
   if (!lvl || !f) return cap;                       // no level → spell max
   // EQMac/Al'Kabor integer division is FLOOR, and formula 6 carries a +2 term
   // we never had (verified against the EQMacEmu CalcBuffDuration_formula port
-  // in the pq-companion comparison, pinned by its PQDI-checked test vectors:
+  // in an earlier comparison, pinned by PQDI-checked test vectors:
   // f6 L57 → 30 ticks, L60 → 32). On our catalog f6/base-35 is 25 spells —
   // essentially the whole slow line (Forlorn Deeds, Tagar's/Togor's/Tigir's
   // Insects, Languid Pace, Slow, Cloud of Grummus …). At L60 the real answer
@@ -14057,6 +14090,14 @@ function _maybeUploadRaidRoster(sample) {
     // tab "raid (type 5)" section — the guild lead 2026-07-15). Updated on EVERY
     // pipe fire, before the upload debounce below, so the local view stays
     // live even between heartbeat uploads.
+    // A raider's health swinging is when the buff queue matters (§617): a drop of 10 points or more since the last pipe
+    // fire puts the queue check back on its fast cadence for a while.
+    try {
+      if (_lastRaidPipe && Array.isArray(_lastRaidPipe.members)) {
+        const before = new Map(_lastRaidPipe.members.map(m => [String(m.name).toLowerCase(), Number(m.hp_pct)]));
+        if (compact.some(m => { const b = before.get(String(m.name).toLowerCase()); const n = Number(m.hp_pct); return Number.isFinite(b) && Number.isFinite(n) && b - n >= 10; })) _buffQueueFast();
+      }
+    } catch (e) { void e; }
     _lastRaidPipe = { at: Date.now(), members: compact };
     // Refresh the local raid-member lookup that trigger actions consult via
     // require_raid_member. Lowercased names only — matched against captured
@@ -16085,10 +16126,31 @@ function _resolveMainTank(mainTargetName) {
 // (the guild lead, 2026-07-06). Primes the shared extended-target cache as a side
 // effect, so these overlays get fed even without the Extended Target overlay
 // open. Returns { name, hp_pct, raider_count } or null (out of combat / cold).
+// The raid's KILL tag (2026-11-17): the newest fresh tag whose text is KILL. With `@` it is exclusive, so there is one.
+function _killTagNow(now = Date.now()) {
+  let best = null;
+  for (const t of _zealTags.values()) {
+    if (!t || !/^kill\b/i.test(String(t.text || '')) || !(now - (t.tsMs || 0) <= _TAG_FRESH_MS)) continue;
+    if (!best || t.tsMs > best.tsMs) best = t;
+  }
+  return best;
+}
 function _resolveMainTarget(activeCharacter) {
   try { fetchExtendedTarget(activeCharacter); } catch { /* best-effort prime */ }
   const cached = _extTargetCache.get(String(activeCharacter || '').trim().toLowerCase());
   const targets = cached && cached.payload && Array.isArray(cached.payload.targets) ? cached.payload.targets : null;
+  // The main assist's KILL tag names the mob outright ("consume this for targetting", the guild lead, 2026-11-17). It wins
+  // while that mob is still a live row of the raid's targets, or for a minute after the tag before any row shows it; a
+  // dead or long-gone KILL mob falls back to "most targeted" below.
+  try {
+    const kt = _killTagNow();
+    if (kt) {
+      const row = (targets || []).find(t => t && t.kind === 'npc' && !t.stale
+        && ((t.spawn_id != null && Number(t.spawn_id) === Number(kt.spawn_id)) || String(t.name || '').toLowerCase() === kt.mob));
+      if (row) return { name: row.name, hp_pct: row.hp_pct != null ? row.hp_pct : null, raider_count: row.raider_count || 0, source: 'kill_tag' };
+      if (Date.now() - kt.tsMs <= 60_000) return { name: kt.mobDisplay, hp_pct: null, raider_count: 0, source: 'kill_tag' };
+    }
+  } catch { /* a tag is a hint: never break the target bar */ }
   if (!targets || !targets.length) return null;
   let best = null;
   for (const t of targets) {
@@ -21037,6 +21099,19 @@ table.wp-abtbl th.wp-r { color:var(--dim); }
    Set up / Machine. A heading is a plain div (no data-tab, not a button), so the tab switcher, the tour and every
    \`.nav button[data-tab]\` lookup never see it. */
 .nav .wp-rail-h { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.09em; margin:10px 2px 0; }
+/* Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live, Raid,
+   Recap, Diagnostics"). A heading is a div with role=button (not a .nav button, so the tab switcher and its styles never
+   see it); its open state is kept per section in localStorage, and the section holding the active tab opens itself. */
+.nav .wp-rail-sec { display:flex; flex-direction:column; gap:4px; }
+.nav .wp-rail-tog { cursor:pointer; user-select:none; display:flex; align-items:center; gap:5px; padding:2px 0; }
+.nav .wp-rail-tog:hover { color:var(--text); }
+.nav .wp-rail-tog::before { content:'▸'; display:inline-block; width:9px; transition:transform .12s; }
+.nav .wp-rail-sec.open > .wp-rail-tog::before { transform:rotate(90deg); }
+.nav .wp-rail-sec:not(.open) > .wp-rail-body { display:none; }
+.nav .wp-rail-body { display:flex; flex-direction:column; gap:4px; }
+/* An "On this PC" page, loaded into the middle pane (2026-11-17: it used to replace the whole window, rail and all). */
+#wpLocalFrame { display:block; width:100%; height:calc(100vh - var(--wp-topbar-h, 64px) - 24px); min-height:480px; border:0; border-radius:8px; background:transparent; }
+body.wp-overlay-mode #localpage, body.wp-feedback-mode #localpage { display:none !important; }
 .nav .wp-rail-h:first-child { margin-top:0; }
 /* The pinned section index: one row of chips under the top bar naming this tab's cards. Solid background (cards
    pass UNDER it); a single line that scrolls sideways rather than a second and third row. */
@@ -21065,6 +21140,7 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
   .shell { display:block; }
   .shell > .nav { position:static; height:auto; }
   .nav .wp-rail-h { display:none; }          /* the group headings have no room in the wrapping row */
+  .nav .wp-rail-sec, .nav .wp-rail-sec > .wp-rail-body { display:contents !important; }   /* no headings, so nothing stays folded */
   .nav .wp-rail-foot { display:contents; }   /* Tour + Feedback just join the wrapping row; .nav outranks the base rule declared below */
   .nav { flex-direction:row; flex-wrap:wrap; align-items:center; }
   .nav button { text-align:center; }
@@ -21394,60 +21470,70 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 </div>
 <div class="shell">
 <div class="nav">
-  <!-- The rail is grouped by WHEN you reach for a tab (Layout A, the guild lead, 2026-10-21). The headings are
-       plain divs: no data-tab, not buttons, so nothing that binds '.nav button[data-tab]' ever sees them. -->
-  <div class="wp-rail-h">Live</div>
-  <button class="active" data-tab="dash">Dashboard</button>
-  <button data-tab="raid">⚔ Raid</button>
-  <button data-tab="fights">⚔️ Fights</button>
-  <div class="wp-rail-h">After the raid</div>
-  <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
-       The tray's "📈 My parses" opens this tab through the #myparses hash. -->
-  <button data-tab="myparses">📈 My parses</button>
-  <button data-tab="stats">📊 Stats</button>
-  <button data-tab="loot">💰 Loot</button>
-  <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
-       the raid, so it sits in this group. The Rehearse tab (§401) will grow out of it. -->
-  <button data-tab="replay">⏪ Replay</button>
-  <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead
-       2026-08-13 — "having to scroll in our dashboard is somewhat annoying to
-       navigate"). Info had grown to 16 cards and Triggers to 12 by mixing three
-       unrelated jobs: what your log SAW (session stats), whether the machinery
-       WORKS (diagnostics), and the thing the tab is actually named for. The
-       sidebar rail is what made room for more destinations. -->
-  <div class="wp-rail-h">Set up</div>
-  <button data-tab="overlays">🪟 Overlays</button>
-  <button data-tab="triggers">⚡ Triggers</button>
-  <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
-  <button data-tab="voice">🗣 Voice</button>
-  <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
-  <button data-tab="buffs">✨ Buffs (and blocking)</button>
-  <div class="wp-rail-h">Machine</div>
-  <button data-tab="diag">🩺 Diagnostics</button>
-  <button data-tab="info">Info</button>
-  <button data-tab="optin">Logsync</button>
-  <!-- 🛡 Admin — officer-only. Hidden by default; renderAdmin flips it visible
-       ONLY when s.mimicIdentity.is_officer (the bot's authenticated reply). The
-       officer-gated card DATA is served only to officers, so this is a real
-       gate, not a CSS hide. -->
-  <button data-tab="admin" id="wpAdminTab" style="display:none" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
-  <!-- 🖥 On this PC (the guild lead, 2026-10-21, option B: the website's own pages bundled into Mimic and
-       served by this agent under /local/). Built from your own logs and inventory files; nothing leaves
-       the PC. Inventory and My replay open in their own Mimic window (the tray's "Inventory (on this PC)"
-       and "My replay (on this PC)" are the same window); in a plain browser they open a new tab. "My fights
-       (this PC)" is the local site's My parses page, named differently here so it is not mistaken for the
-       📈 My parses tab above it. No data-tab, so the tab switcher ignores them. -->
-  <div class="wp-rail-grp" id="wpLocalGrp">
-    <div class="wp-lbl">On this PC</div>
-    <!-- Each page opens in THIS window; ↗ (or Ctrl / Shift / middle click) opens it in its own window (the guild lead,
-         2026-11-16: "should be able to load in the same window, not external unless people want to launch in a new window"). -->
-    <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
-    <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
-    <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
-    <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
-    <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
-    <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+  <!-- Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live,
+       Raid, Recap, Diagnostics"), in that order. Headings are divs with role=button: no data-tab, not buttons, so nothing
+       that binds '.nav button[data-tab]' ever sees them. wpRailToggle keeps each section's open state; the section that
+       holds the active tab opens itself (wpRailReveal). The "On this PC" pages (built from this PC's own logs and files;
+       nothing leaves it) sit in the section they belong to and load into the middle pane (#localpage); ↗ (or Ctrl /
+       Shift / middle click) opens one in its own window. "My fights (this PC)" is the local site's My parses page, named
+       so it is not mistaken for the 📈 My parses tab. -->
+  <div class="wp-rail-sec" data-sec="setup">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Setup</div>
+    <div class="wp-rail-body">
+      <button data-tab="overlays">🪟 Overlays</button>
+      <button data-tab="triggers">⚡ Triggers</button>
+      <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
+      <button data-tab="voice">🗣 Voice</button>
+      <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
+      <button data-tab="buffs">✨ Buffs (and blocking)</button>
+      <button data-tab="optin">Logsync</button>
+      <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
+      <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
+    </div>
   </div>
+  <div class="wp-rail-sec open" data-sec="live">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Live</div>
+    <div class="wp-rail-body">
+      <button class="active" data-tab="dash">Dashboard</button>
+      <button data-tab="fights">⚔️ Fights</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec open" data-sec="raid">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Raid</div>
+    <div class="wp-rail-body">
+      <button data-tab="raid">⚔ Raid</button>
+      <button data-tab="loot">💰 Loot</button>
+      <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
+      <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="recap">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Recap</div>
+    <div class="wp-rail-body">
+      <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
+           The tray's "📈 My parses" opens this tab through the #myparses hash. -->
+      <button data-tab="myparses">📈 My parses</button>
+      <button data-tab="stats">📊 Stats</button>
+      <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
+           the raid. The Rehearse tab (§401) will grow out of it. -->
+      <button data-tab="replay">⏪ Replay</button>
+      <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
+      <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="diag">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Diagnostics</div>
+    <div class="wp-rail-body">
+      <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead 2026-08-13 — "having to scroll
+           in our dashboard is somewhat annoying to navigate"). -->
+      <button data-tab="diag">🩺 Diagnostics</button>
+      <button data-tab="info">Info</button>
+    </div>
+  </div>
+  <!-- 🛡 Admin — officer-only, outside the five sections. Hidden by default; renderAdmin flips it visible ONLY when
+       s.mimicIdentity.is_officer (the bot's authenticated reply). The officer-gated card DATA is served only to
+       officers, so this is a real gate, not a CSS hide. -->
+  <button data-tab="admin" id="wpAdminTab" style="display:none;margin-top:10px" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
   <!-- ✨ Tour sits at the FOOT of the rail (the guild lead, 2026-09-23: "We're running out of horizontal real
        estate"); the rail is sticky, so a long page never means scrolling back for it. No data-tab, so the tab
        switcher ignores it. 💬 Feedback moved to the title row's top-right on 2026-10-29 (next to Reload). -->
@@ -21504,6 +21590,8 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <div id="diag" class="section"></div>
 <div id="optin" class="section"></div>
 <div id="admin" class="section"></div>
+<!-- An "On this PC" page in the middle pane (2026-11-17); wpOpenLocalSite sets the frame's address. Never repainted by the poll. -->
+<div id="localpage" class="section"><iframe id="wpLocalFrame" title="On this PC" src="about:blank"></iframe></div>
 </div><!-- /.panes -->
 </div><!-- /.shell -->
 <script>
@@ -21778,13 +21866,53 @@ function wpFeedbackClick() {
 // to launch in a new window"); the page then shows "← Dashboard" (LocalNav reads the session flag set here). The ↗
 // button ('window'), Ctrl / Shift / Cmd click and a middle click open it in its own window, the one the tray item opens;
 // with no Mimic bridge, or while the agent has no port yet, a new browser tab does that job.
+// The rail's five folding sections (2026-11-17). Open state per section in localStorage (a private window or blocked
+// storage just starts from the defaults in the markup: Live and Raid open).
+var WP_RAIL_KEY = 'wp.rail.open';
+function _wpRailSaved() { try { return JSON.parse(localStorage.getItem(WP_RAIL_KEY) || 'null'); } catch (e) { return null; } }
+function _wpRailSave() {
+  var o = {};
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) { o[s.getAttribute('data-sec')] = s.classList.contains('open'); });
+  try { localStorage.setItem(WP_RAIL_KEY, JSON.stringify(o)); } catch (e) { void e; }
+}
+function wpRailToggle(h) {
+  var s = h && h.parentElement;
+  if (!s) return;
+  s.classList.toggle('open');
+  _wpRailSave();
+}
+// Open the section holding \`el\` (the active tab), so a tab chosen another way (the tour, a hash, the tray) is never hidden.
+function wpRailReveal(el) {
+  var s = el && el.closest ? el.closest('.wp-rail-sec') : null;
+  if (s && !s.classList.contains('open')) { s.classList.add('open'); _wpRailSave(); }
+}
+(function wpRailRestore() {
+  var o = _wpRailSaved();
+  if (!o || typeof o !== 'object') return;
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) {
+    var k = s.getAttribute('data-sec');
+    if (typeof o[k] === 'boolean') s.classList.toggle('open', o[k]);
+  });
+  try { wpRailReveal(document.querySelector('.nav button.active')); } catch (e) { void e; }
+})();
 function wpOpenLocalSite(page, how) {
   var url = '/local/' + page + '/';
   var own = how === 'window' || (how && typeof how === 'object' && (how.ctrlKey || how.metaKey || how.shiftKey || how.button === 1));
   if (how && typeof how === 'object' && how.type === 'auxclick' && how.button !== 1) return;   // right click: the menu, not a page
   if (!own) {
-    try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; }
-    location.href = url;
+    // In the middle pane, rail and all kept (the guild lead, 2026-11-17: "launched a new tab instead of just the middle
+    // one"). The page hides its own top bar inside the frame (web/local/app/layout.tsx).
+    var frame = document.getElementById('wpLocalFrame'), pane = document.getElementById('localpage');
+    if (!frame || !pane) { try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; } location.href = url; return; }
+    var src = url + '?embed=1';
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
+    document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(function (x) { x.classList.remove('active'); });
+    pane.classList.add('active');
+    var btn = { inventory: 'wpLocalInv', flags: 'wpLocalFlags', parses: 'wpLocalFights', replay: 'wpLocalReplay' }[page];
+    var b = btn ? document.getElementById(btn) : null;
+    if (b) { b.classList.add('active'); try { wpRailReveal(b); } catch (e) { void e; } }
+    try { wpIndexSync(); } catch (e) { void e; }
     return;
   }
   if (how && typeof how === 'object' && how.preventDefault) how.preventDefault();
@@ -31135,10 +31263,11 @@ setTimeout(function () {
 // state and then threw on getElementById(undefined). Net effect: dashboard
 // blanked. Scoping to [data-tab] keeps the popover button out of the loop.
 document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.nav button[data-tab]').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   document.getElementById(b.dataset.tab).classList.add('active');
+  try { wpRailReveal(b); } catch (e) { void e; }
   if (b.dataset.tab === 'optin') refreshOptin();
   if (b.dataset.tab === 'raid') refreshRaidTab();
   if (b.dataset.tab === 'myparses') wpMpOpenTab();
@@ -34298,7 +34427,7 @@ function wpTrigApplyForm(base, f) {
       + '    <button id="trigCancelBtn" type="button" style="display:none;background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Cancel edit</button>'
       + '    <button id="trigPreviewBtn" type="button" style="background:#21262d;color:var(--green);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Fire the overlay with the current form text (no save, no DB)">▶ Preview</button>'
       + '    <button id="trigTestBtn" type="button" style="background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Test pattern…</button>'
-      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or PQ Companion trigger file">⬇ Import GINA / EQLP / PQ Companion</button>'
+      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or JSON trigger pack file">⬇ Import GINA / EQLP / JSON pack</button>'
       + '    <span id="trigAddMsg" class="dim" style="font-size:11px"></span>'
       + '  </div>'
       + '  <div id="trigTestPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
@@ -34308,7 +34437,7 @@ function wpTrigApplyForm(base, f) {
       + '    <div id="trigTestResult" class="dim" style="font-size:11px;margin-top:6px"></div>'
       + '  </div>'
       + '  <div id="trigImportPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
-+ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or <b>PQ Companion</b> (its exported .json trigger pack). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
++ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or a <b>JSON trigger pack</b> (a .json export). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
       + '    <input id="trigImportFile" type="file" accept=".tgf,.gz,.gtp,.xml,.json,application/gzip,application/json,text/xml" style="display:block;margin-bottom:6px;font-size:11px;color:var(--text)">'
       + '    <textarea id="trigImportXml" placeholder="…or paste the .tgf JSON / SharedTriggers XML here" style="width:100%;height:120px;background:var(--wp-panel);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;margin-bottom:6px"></textarea>'
       + '    <button id="trigImportRun" type="button" style="background:var(--wp-accent);color:#fff;border:0;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px">Import pasted text</button>'
@@ -35018,7 +35147,7 @@ function wpTrigApplyForm(base, f) {
         summary += '<br><span class="dim" style="font-size:11px">' + j.sound_notes.length + ' trigger' + (j.sound_notes.length === 1 ? '' : 's') + ' played a sound that could not come along, so ' + (j.sound_notes.length === 1 ? 'it keeps' : 'they keep') + ' the spoken callout: '
           + j.sound_notes.slice(0, 4).map(function(n){ return esc(n.name) + (n.file ? ' (' + esc(n.file) + ')' : '') + ' &mdash; ' + esc(n.why); }).join('; ') + (j.sound_notes.length > 4 ? '; and ' + (j.sound_notes.length - 4) + ' more' : '') + '. Drop the file in your sounds folder and pick it in the trigger.</span>';
       }
-      // PQ Companion packs: what a personal trigger has no place for.
+      // JSON trigger packs: what a personal trigger has no place for.
       if (Array.isArray(j.not_carried) && j.not_carried.length > 0) {
         summary += '<br><span class="dim" style="font-size:11px">Not carried over: '
           + j.not_carried.slice(0, 6).map(function(n){ return esc(n.name) + ' (' + n.what.map(esc).join('; ') + ')'; }).join('; ')
@@ -39018,7 +39147,7 @@ function startWebDashboard(port) {
       // ⚠ GONE (2026-08-27): the local /api/loot/dkp route used to call
       // api.opendkp.com DIRECTLY from this machine, once a minute per running
       // agent, to fetch the whole 472-character standings array and render one
-      // number. Moncs saw ~54 calls/hour from a single member's home ip.
+      // number. The upstream maintainer saw ~54 calls/hour from a single member's home ip.
       //
       // The guild lead: "agents shouldnt be reaching out to opendkp like this."
       // The bot now owns that call — one fetch for the whole guild, counted,
@@ -40055,7 +40184,7 @@ function startWebDashboard(port) {
 
       // POST /api/personal-triggers/import — accepts a GINA / EQLogParser
       // XML blob (both export the same SharedTriggers shape), an EQLogParser
-      // .tgf tree or a PQ Companion JSON pack (_parseTriggerImport) and APPENDS
+      // .tgf tree or a third-party trigger pack (JSON) (_parseTriggerImport) and APPENDS
       // parsed entries to the personal triggers list. Existing personal
       // triggers are preserved; duplicates by name are skipped (caller can
       // delete + re-import to overwrite). Returns { imported, skipped,
@@ -40141,14 +40270,14 @@ function startWebDashboard(port) {
         }
         const parsed = _parseTriggerImport(raw);
         if (!parsed.length) {
-          res.writeHead(400); return res.end(JSON.stringify({ error: 'no triggers found in that file (GINA, EQLogParser and PQ Companion exports are supported)' }));
+          res.writeHead(400); return res.end(JSON.stringify({ error: 'no triggers found in that file (GINA, EQLogParser and JSON trigger pack exports are supported)' }));
         }
         const existingNames = new Set(_personalTriggers.map(t => String(t.name || '').toLowerCase()));
         const compiled = [];
         const errors = [];
         let imported = 0, skipped = 0, soundsCopied = 0;
         const soundNotes = [];   // triggers whose sound file could not come along
-        const notCarried = [];   // pieces of a trigger a personal trigger has no place for (PQ Companion packs)
+        const notCarried = [];   // pieces of a trigger a personal trigger has no place for (JSON trigger packs)
         const noteNotCarried = (t) => {
           if (Array.isArray(t.not_carried) && t.not_carried.length) {
             notCarried.push({ name: String(t.name || '').slice(0, 100), what: t.not_carried.slice(0, 8).map(s => String(s).slice(0, 120)) });
@@ -40200,7 +40329,7 @@ function startWebDashboard(port) {
             actions,
           };
           if (t.timer_duration_sec > 0) row.timer_duration_sec = Math.max(1, Math.min(3600, t.timer_duration_sec));
-          // PQ Companion pack fields the parser already cleaned (timer warnings, excludes, capture-timed
+          // JSON trigger pack fields the parser already cleaned (timer warnings, excludes, capture-timed
           // timers, bar colour, loop); other formats never set them.
           for (const k of _PQC_ROW_FIELDS) if (t[k] !== undefined) row[k] = t[k];
           if (t.enabled === false) row.enabled = false;
@@ -40218,7 +40347,7 @@ function startWebDashboard(port) {
             existingNames.add(row.name.toLowerCase());
             imported++;
           } catch (err) {
-            // Import DISABLED rather than drop (pq-companion's contract, and
+            // Import DISABLED rather than drop (the pack format's contract, and
             // the right one): a silently-missing trigger is the worse failure
             // mode. The row sits in the list flagged for manual editing.
             compiled.push({ ...row, enabled: false, import_error: String(err.message || err).slice(0, 200),
@@ -49473,7 +49602,7 @@ function _escapeForLiteralMatch(s) {
 // ── Trigger pattern compiler (GINA / EQLogParser / native) ──────────────────
 // One pipeline for every pattern, no matter which door it came through —
 // import, guild poll, personal load, or the dashboard test box. Built from the
-// pq-companion comparison (scratchpad analysis 01), which ran 1,189 real
+// an earlier comparison, which ran 1,189 real
 // GINA/EQLP fixture triggers through the OLD translators: 92 threw at compile,
 // 311 ^-anchored patterns could never fire, and 82 bound their action tokens
 // to the wrong capture. With this pipeline the same corpus compiles 583/583.
@@ -49526,7 +49655,7 @@ function _rewriteAnchorsForRawLine(pattern) {
 }
 
 // .NET / RE2 dialect → JavaScript. GINA and EQLogParser write .NET regex; a
-// pq-companion pack writes Go/RE2. JS has lookbehind and backrefs (RE2's gap —
+// third-party trigger pack writes Go/RE2. JS has lookbehind and backrefs (RE2's gap —
 // our advantage) but NOT scoped inline flags, which .NET packs use heavily.
 // Rewrites: (?P<n>…)→(?<n>…) · (?#comment) removed · (?i:…)→(?:…)+flag ·
 // (?i) hoisted · (?>…)→(?:…) · duplicate (?<x>…) renamed x_2 with an alias so
@@ -49925,6 +50054,11 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
   // more natural raid action than two people tagging simultaneously.
   const first = text[0];
   let mode = 'set';
+  // `@` is `+` plus exclusivity (a member, in the guild's raid channel, 2026-11-17): "+ does 'Add this TAG to my current
+  // target, but don't remove any of its existing tags' ... @ does 'Add this TAG to my current target, but don't remove any
+  // of its existing tags. Also remove specifically this TAG from other targets in the zone'". The main assist's kill macro
+  // is `/tag rsgs @^r^KILL`, so KILL moves with each new target and `/tag target KILL` finds it.
+  const exclusive = first === '@';
   if (first === '+' || first === '@') { mode = 'append'; text = text.slice(1); }
   else if (first === '!') { mode = 'replace'; text = text.slice(1); }
   else if (first === '-') {
@@ -49938,7 +50072,13 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
     shape = _ZEAL_TAG_SHAPES[sm[1].toLowerCase()] || null;            // '^-^' → null = shape cleared
     text = text.slice(sm[0].length);
   }
-  text = text.replace(/\s+/g, ' ').trim().slice(0, 48);
+  text = text.replace(/\^.\^/g, '').replace(/\s+/g, ' ').trim().slice(0, 48);   // a colour code mid-text is not text either
+  // Exclusive: the same tag comes off every OTHER spawn here. Its entry stays, text blanked, as the game leaves the old
+  // target its arrow but no text.
+  if (exclusive && text) {
+    const want = text.toLowerCase();
+    for (const [sid, t] of _zealTags) if (sid !== spawnId && t && String(t.text || '').toLowerCase() === want) t.text = '';
+  }
   const prev = _zealTags.get(spawnId);
   _zealTags.set(spawnId, {
     spawn_id: spawnId, mob: name.toLowerCase(), mobDisplay: name,
@@ -49982,15 +50122,19 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
 // with only chat+rsay and the first live test (two `a Darkpaw warrior`s tagged
 // Bardy and Cano, NOT in a raid) captured nothing at all. So: find the header,
 // take the payload from there to end-of-line, and read the speaker off whatever
-// prefix precedes it. The `ZEALTAG | ` header is machine-generated and can't
-// collide with human chat, which is what makes the loose match safe.
+// prefix precedes it.
+// The header alone is not a tag: this hook runs on the raw line, before the
+// channel filters, so the prefix must be one of Zeal's transports (raid, group,
+// or a numbered/ZT tag channel). Text on any other channel is chat, not a tag.
+const _TAG_TRANSPORT_RX = /(?:^|\s)(?:tells? the raid|tells? the group|tell your (?:raid|party)|(?:tells?|say to) zt[^\s,]*:\d+),\s*['"]?\s*$|^\[(?:R|P|\d+)\]\s+\[[A-Za-z]+\]:\s*$/i;
 function _tagLineParts(line, selfCharacter) {
   let idx = line.indexOf('ZEALTAG | ');
   if (idx === -1) idx = line.indexOf('ZT | ');
   if (idx === -1) return null;
   // Quoted shape closes with the quote; abbreviated shape just ends.
-  const payload = line.slice(idx).replace(/\s*['"]\s*$/, '').trim();
+  const payload = line.slice(idx).replace(/\s*['"]\s*$/, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200).trim();
   let prefix = line.slice(0, idx).replace(/^\[[^\]]*\]\s*/, '');   // drop the EQ timestamp
+  if (!_TAG_TRANSPORT_RX.test(prefix)) return null;
   let tagger = null;
   // Abbreviated form ends `…[Sender]: ` — Zeal already substitutes the real
   // name for "You" there (abbreviateChat), so trust it as-is.
@@ -51848,8 +51992,8 @@ function _parseTriggerXml(xml) {
     const enableRegex = get('EnableRegex').toLowerCase() === 'true';
     const displayText = get('DisplayText');
     const ttsText     = get('TextToVoiceText');
-    // GINA timer semantics — corrected 2026-08-07 (pq-companion analysis 01
-    // §3.9): TimerDuration is the COUNTDOWN length, and we used to import it
+    // GINA timer semantics — corrected 2026-08-07 (found in an earlier
+    // comparison): TimerDuration is the COUNTDOWN length, and we used to import it
     // as cooldown_seconds — a semantic inversion that turned a 450s raid
     // timer into a 450s MUTE on the trigger with no timer at all. GINA has no
     // lockout concept, so cooldown is always 0 here; the duration becomes a
@@ -51983,7 +52127,7 @@ function _parseTriggerTgfJson(text) {
   return out;
 }
 
-// PQ Companion's trigger pack (2026-10-20): plain JSON, {pack_name, description, triggers:[…]}, written by
+// A third-party trigger pack (2026-10-20): plain JSON, {pack_name, description, triggers:[…]}, written by
 // its Triggers page "Export" (a whole list or one category). Read from its published trigger model; the
 // code here is our own. A trigger is one record: `pattern` (Go regex, run on the message with the timestamp
 // already stripped, so a leading ^ is normal — compileTriggerPattern handles that and the (?P<name>…) groups,
@@ -51993,7 +52137,7 @@ function _parseTriggerTgfJson(text) {
 // sentences for whatever has no home in a personal trigger, which the import result lists. A trigger with
 // nothing to match on comes back with no pattern, so the endpoint reports it without storing it.
 // `characters` is deliberately never carried — it names the exporter's own characters.
-// Returns null when the text is not a PQ Companion pack, so the caller can try the next format.
+// Returns null when the text is not a JSON trigger pack, so the caller can try the next format.
 const _PQC_ROW_FIELDS = ['timer_warnings', 'exclude_patterns', 'timer_duration_capture', 'timer_key_capture',
   'bar_color', 'pinned', 'display_threshold_sec', 'timer_loop', 'timer_loop_max'];
 function _parsePqCompanionPack(text) {
@@ -52091,7 +52235,7 @@ function _parsePqCompanionPack(text) {
   }
   return out;
 }
-// One door for the import endpoint: XML (GINA / EQLogParser share-data), a PQ Companion pack, or an
+// One door for the import endpoint: XML (GINA / EQLogParser share-data), a JSON trigger pack, or an
 // EQLogParser .tgf tree — told apart by what the text is, never by file name.
 function _parseTriggerImport(raw) {
   if (!/^\s*[[{]/.test(raw)) return _parseTriggerXml(raw);
@@ -53806,7 +53950,10 @@ function _charmPetDiedById(spawnId) {
   const out = [];
   if (!(id > 0)) return out;
   for (const [k, info] of _charmTickTracker) {
-    if (info && Number(info.pet_id) === id) { out.push(info.pet || k); _charmTickTracker.delete(k); }
+    if (!info || Number(info.pet_id) !== id) continue;
+    // Same hold as checkCharmPetDeath: the id may belong to another same-named mob; the pet window decides.
+    if (info.is_active && _slot16StillNames(info.owner, info.pet || k)) { info.maybe_dead_at = Date.now(); continue; }
+    out.push(info.pet || k); _charmTickTracker.delete(k);
   }
   return out;
 }
@@ -56759,6 +56906,17 @@ function _mapApplyShared(zone, j, now) {
         n: Math.max(1, Math.trunc(Number(t.n)) || 1), age: Math.max(0, botNow - at) });   // age on the bot's clock, when the pull came back
     }
     _mapSync.targets[zone] = { rows, pulledAt: now };
+    // Another raider's target is a sighting here too (the guild lead, 2026-11-17: "if another raider has targetted a mob
+    // and knows that mob has died" it should come off everyone's map). The FIRST place we hear of a spawn id is kept, as a
+    // first tab of our own is; a later death of that id (Zeal's death message, a slain line) is then placed on its spawn
+    // point by the same certainty rules, and the point's "died" goes out to the guild. Standing on its spot, it is pinned
+    // now, the way our own target is.
+    const ch = _mapActiveCharacter(now);
+    for (const r of rows) {
+      const loc = { x: r.x, y: r.y, z: r.z };
+      try { _mapNoteSighting(zone, r.id, r.name, loc, now - r.age); } catch (e) { void e; }
+      try { if (ch) _mapTryPin(zone, ch, r.id, r.name, loc, now, {}); } catch (e) { void e; }
+    }
   }
   if (j.trails && typeof j.trails === 'object' && !Array.isArray(j.trails)) {
     const tracked = MAP_TRACKED_PATHS[zone] || [];
@@ -57644,6 +57802,13 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     .filter(s => s && now - s.at <= MAP_SEEN_KEEP_MS && !(zd.timers[String(s.point_id)] && zd.timers[String(s.point_id)].died_at >= s.at))
     .map(s => ({ point_id: s.point_id, spawn_id: s.spawn_id == null ? null : s.spawn_id, name: s.name, at: s.at, by: s.by || null }))
     .sort((a, b) => b.at - a.at);
+  // A seen mob that is now someone's charm pet (the guild lead, 2026-11-17: "charm pets aren't showing up on the map"): the
+  // row says whose, and the Map draws no aggro ring for it. Matched by spawn id only, never by name.
+  try {
+    const charmById = new Map();
+    for (const c of _charmTickTracker.values()) if (c && c.is_active && Number(c.pet_id) > 0) charmById.set(Number(c.pet_id), c.owner || null);
+    if (charmById.size) for (const s of out.seen) if (s.spawn_id != null && charmById.has(Number(s.spawn_id))) s.charmed_by = charmById.get(Number(s.spawn_id)) || '?';
+  } catch { /* a nicety: never break the map */ }
   try {   // health on the alive rows (FB-87): your target, else the Extended Target cache; blank when it is not certain
     const ec = typeof _extTargetCache === 'undefined' ? null : _extTargetCache.get(String(character).trim().toLowerCase());
     const ecRows = ec && ec.payload && ec.payload.targets;
@@ -58489,13 +58654,27 @@ const SNAPPY_WINDOW  = 60_000;
 // every 1.5s, so 2s still means most ticks reuse the cache rather than
 // re-fetching every single one. Override via WP_BUFF_QUEUE_TTL_MS.
 const BUFF_QUEUE_TTL_MS = parseInt(process.env.WP_BUFF_QUEUE_TTL_MS, 10) || 2000;
+// Change-driven (the guild lead, 2026-11-17: "We don't need to check those that often. We're more concerned with when things
+// change… when someone's health is fluxuating that's a sign we need to pay attention to them. Also when someone died they
+// need to be rebuffed"; DECISIONS §617). The queue was ~45% of the bot's raid-night data out: >30 KB to every raider every
+// 2 s. Now, on top of gzip: the bot's ETag (bot 4.1.6) makes an unchanged answer a ~200-byte 304, and the check slows to
+// 6 s while nothing happens, back to 2 s for 20 s after a raider's HP
+// drops 10 points or more, your own death or rez, or a dispel of your buffs. Overlay ticks keep reading the cache.
+const BUFF_QUEUE_IDLE_TTL_MS = parseInt(process.env.WP_BUFF_QUEUE_IDLE_TTL_MS, 10) || 6000;
+const BUFF_QUEUE_FAST_WINDOW = 20_000;
+let _buffQueueFastUntil = 0;
+function _buffQueueFast(now) { _buffQueueFastUntil = Math.max(_buffQueueFastUntil, (now == null ? Date.now() : now) + BUFF_QUEUE_FAST_WINDOW); }
+function _buffQueueTtl(now) {
+  if (now < _buffQueueSnappyUntil) return SNAPPY_TTL_MS;
+  return now < _buffQueueFastUntil ? BUFF_QUEUE_TTL_MS : BUFF_QUEUE_IDLE_TTL_MS;
+}
 function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
   const opts = _uploadOpts;
   if (!opts || !opts.botUrl || !opts.token) return;
   const key = String(bufferClass || '').trim().toLowerCase() + '|' + String(bufferCharacter || '').trim().toLowerCase();
   if (_buffQueueInflight.has(key)) return;
   const cached = _buffQueueCache.get(key);
-  const ttl = (Date.now() < _buffQueueSnappyUntil) ? SNAPPY_TTL_MS : BUFF_QUEUE_TTL_MS;
+  const ttl = _buffQueueTtl(Date.now());
   if (cached && (Date.now() - cached.at) < ttl) return;
   _buffQueueInflight.add(key);
   const qs = [];
@@ -58509,17 +58688,24 @@ function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
       method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search,
       // Accept-Encoding: the bot gzips this reply when asked (bot 4.1.3, utils/gzipReply.js; the guild lead's
       // hosting-sizes "gzip-now" pick). An older bot ignores the header and answers plain, which the end handler reads too.
-      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}`, 'Accept-Encoding': 'gzip' },
+      // If-None-Match: bot 4.1.6 tags the answer and sends 304 when nothing that matters changed (§617).
+      headers: Object.assign(
+        { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}`, 'Accept-Encoding': 'gzip' },
+        (cached && cached.etag) ? { 'If-None-Match': cached.etag } : {}),
       timeout: 8000,
     }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
         _buffQueueInflight.delete(key);
+        // 304: our copy is still the answer, so it is current again.
+        if (res.statusCode === 304 && cached) { cached.at = Date.now(); return; }
         try {
           let buf = Buffer.concat(chunks);
           if (/gzip/i.test(String(res.headers['content-encoding'] || ''))) buf = zlib.gunzipSync(buf);
-          const j = JSON.parse(buf.toString('utf8')); _buffQueueCache.set(key, { at: Date.now(), payload: j }); _noteRaidSplit(j);
+          const j = JSON.parse(buf.toString('utf8'));
+          _buffQueueCache.set(key, { at: Date.now(), payload: j, etag: res.statusCode === 200 ? (res.headers.etag || null) : null });
+          _noteRaidSplit(j);
         }
         catch { _buffQueueCache.set(key, { at: Date.now(), payload: { buff_queue: [], debuff_queue: [] } }); }
       });
@@ -60401,7 +60587,7 @@ function _readZipEntry(zipPath, entryName) {
 
 // Buffer-based sibling of _readZipEntry for GINA .gtp packages — a .gtp is a
 // PKZIP holding one ShareData.xml, which our gzip-only import path could never
-// read (the "advertised and broken" finding in the pq-companion comparison).
+// read (the "advertised and broken" finding in an earlier comparison).
 // Prefers a member whose basename matches `preferBase`, else the first .xml
 // member, else the first member. Store (0) and deflate (8) only.
 function _readZipMemberFromBuf(buf, preferBase) {
@@ -62690,6 +62876,14 @@ const DISPEL_SETTLE_MS        = 1_500;    // after the last removal, wait for th
 const DISPEL_SELF_SETTLE_MS   = 2_500;    // Zeal's buff slots lag the log by a poll
 const DISPEL_SELF_COOLDOWN_MS = 8_000;    // one callout per dispel
 const DISPEL_QUIET_MS         = 10_000;   // after zoning or dying nothing counts: buffs and mobs go away on their own
+// Your own death and rez (the guild lead, 2026-11-17: "When you die we shouldn't announce the the user (X/Y/Z Dispelled,
+// rebuff) because they already know that. The same when they accept a rez."). Dead, you can lie on the floor for minutes
+// before a rez or a respawn, so a death stays quiet until one of those (or this long); the rez itself, its zone-in and
+// the "Resurrection Effects" buff that follows it each start a fresh quiet window.
+const DISPEL_DEAD_QUIET_MS    = 30 * 60_000;
+const DISPEL_REZ_QUIET_MS     = 60_000;
+const DISPEL_REZ_RX           = /^You regain some experience from resurrection\.$/;
+const DISPEL_REZ_BUFF_RX      = /^resurrection effects?$/i;   // spells 756 / 757 in the catalog
 const _dispelState = {
   lines: new Map(),   // charLower → [{ at, arrived, mob (lower) | null, you }]  the dispel spells' own landing lines
   mine:  new Map(),   // charLower → [{ at, arrived, spell, hits:[{ tk, sk, entry }] }]  worn-off lines for a debuff of ours
@@ -62761,8 +62955,8 @@ function _dispelSelfOpen(cl, arrived) {
   p.lastAt = Math.max(p.lastAt, arrived);
   return p;
 }
-function _dispelQuiet(cl, atMs) {
-  _dispelState.quiet.set(cl, atMs + DISPEL_QUIET_MS);
+function _dispelQuiet(cl, atMs, ms = DISPEL_QUIET_MS) {
+  _dispelState.quiet.set(cl, atMs + ms);
   _dispelState.mine.delete(cl); _dispelState.self.delete(cl); _dispelState.lines.delete(cl); _dispelState.fades.delete(cl);
 }
 // One log line. Live lines only; every kind of evidence is only noted here and decided in flushDispelWatch.
@@ -62777,7 +62971,16 @@ function noteDispelLine(line, character, nowMs) {
   if (Math.abs(now - at) > DISPEL_LIVE_MS) return;
   const cl = String(character).toLowerCase();
   // A zone change (the one zone-line parser, CHAT_ZONE_RX) or a death: buffs and mobs go away on their own after these.
-  if (/^LOADING, PLEASE WAIT|^You died\.$|^You have been slain by /.test(body) || CHAT_ZONE_RX.test(line)) { _dispelQuiet(cl, at); return; }
+  // Your own death: quiet until a rez or a respawn (each of which starts its own window below). The buff queue re-reads
+  // sooner too, since a death is exactly when buffs change.
+  if (/^You died\.$|^You have been slain by /.test(body)) { _dispelQuiet(cl, at, DISPEL_DEAD_QUIET_MS); _buffQueueFast(now); return; }
+  if (DISPEL_REZ_RX.test(body)) { _dispelQuiet(cl, at, DISPEL_REZ_QUIET_MS); _buffQueueFast(now); return; }
+  if (/^LOADING, PLEASE WAIT/.test(body) || CHAT_ZONE_RX.test(line)) {
+    // A zone-in while dead is the rez or the respawn: a minute of quiet for the buffs to settle, not the full death window.
+    const dead = (_dispelState.quiet.get(cl) || 0) > at + DISPEL_REZ_QUIET_MS;
+    _dispelQuiet(cl, at, dead ? DISPEL_REZ_QUIET_MS : DISPEL_QUIET_MS);
+    return;
+  }
   if ((_dispelState.quiet.get(cl) || 0) > at) return;
   const keep = (map, v) => { const a = map.get(cl) || []; a.push(v); while (a.length && now - a[0].arrived > 10_000) a.shift(); map.set(cl, a); };
   if (DISPEL_YOU_TEXTS.has(body)) {
@@ -62811,6 +63014,12 @@ function _dispelNoteZealDiff(character, prev, next, nowMs) {
   const cl = String(character).toLowerCase();
   const now = nowMs == null ? Date.now() : nowMs;
   if ((_dispelState.quiet.get(cl) || 0) > now) return;
+  // A rez in the same zone may print no zone line: its "Resurrection Effects" buff arriving is the tell (§617).
+  if (nb.some(b => b && b.name && DISPEL_REZ_BUFF_RX.test(String(b.name).trim()))
+      && !pb.some(b => b && b.name && DISPEL_REZ_BUFF_RX.test(String(b.name).trim()))) {
+    _dispelQuiet(cl, now, DISPEL_REZ_QUIET_MS);
+    return;
+  }
   const nowNames = new Set(nb.filter(b => b && b.name).map(b => _dispelNorm(b.name)));
   const prevNames = new Set(pb.filter(b => b && b.name).map(b => _dispelNorm(b.name)));
   const added = nb.some(b => b && b.name && !prevNames.has(_dispelNorm(b.name)));
@@ -63763,7 +63972,7 @@ function _synthesizeMatchingLine(t, captures) {
   // by prepending a synthetic timestamp below, so REHEARSE chews on the same
   // raw-line shape the live tail produces. The old blanket anchor delete made
   // a ^-anchored pattern rehearse green while being dead on live (the
-  // false-green half of the pq-companion 01 findings).
+  // false-green half of the earlier comparison's findings).
   src = src.replace(/[?*+]/g, '');
   src = src.replace(/\$$/, '');
   if (src.startsWith('^')) src = src.slice(1);
@@ -71081,6 +71290,7 @@ async function _partyRoute(req, res) {
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
   // Raid Mimic party (2026-11-15): see the block above module.exports.
+  _buffQueueTtl, _buffQueueFast, _maybeUploadRaidRoster, _resetBuffQueueFastForTest: () => { _buffQueueFastUntil = 0; },
   MiniWebSocket, createPartyClient, partyBuildPub, partyMembersList, _partyMembers, _partyShareState, _setRaidPipeForTest: (v) => { _lastRaidPipe = v; }, PARTY_AUTO_SOLO_MS, PARTY_MAX_MEMBERS, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
   _partyResetForTest: () => { if (_partyClientInst) _partyClientInst.destroy(); _partyClientInst = null; },
   _partySetFileForTest: (f) => { _partyFile = f || PARTY_FILE; },
@@ -71149,7 +71359,7 @@ module.exports = {
   classifyMovement, observedSpeed, rootActiveOn, withSpellIds, _tgtMoveNote, _tgtMoveResetForTest: () => { _tgtMove.id = null; _tgtMove.pts = []; },
   TGT_HIST_MAX, TGT_HIST_KEEP_MS, _tgtHistNoteFromState, _tgtHistNoteSlain, _targetHistoryPayload, _pastMobInfo,
   _saveTargetHistory, _loadTargetHistory, _trimTargetHistory,
-  _zealDeathsFromState, _charmPetDiedById, _tgtHistNoteZealDeath, _zealDeathSeen,
+  _zealDeathsFromState, _charmPetDiedById, _tgtHistNoteZealDeath, _zealDeathSeen, checkCharmPetDeath, _lastCharmPetByOwner,
   _tgtHistForTest: () => _tgtHist, _tgtHistResetForTest: () => { _tgtHist = []; _tgtCur.clear(); },
   // Kite loops (2026-10-15): the Map's summary gate + queue, the guild's loops in, and the queue the summary lands in.
   _kiteLoopSubmit, _kiteLoopBody, _kiteLoopsClean, _kiteLoopsFor, _kiteLoopCache, _handleKiteLoopPost, _handleKiteLoopsGet,
@@ -71289,7 +71499,7 @@ module.exports = {
   _applyPetOwnersResponse, _isGeneratedPetName, _guildPetOwners, whoData,
   _liveThreatForTest: () => stats.currentEncounterThreat,
   // +pet spawn ids on the DPS HUD — exported for their test.
-  _petSpawnIdFor, _ownPetSpawnId, _guildPetIds, _zealTagsForTest: _zealTags,
+  _petSpawnIdFor, _ownPetSpawnId, _guildPetIds, _zealTagsForTest: _zealTags, _applyZealTagMessage, _killTagNow,
   _uploadQueueLenForTest: () => _uploadQueue.length,
   // "What you hear" (2026-10-12) — exported for test/trigger-rules.test.js.
   _triggerRules, _resolveRule, _computeRuleGroups, _triggerRulesPayload, _setTriggerRule, _cleanRules,
@@ -71311,7 +71521,7 @@ module.exports = {
   _setPronunciationsForTest: (synced, local) => { _pronSynced = new Map(_pronPairs(synced)); _pronLocal = { ...(local || {}) }; _pronMerged = null; },
   _noteOwnMelee, _afterMyMeleeOk, _ownMeleeAt,
   _importSoundFile, _parseTriggerXml, _parseTriggerTgfJson,
-  // PQ Companion pack import (2026-10-20) — exported for test/pqc-import.test.js.
+  // JSON trigger pack import (2026-10-20) — exported for test/pqc-import.test.js.
   _parsePqCompanionPack, _parseTriggerImport, _PQC_ROW_FIELDS, compileTriggerPattern,
   _setVoiceStateDirForTest: (d) => { _voiceStateDir = d || null; },
   _setGuildTriggersForTest: (arr) => { stats.guildTriggers = arr; stats.guildTriggersVersion = null; },

@@ -98,6 +98,19 @@ table.wp-abtbl th.wp-r { color:var(--dim); }
    Set up / Machine. A heading is a plain div (no data-tab, not a button), so the tab switcher, the tour and every
    `.nav button[data-tab]` lookup never see it. */
 .nav .wp-rail-h { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.09em; margin:10px 2px 0; }
+/* Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live, Raid,
+   Recap, Diagnostics"). A heading is a div with role=button (not a .nav button, so the tab switcher and its styles never
+   see it); its open state is kept per section in localStorage, and the section holding the active tab opens itself. */
+.nav .wp-rail-sec { display:flex; flex-direction:column; gap:4px; }
+.nav .wp-rail-tog { cursor:pointer; user-select:none; display:flex; align-items:center; gap:5px; padding:2px 0; }
+.nav .wp-rail-tog:hover { color:var(--text); }
+.nav .wp-rail-tog::before { content:'▸'; display:inline-block; width:9px; transition:transform .12s; }
+.nav .wp-rail-sec.open > .wp-rail-tog::before { transform:rotate(90deg); }
+.nav .wp-rail-sec:not(.open) > .wp-rail-body { display:none; }
+.nav .wp-rail-body { display:flex; flex-direction:column; gap:4px; }
+/* An "On this PC" page, loaded into the middle pane (2026-11-17: it used to replace the whole window, rail and all). */
+#wpLocalFrame { display:block; width:100%; height:calc(100vh - var(--wp-topbar-h, 64px) - 24px); min-height:480px; border:0; border-radius:8px; background:transparent; }
+body.wp-overlay-mode #localpage, body.wp-feedback-mode #localpage { display:none !important; }
 .nav .wp-rail-h:first-child { margin-top:0; }
 /* The pinned section index: one row of chips under the top bar naming this tab's cards. Solid background (cards
    pass UNDER it); a single line that scrolls sideways rather than a second and third row. */
@@ -126,6 +139,7 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
   .shell { display:block; }
   .shell > .nav { position:static; height:auto; }
   .nav .wp-rail-h { display:none; }          /* the group headings have no room in the wrapping row */
+  .nav .wp-rail-sec, .nav .wp-rail-sec > .wp-rail-body { display:contents !important; }   /* no headings, so nothing stays folded */
   .nav .wp-rail-foot { display:contents; }   /* Tour + Feedback just join the wrapping row; .nav outranks the base rule declared below */
   .nav { flex-direction:row; flex-wrap:wrap; align-items:center; }
   .nav button { text-align:center; }
@@ -455,60 +469,70 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 </div>
 <div class="shell">
 <div class="nav">
-  <!-- The rail is grouped by WHEN you reach for a tab (Layout A, the guild lead, 2026-10-21). The headings are
-       plain divs: no data-tab, not buttons, so nothing that binds '.nav button[data-tab]' ever sees them. -->
-  <div class="wp-rail-h">Live</div>
-  <button class="active" data-tab="dash">Dashboard</button>
-  <button data-tab="raid">⚔ Raid</button>
-  <button data-tab="fights">⚔️ Fights</button>
-  <div class="wp-rail-h">After the raid</div>
-  <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
-       The tray's "📈 My parses" opens this tab through the #myparses hash. -->
-  <button data-tab="myparses">📈 My parses</button>
-  <button data-tab="stats">📊 Stats</button>
-  <button data-tab="loot">💰 Loot</button>
-  <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
-       the raid, so it sits in this group. The Rehearse tab (§401) will grow out of it. -->
-  <button data-tab="replay">⏪ Replay</button>
-  <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead
-       2026-08-13 — "having to scroll in our dashboard is somewhat annoying to
-       navigate"). Info had grown to 16 cards and Triggers to 12 by mixing three
-       unrelated jobs: what your log SAW (session stats), whether the machinery
-       WORKS (diagnostics), and the thing the tab is actually named for. The
-       sidebar rail is what made room for more destinations. -->
-  <div class="wp-rail-h">Set up</div>
-  <button data-tab="overlays">🪟 Overlays</button>
-  <button data-tab="triggers">⚡ Triggers</button>
-  <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
-  <button data-tab="voice">🗣 Voice</button>
-  <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
-  <button data-tab="buffs">✨ Buffs (and blocking)</button>
-  <div class="wp-rail-h">Machine</div>
-  <button data-tab="diag">🩺 Diagnostics</button>
-  <button data-tab="info">Info</button>
-  <button data-tab="optin">Logsync</button>
-  <!-- 🛡 Admin — officer-only. Hidden by default; renderAdmin flips it visible
-       ONLY when s.mimicIdentity.is_officer (the bot's authenticated reply). The
-       officer-gated card DATA is served only to officers, so this is a real
-       gate, not a CSS hide. -->
-  <button data-tab="admin" id="wpAdminTab" style="display:none" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
-  <!-- 🖥 On this PC (the guild lead, 2026-10-21, option B: the website's own pages bundled into Mimic and
-       served by this agent under /local/). Built from your own logs and inventory files; nothing leaves
-       the PC. Inventory and My replay open in their own Mimic window (the tray's "Inventory (on this PC)"
-       and "My replay (on this PC)" are the same window); in a plain browser they open a new tab. "My fights
-       (this PC)" is the local site's My parses page, named differently here so it is not mistaken for the
-       📈 My parses tab above it. No data-tab, so the tab switcher ignores them. -->
-  <div class="wp-rail-grp" id="wpLocalGrp">
-    <div class="wp-lbl">On this PC</div>
-    <!-- Each page opens in THIS window; ↗ (or Ctrl / Shift / middle click) opens it in its own window (the guild lead,
-         2026-11-16: "should be able to load in the same window, not external unless people want to launch in a new window"). -->
-    <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
-    <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
-    <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
-    <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
-    <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
-    <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+  <!-- Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live,
+       Raid, Recap, Diagnostics"), in that order. Headings are divs with role=button: no data-tab, not buttons, so nothing
+       that binds '.nav button[data-tab]' ever sees them. wpRailToggle keeps each section's open state; the section that
+       holds the active tab opens itself (wpRailReveal). The "On this PC" pages (built from this PC's own logs and files;
+       nothing leaves it) sit in the section they belong to and load into the middle pane (#localpage); ↗ (or Ctrl /
+       Shift / middle click) opens one in its own window. "My fights (this PC)" is the local site's My parses page, named
+       so it is not mistaken for the 📈 My parses tab. -->
+  <div class="wp-rail-sec" data-sec="setup">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Setup</div>
+    <div class="wp-rail-body">
+      <button data-tab="overlays">🪟 Overlays</button>
+      <button data-tab="triggers">⚡ Triggers</button>
+      <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
+      <button data-tab="voice">🗣 Voice</button>
+      <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
+      <button data-tab="buffs">✨ Buffs (and blocking)</button>
+      <button data-tab="optin">Logsync</button>
+      <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
+      <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
+    </div>
   </div>
+  <div class="wp-rail-sec open" data-sec="live">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Live</div>
+    <div class="wp-rail-body">
+      <button class="active" data-tab="dash">Dashboard</button>
+      <button data-tab="fights">⚔️ Fights</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec open" data-sec="raid">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Raid</div>
+    <div class="wp-rail-body">
+      <button data-tab="raid">⚔ Raid</button>
+      <button data-tab="loot">💰 Loot</button>
+      <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
+      <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="recap">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Recap</div>
+    <div class="wp-rail-body">
+      <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
+           The tray's "📈 My parses" opens this tab through the #myparses hash. -->
+      <button data-tab="myparses">📈 My parses</button>
+      <button data-tab="stats">📊 Stats</button>
+      <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
+           the raid. The Rehearse tab (§401) will grow out of it. -->
+      <button data-tab="replay">⏪ Replay</button>
+      <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
+      <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="diag">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Diagnostics</div>
+    <div class="wp-rail-body">
+      <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead 2026-08-13 — "having to scroll
+           in our dashboard is somewhat annoying to navigate"). -->
+      <button data-tab="diag">🩺 Diagnostics</button>
+      <button data-tab="info">Info</button>
+    </div>
+  </div>
+  <!-- 🛡 Admin — officer-only, outside the five sections. Hidden by default; renderAdmin flips it visible ONLY when
+       s.mimicIdentity.is_officer (the bot's authenticated reply). The officer-gated card DATA is served only to
+       officers, so this is a real gate, not a CSS hide. -->
+  <button data-tab="admin" id="wpAdminTab" style="display:none;margin-top:10px" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
   <!-- ✨ Tour sits at the FOOT of the rail (the guild lead, 2026-09-23: "We're running out of horizontal real
        estate"); the rail is sticky, so a long page never means scrolling back for it. No data-tab, so the tab
        switcher ignores it. 💬 Feedback moved to the title row's top-right on 2026-10-29 (next to Reload). -->
@@ -565,6 +589,8 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <div id="diag" class="section"></div>
 <div id="optin" class="section"></div>
 <div id="admin" class="section"></div>
+<!-- An "On this PC" page in the middle pane (2026-11-17); wpOpenLocalSite sets the frame's address. Never repainted by the poll. -->
+<div id="localpage" class="section"><iframe id="wpLocalFrame" title="On this PC" src="about:blank"></iframe></div>
 </div><!-- /.panes -->
 </div><!-- /.shell -->
 <script>
@@ -839,13 +865,53 @@ function wpFeedbackClick() {
 // to launch in a new window"); the page then shows "← Dashboard" (LocalNav reads the session flag set here). The ↗
 // button ('window'), Ctrl / Shift / Cmd click and a middle click open it in its own window, the one the tray item opens;
 // with no Mimic bridge, or while the agent has no port yet, a new browser tab does that job.
+// The rail's five folding sections (2026-11-17). Open state per section in localStorage (a private window or blocked
+// storage just starts from the defaults in the markup: Live and Raid open).
+var WP_RAIL_KEY = 'wp.rail.open';
+function _wpRailSaved() { try { return JSON.parse(localStorage.getItem(WP_RAIL_KEY) || 'null'); } catch (e) { return null; } }
+function _wpRailSave() {
+  var o = {};
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) { o[s.getAttribute('data-sec')] = s.classList.contains('open'); });
+  try { localStorage.setItem(WP_RAIL_KEY, JSON.stringify(o)); } catch (e) { void e; }
+}
+function wpRailToggle(h) {
+  var s = h && h.parentElement;
+  if (!s) return;
+  s.classList.toggle('open');
+  _wpRailSave();
+}
+// Open the section holding `el` (the active tab), so a tab chosen another way (the tour, a hash, the tray) is never hidden.
+function wpRailReveal(el) {
+  var s = el && el.closest ? el.closest('.wp-rail-sec') : null;
+  if (s && !s.classList.contains('open')) { s.classList.add('open'); _wpRailSave(); }
+}
+(function wpRailRestore() {
+  var o = _wpRailSaved();
+  if (!o || typeof o !== 'object') return;
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) {
+    var k = s.getAttribute('data-sec');
+    if (typeof o[k] === 'boolean') s.classList.toggle('open', o[k]);
+  });
+  try { wpRailReveal(document.querySelector('.nav button.active')); } catch (e) { void e; }
+})();
 function wpOpenLocalSite(page, how) {
   var url = '/local/' + page + '/';
   var own = how === 'window' || (how && typeof how === 'object' && (how.ctrlKey || how.metaKey || how.shiftKey || how.button === 1));
   if (how && typeof how === 'object' && how.type === 'auxclick' && how.button !== 1) return;   // right click: the menu, not a page
   if (!own) {
-    try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; }
-    location.href = url;
+    // In the middle pane, rail and all kept (the guild lead, 2026-11-17: "launched a new tab instead of just the middle
+    // one"). The page hides its own top bar inside the frame (web/local/app/layout.tsx).
+    var frame = document.getElementById('wpLocalFrame'), pane = document.getElementById('localpage');
+    if (!frame || !pane) { try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; } location.href = url; return; }
+    var src = url + '?embed=1';
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
+    document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(function (x) { x.classList.remove('active'); });
+    pane.classList.add('active');
+    var btn = { inventory: 'wpLocalInv', flags: 'wpLocalFlags', parses: 'wpLocalFights', replay: 'wpLocalReplay' }[page];
+    var b = btn ? document.getElementById(btn) : null;
+    if (b) { b.classList.add('active'); try { wpRailReveal(b); } catch (e) { void e; } }
+    try { wpIndexSync(); } catch (e) { void e; }
     return;
   }
   if (how && typeof how === 'object' && how.preventDefault) how.preventDefault();
@@ -10196,10 +10262,11 @@ setTimeout(function () {
 // state and then threw on getElementById(undefined). Net effect: dashboard
 // blanked. Scoping to [data-tab] keeps the popover button out of the loop.
 document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.nav button[data-tab]').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   document.getElementById(b.dataset.tab).classList.add('active');
+  try { wpRailReveal(b); } catch (e) { void e; }
   if (b.dataset.tab === 'optin') refreshOptin();
   if (b.dataset.tab === 'raid') refreshRaidTab();
   if (b.dataset.tab === 'myparses') wpMpOpenTab();
@@ -13359,7 +13426,7 @@ function wpTrigApplyForm(base, f) {
       + '    <button id="trigCancelBtn" type="button" style="display:none;background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Cancel edit</button>'
       + '    <button id="trigPreviewBtn" type="button" style="background:#21262d;color:var(--green);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Fire the overlay with the current form text (no save, no DB)">▶ Preview</button>'
       + '    <button id="trigTestBtn" type="button" style="background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Test pattern…</button>'
-      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or PQ Companion trigger file">⬇ Import GINA / EQLP / PQ Companion</button>'
+      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or JSON trigger pack file">⬇ Import GINA / EQLP / JSON pack</button>'
       + '    <span id="trigAddMsg" class="dim" style="font-size:11px"></span>'
       + '  </div>'
       + '  <div id="trigTestPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
@@ -13369,7 +13436,7 @@ function wpTrigApplyForm(base, f) {
       + '    <div id="trigTestResult" class="dim" style="font-size:11px;margin-top:6px"></div>'
       + '  </div>'
       + '  <div id="trigImportPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
-+ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or <b>PQ Companion</b> (its exported .json trigger pack). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
++ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or a <b>JSON trigger pack</b> (a .json export). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
       + '    <input id="trigImportFile" type="file" accept=".tgf,.gz,.gtp,.xml,.json,application/gzip,application/json,text/xml" style="display:block;margin-bottom:6px;font-size:11px;color:var(--text)">'
       + '    <textarea id="trigImportXml" placeholder="…or paste the .tgf JSON / SharedTriggers XML here" style="width:100%;height:120px;background:var(--wp-panel);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;margin-bottom:6px"></textarea>'
       + '    <button id="trigImportRun" type="button" style="background:var(--wp-accent);color:#fff;border:0;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px">Import pasted text</button>'
@@ -14079,7 +14146,7 @@ function wpTrigApplyForm(base, f) {
         summary += '<br><span class="dim" style="font-size:11px">' + j.sound_notes.length + ' trigger' + (j.sound_notes.length === 1 ? '' : 's') + ' played a sound that could not come along, so ' + (j.sound_notes.length === 1 ? 'it keeps' : 'they keep') + ' the spoken callout: '
           + j.sound_notes.slice(0, 4).map(function(n){ return esc(n.name) + (n.file ? ' (' + esc(n.file) + ')' : '') + ' &mdash; ' + esc(n.why); }).join('; ') + (j.sound_notes.length > 4 ? '; and ' + (j.sound_notes.length - 4) + ' more' : '') + '. Drop the file in your sounds folder and pick it in the trigger.</span>';
       }
-      // PQ Companion packs: what a personal trigger has no place for.
+      // JSON trigger packs: what a personal trigger has no place for.
       if (Array.isArray(j.not_carried) && j.not_carried.length > 0) {
         summary += '<br><span class="dim" style="font-size:11px">Not carried over: '
           + j.not_carried.slice(0, 6).map(function(n){ return esc(n.name) + ' (' + n.what.map(esc).join('; ') + ')'; }).join('; ')

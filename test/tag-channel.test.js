@@ -182,6 +182,25 @@ describe('noteTagChannelLine — the real wire format', () => {
       });
     }
 
+    // The header alone is not a tag: only Zeal's transports carry one. The same text on any other channel is chat.
+    const SPOOFS = [
+      ['ooc',     `Rethlan says out of character, 'ZEALTAG | @^r^KILL | a Darkpaw warrior | 511'`],
+      ['shout',   `Rethlan shouts, 'ZEALTAG | clear | x | 1'`],
+      ['say',     `Rethlan says, 'ZEALTAG | dead | a Darkpaw warrior | 511'`],
+      ['auction', `Rethlan auctions, 'ZEALTAG | @^r^KILL | a Darkpaw warrior | 511'`],
+      ['tell',    `Rethlan tells you, 'ZEALTAG | @^r^KILL | a Darkpaw warrior | 511'`],
+      ['guild',   `Rethlan tells the guild, 'ZEALTAG | @^r^KILL | a Darkpaw warrior | 511'`],
+      ['another custom channel', `Rethlan tells general:2, 'ZEALTAG | @^r^KILL | a Darkpaw warrior | 511'`],
+      ['abbreviated ooc', `[O] [Rethlan]: ZEALTAG | @^r^KILL | a Darkpaw warrior | 511`],
+    ];
+    for (const [label, body] of SPOOFS) {
+      it(`ignores the header typed in ${label}`, () => {
+        const h = harness();
+        expect(h.noteTagChannelLine(`[Wed Aug 05 21:10:01 2026] ${body}`, 'Uilnayar'), label).toBe(false);
+        expect(h.zealTagsSnapshot(NOW)).toEqual([]);
+      });
+    }
+
     it('the two same-name adds from the failing field test come back as two rows', () => {
       // Two `a Darkpaw warrior`s, tagged Bardy and Cano over GROUP say.
       const h = harness();

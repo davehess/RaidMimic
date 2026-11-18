@@ -429,6 +429,8 @@ async function callHandler({ identity = { discord_id: 'u1' }, query = 'class=Cle
     _applyCuredCounters: () => {},
     _cureStateFor: () => ({ state: 'none' }),
     _castingOnTarget: () => [],
+    _rebuffAfterDeath: () => false,
+    _rbqEtag: () => '"t"',
     _mgbTrainedSet: async () => new Set(),
     _buffDetailFor: () => null,
     require: (p) => { if (!(p in modules)) throw new Error('unstubbed require ' + p); return modules[p]; },

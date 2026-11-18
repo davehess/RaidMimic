@@ -6,7 +6,7 @@ import { CHARS, EVENTS, LAST_RAID, TARGETS, TONIGHT, reportFor, targetByKey } fr
 import DemoShell, { PANEL, demoBase } from './_parts/DemoShell';
 
 export const metadata: Metadata = {
-  title: { absolute: '[beta] Demo guild' },
+  title: { absolute: 'Demo guild' },
   description: 'A click-through demo of a Raid Mimic guild: the next raid night, flags progress, flag events and who needs what. Invented guild, nothing is real.',
   robots: { index: false, follow: false },
 };

@@ -1,6 +1,6 @@
 // web/lib/gearWeights.ts — the gear upgrade finder's tuning table. ONE file, data only.
 //
-// /me/upgrades (DECISIONS §383, companion gap §94: "class weights off / low / med / high / crit with rules for
+// /me/upgrades (DECISIONS §383, gap list §94: "class weights off / low / med / high / crit with rules for
 // the attack, haste, mana-regen and weapon-damage caps") scores every wearable item for a class with this
 // table and lists the three best upgrades per slot. Change a number here and the page, the tests' shape and
 // nothing else moves; the scoring code (web/lib/gearUpgrades.ts) has no weights of its own.

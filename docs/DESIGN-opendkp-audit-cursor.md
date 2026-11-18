@@ -10,8 +10,8 @@ artifact), which was right in spirit and aimed at too many endpoints.
 
 ⚠ **The 2026-08-27 numbers in this doc were stale and are now replaced.** We
 cut our own traffic 60% in the four days after writing it (116 → 46 MB/day), so
-quoting the old figures to Moncs would have been wrong in the direction that
-damages credibility — he can read his own logs. Every number below is measured
+quoting the old figures to the upstream maintainer would have been wrong in the direction that
+damages credibility — they can read their own logs. Every number below is measured
 from `opendkp_call_stats` over the 7 days to 2026-08-31.
 
 ⚠ **A cheaper tier was added on 2026-08-31**, from reading OpenDKP's own API
@@ -19,7 +19,7 @@ reference: `/raids` already accepts `?count=N`. So the smallest useful version
 of this ask is a parameter he has already built somewhere else — see "The ask"
 below, which is now a ladder rather than a single request.
 
-Artifact for Moncs (sendable, refreshed 2026-08-31):
+Artifact for the upstream maintainer (sendable, refreshed 2026-08-31):
 https://claude.ai/code/artifact/924ea487-4fb4-4e55-ac66-4cb8ed6be897
 
 ---
@@ -124,7 +124,7 @@ it to roughly **1.5 MB/day**, and reduce request count too.
 sample shows 128 calls / 17.5 MB — it is our largest single line on a normal
 day, and 100 of those calls land inside the raid window. The weekly full sweep
 inflates the `/audits` average and deflates everything else by comparison. If
-Moncs looks at a single day rather than a week, `/characters` is what he will
+the upstream maintainer looks at a single day rather than a week, `/characters` is what they will
 see at the top, so the ask should not open by calling `/audits` the biggest.
 
 ⚠ Note `/auctions/active`: **656 calls for 0.11 MB.** That is the whole guild's

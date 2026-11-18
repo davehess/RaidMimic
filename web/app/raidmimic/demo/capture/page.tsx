@@ -9,7 +9,7 @@ import { parseRecital } from '@/lib/popRecital';
 import DemoShell, { DemoButton, PANEL, demoBase } from '../_parts/DemoShell';
 
 export const metadata: Metadata = {
-  title: { absolute: '[beta] Demo guild · Record flags for someone else' },
+  title: { absolute: 'Demo guild · Record flags for someone else' },
   description: 'How a raid leader records flags for a character that is not theirs, and how the owner signs in to confirm or correct them. Invented guild.',
   robots: { index: false, follow: false },
 };

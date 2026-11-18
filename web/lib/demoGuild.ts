@@ -30,7 +30,7 @@ export const GUILD = {
   era: 'Planes of Power',
 } as const;
 
-export const DEMO_BAR = '[beta] Demo — invented guild, nothing here is real';
+export const DEMO_BAR = 'Demo — invented guild, nothing here is real';
 
 // ─── The raiders ────────────────────────────────────────────────────────────────────────────────
 

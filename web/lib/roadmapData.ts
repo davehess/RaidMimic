@@ -37,6 +37,40 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'buff-queue-on-change-2026-11-17',
+    title: 'Buff queue: the dead first, and quieter',
+    version: 'Bot 4.1.6 · Agent 4.0.101',
+    channel: 'beta',
+    date: '2026-11-17',
+    headline: 'Raiders who just died go to the top of the buff queue, and the queue checks for changes instead of re-downloading everything every two seconds.',
+    features: [
+      { name: 'Rebuff the dead first', blurb: 'A raider who died in the last half hour and is still unbuffed gets a 💀 and sits at the top, right after the raiders in your zone.' },
+      { name: 'Checks when it matters', blurb: 'The queue checks every few seconds while things are calm, and right away when a raider\'s health drops, you die or you take a rez. It uses far less data.' },
+      { name: 'A tidier dashboard menu', blurb: 'The side menu folds into Setup, Live, Raid, Recap and Diagnostics, and Inventory, PoP flags, My fights and My replay open in the middle with the menu still beside them.' },
+      { name: 'The KILL tag sets the target', blurb: 'When the main assist tags with "@" (`/tag rsgs @^r^KILL`), the tag moves to each new target and the target bars follow it.' },
+    ],
+    fixes: [
+      'No more "Buffs dispelled — rebuff" after your own death or after you accept a rez.',
+      'Charm tracker: a named pet no longer drops to "no active charm" when another mob of the same name dies, and it comes back by itself while your pet window still shows it.',
+      'Map: when a mob another raider targeted dies, its spawn point starts its respawn timer on your map too and its aggro ring goes away.',
+      'Map: a charmed mob\'s spawn point says "charmed" instead of showing an aggro ring.',
+    ],
+  },
+  {
+    key: 'raidmimic-free-register-2026-11-17',
+    title: 'Registering your guild is free',
+    version: 'Web 2.2.11',
+    date: '2026-11-17',
+    headline: 'raidmimic.com now says up front that registering a guild is free, and only guild hosting costs money.',
+    features: [
+      { name: 'Free, said first', blurb: 'The guild sign-up opens with "Registering is free": no sign-in, no card, no commitment. Hosting is $25 a month, only if you choose it.' },
+      { name: 'Cleaner pages', blurb: 'The "beta" boxes are gone from the top of the sign-up, set-up and legal pages.' },
+    ],
+    fixes: [
+      'The guild plan no longer offers a free first month; the 7-day refund stays.',
+    ],
+  },
+  {
     key: 'pop-raid-tiers-2026-11-16',
     title: 'The raid night plan, by tier',
     version: 'Web 2.2.10',

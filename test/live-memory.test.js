@@ -42,7 +42,7 @@ function client(over = {}) {
   const c = { upsert: vi.fn(async () => true), ...over };
   return c;
 }
-const tick = (ms = mem.FLUSH_MS) => vi.advanceTimersByTimeAsync(ms);
+const tick = (ms = mem.ROSTER_FLUSH_MS) => vi.advanceTimersByTimeAsync(ms);   // the longer of the two streams' intervals
 // Start both streams (one row of another guild, which no reader here asks about) and let 20 minutes pass without
 // firing the flush timers, so a case can note rows stamped relative to "now" and read any window up to 20 minutes.
 function warmUp() {
@@ -209,6 +209,20 @@ describe('writes: one upsert per table per tick, the newest row per key', () => 
     expect(c.upsert).toHaveBeenCalledTimes(2);                                  // nothing pending, nothing sent
   });
 
+  it('raid_roster is written every 6 s, live state every 2 s (§617)', async () => {
+    const c = client({ upsert: vi.fn(async () => true) });
+    mem._reset(c);
+    mem.noteRosterRows([rosterRow('Aldenmar')]);
+    mem.noteLiveStateRows([liveRow('Aldenmar')]);
+    await tick(mem.FLUSH_MS);
+    expect(c.upsert.mock.calls.map(a => a[0])).toEqual(['character_live_state']);
+    mem.noteRosterRows([rosterRow('Aldenmar', { hp_pct: 50 })]);              // a second upload inside the window
+    await tick(mem.ROSTER_FLUSH_MS - mem.FLUSH_MS);
+    const rosterCalls = c.upsert.mock.calls.filter(a => a[0] === 'raid_roster');
+    expect(rosterCalls).toHaveLength(1);                                        // one write for both uploads
+    expect(rosterCalls[0][1][0].hp_pct).toBe(50);                               // the newer row
+  });
+
   it('a failed flush keeps the rows, and a newer row for the same key wins on the retry', async () => {
     const c = client({
       upsert: vi.fn()
@@ -218,10 +232,10 @@ describe('writes: one upsert per table per tick, the newest row per key', () => 
     });
     mem._reset(c);
     mem.noteLiveStateRows([liveRow('Aldenmar', { self_hp_pct: 10 }), liveRow('Brackwyn', { self_hp_pct: 20 })]);
-    await tick();
+    await tick(mem.FLUSH_MS);                                                   // live state keeps the 2 s interval
     expect(c.upsert).toHaveBeenCalledTimes(1);
     expect(mem._sizes().livePending).toBe(2);                                   // kept
-    await tick();
+    await tick(mem.FLUSH_MS);
     expect(c.upsert).toHaveBeenCalledTimes(2);
     const retried = Object.fromEntries(c.upsert.mock.calls[1][1].map(r => [r.character, r.self_hp_pct]));
     expect(retried).toEqual({ Aldenmar: 99, Brackwyn: 20 });

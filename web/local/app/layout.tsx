@@ -14,8 +14,17 @@ export const metadata: Metadata = {
 export default function LocalLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        {/* Inside the dashboard's middle pane (2026-11-17), the dashboard's rail is the navigation: this page's own top bar
+            hides. Set before first paint, from the frame itself or the ?embed=1 the rail adds. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{if(window.self!==window.top||/[?&]embed=1\\b/.test(location.search))document.documentElement.classList.add('wp-embed')}catch(e){document.documentElement.classList.add('wp-embed')}",
+          }}
+        />
+      </head>
       <body className="font-mono">
-        <header className="border-b border-border bg-panel">
+        <header className="wp-local-head border-b border-border bg-panel">
           <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className="text-lg font-bold text-blue">
               WolfPack<span className="text-dim">.quest</span>

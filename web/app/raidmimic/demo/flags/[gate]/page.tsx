@@ -13,7 +13,7 @@ export function generateStaticParams() {
 export function generateMetadata({ params }: { params: { gate: string } }): Metadata {
   const name = GATE_CHOICES.find(g => g.key === params.gate)?.name ?? 'Gate';
   return {
-    title: { absolute: `[beta] Demo guild · ${name} flags` },
+    title: { absolute: `Demo guild · ${name} flags` },
     description: `A demo guild’s progress toward ${name}, piece by piece, with flags recorded for someone else shown as reported. Invented guild.`,
     robots: { index: false, follow: false },
   };

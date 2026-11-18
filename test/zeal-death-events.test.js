@@ -244,7 +244,7 @@ function loadCore() {
   const noNet = { request() { throw new Error('no network in this test'); } };
   // eslint-disable-next-line no-new-func
   const f = new Function('fs', 'path', 'http', 'https', 'zlib', '__dirname', '__tmp', '__opts',
-    prelude + '\n' + CORE + '\nreturn { _mapEnsureZone, _mapNoteState, _mapNoteZealDeath, _mapZoneDoc, _mapSaveNow, _mapSyncStop, _mapPaths, _zealState };');
+    prelude + '\n' + CORE + '\nreturn { _mapEnsureZone, _mapNoteState, _mapNoteZealDeath, _mapZoneDoc, _mapSaveNow, _mapSyncStop, _mapPaths, _zealState, _mapApplyShared };');
   const c = f(fs, path, noNet, noNet, zlib, dir, dir, { botUrl: 'http://127.0.0.1:9/api/agent/encounter', token: '' });
   c._mapPaths.cache = path.join(dir, 'zone-spawns-cache');
   c._mapPaths.timers = path.join(dir, 'map_timers.json');
@@ -278,6 +278,21 @@ describe('agent: spawn map', () => {
     seeAlive();
     expect(core._mapNoteZealDeath('thedeep', 'Aldenmar', { spawn_id: 77 }, T0 + 9000)).toBe(true);
     expect(core._mapZoneDoc('thedeep').timers['1']).toBeDefined();
+  });
+
+  // The guild lead, 2026-11-17: "if another raider has targetted a mob and knows that mob has died" it should come off
+  // everyone's map. Here this machine never targeted spawn 88; another raider did, on its spawn point (the raid's shared
+  // targets, server frame), and then Zeal reports it dead.
+  it('another raider\'s target, then a Zeal death: the point gets its respawn timer here too', () => {
+    core._mapApplyShared('thedeep', { now: T0 + 2000, targets: [{ id: 88, name: 'a decaying skeleton', x: 100, y: 200, z: 0, at: T0 + 2000, n: 1 }] }, T0 + 2000);
+    expect(core._mapNoteZealDeath('thedeep', 'Aldenmar', { spawn_id: 88, name: 'a decaying skeleton', type: 1 }, T0 + 9000)).toBe(true);
+    expect(core._mapZoneDoc('thedeep').timers['1']).toMatchObject({ point_id: 1, died_at: T0 + 9000 });
+  });
+
+  it('a shared target first heard of far from any point is not placed (no guessing)', () => {
+    core._mapApplyShared('thedeep', { now: T0 + 2000, targets: [{ id: 89, name: 'a decaying skeleton', x: 2000, y: 600, z: 0, at: T0 + 2000, n: 1 }] }, T0 + 2000);
+    core._mapNoteZealDeath('thedeep', 'Aldenmar', { spawn_id: 89, name: 'a decaying skeleton', type: 1 }, T0 + 9000);
+    expect(Object.keys(core._mapZoneDoc('thedeep').timers)).toHaveLength(0);
   });
 
   it('a death with no position and no history adds nothing (no "?" marker for every trash mob)', () => {

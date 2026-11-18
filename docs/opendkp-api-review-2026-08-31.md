@@ -184,7 +184,7 @@ keys on the next standings refresh — raid-window only, so Wednesday.
 
 ⚠ `GET /characters/{id}/dkp` is **not** a balance. It is a LEDGER (`Order, Date,
 SourceType, Source, Value, Cumulative, TickId`); the balance is `Cumulative` on
-the last entry. One call per character — the per-member traffic Moncs flagged.
+the last entry. One call per character — the per-member traffic the upstream maintainer flagged.
 Right basis for a future DKP-history view, wrong tool for the pill.
 
 ## 6. Smaller leads, recorded not actioned

@@ -72,9 +72,9 @@ describe('the pages', () => {
     expect(src).toMatch(new RegExp(`raidmimicSeo\\(headers\\(\\)\\.get\\('host'\\), '/${name}'\\)`));
     expect(src).toMatch(/<LegalShell\b/);
   });
-  it('each carries the [beta] tag (a NEW page ships live with it) in its title and through the shared frame', () => {
-    for (const k of ['privacy', 'terms', 'refunds']) expect(L.LEGAL_META[k].title).toMatch(/^\[beta\] /);
-    expect(code('web/app/raidmimic/_legal/LegalParts.tsx')).toMatch(/<NewPageTag\b/);
+  it('no beta marker any more (settled 2026-11-17, §613): plain titles, no tag in the shared frame', () => {
+    for (const k of ['privacy', 'terms', 'refunds']) expect(L.LEGAL_META[k].title).toMatch(/^Raid Mimic /);
+    expect(code('web/app/raidmimic/_legal/LegalParts.tsx')).not.toMatch(/<NewPageTag\b/);
   });
   it('wolfpack.quest/terms is a real route that serves the same page, with its own generateMetadata', () => {
     expect(exists('web/app/terms/page.tsx')).toBe(true);

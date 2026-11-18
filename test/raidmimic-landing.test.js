@@ -381,8 +381,8 @@ describe('honesty: "coming" means coming', () => {
     expect(EQ.PRIVACY_BULLETS.join(' ')).toMatch(/signing out stops every upload/);
     expect(EQ.PRIVACY_BULLETS.join(' ')).toMatch(/Officer, group, custom-channel/);
   });
-  it('works-with names the three tools and does not claim to replace or beat them', () => {
-    expect(C.WORKS_WITH.tools).toEqual(['PQ Companion', 'GINA', 'EQLogParser']);
+  it('works-with names the two tools and does not claim to replace or beat them', () => {
+    expect(C.WORKS_WITH.tools).toEqual(['GINA', 'EQLogParser']);
     expect(C.WORKS_WITH.lead).toMatch(/keep running/);
     expect(C.WORKS_WITH.lead).toMatch(/log file/);
     expect(JSON.stringify(C.WORKS_WITH)).not.toMatch(/better than|replace|instead of|switch from|unlike/i);

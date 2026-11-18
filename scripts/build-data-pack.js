@@ -25,7 +25,7 @@
 // those reads are answered here without touching the tables — no win counts (`seen` stays 0), and the zone
 // comes from the NPC's own id block (id = zone*1000 + n) through eqemu_zone.
 //
-// CHECKS (the part worth copying from PQ Companion, which fails its build on a mismatch). Any failure exits 1
+// CHECKS (the build fails on a mismatch). Any failure exits 1
 // and the workflow publishes nothing:
 //   · each catalog's rows == the server's own COUNT for its source (a paged read the 1,000-row cap clipped
 //     cannot agree with a count the server made)

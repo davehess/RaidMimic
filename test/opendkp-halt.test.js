@@ -1,6 +1,6 @@
 // test/opendkp-halt.test.js — the OpenDKP halt switch actually halts.
 //
-// 2026-08-25: OpenDKP's owner reported API Gateway costs past $200/month and
+// 2026-08-25: the upstream maintainer reported API Gateway costs past $200/month and
 // asked anyone running automation to make contact. Wolf Pack runs the heaviest
 // automation we know of against that API, so we stopped first and measured
 // second (The guild lead: "can you halt all traffic to opendkp").
