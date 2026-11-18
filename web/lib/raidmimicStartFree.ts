@@ -3,7 +3,7 @@
 // stays free to start"). Shown on /raidmimic/setup and /guilds/new as a preview on beta (?v=b short, ?v=c cost table);
 // with no ?v= the pages stay as production shows them. Every price comes from raidmimicStory.ts. A plan is sold for what a
 // guild learns from its raids; storage is included while you pay and is never the reason given (DECISIONS §552).
-import { GUILD_PRICE, priceLabel } from './raidmimicStory';
+import { EARLY_GUILD_PRICE, priceLabel } from './raidmimicStory';
 
 export type StartFreeVariant = 'b' | 'c';
 export function startFreeVariant(v: string | undefined): StartFreeVariant | null {
@@ -14,7 +14,7 @@ export const START_FREE = {
   chip: 'Free to start',
   lead: 'Setting up Mimic or starting a guild costs nothing, and nothing asks for a card.',
   free: 'Free stays free: the overlays, triggers, the meter on your own PC, and your PoP flags and boss kills synced.',
-  planned: `Planned: Pro · Guild at ${priceLabel(GUILD_PRICE)}, raid reviews, replays, merged parses and a bot in your Discord.`,
+  planned: `Planned: Pro · Guild from ${priceLabel(EARLY_GUILD_PRICE)} (early bird), raid reviews, replays, merged parses and a bot in your Discord.`,
   promise: 'Nothing is charged until you choose a plan.',
   more: 'See pricing',
   tableTitle: 'What Free gives, and what Pro gives',

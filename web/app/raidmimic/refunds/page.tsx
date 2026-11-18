@@ -4,13 +4,13 @@
 //
 // ⚠ PAYMENTS ARE NOT LIVE. There is no billing code anywhere in the repository. The page says so at the top, in words, and
 // every line below is written as what WILL be true when billing opens. Remove the banner only when billing really is live.
-// The price is web/lib/raidmimicStory.ts (GUILD_PRICE, TIERS); the 7-day window is the guild lead's call. No free month
+// The price is web/lib/raidmimicStory.ts (GUILD_PRICE_SENTENCE, TIERS); the 7-day window is the guild lead's call. No free month
 // (removed 2026-11-17, DECISIONS §612), so the 7-day refund is the safety net for a first charge.
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { isRaidmimicHost, raidmimicSeo } from '@/lib/raidmimicHost';
 import { CONTACT_EMAIL, CONTACT_HREF, LEGAL_META, legalPaths } from '@/lib/legal';
-import { GUILD_PRICE } from '@/lib/raidmimicStory';
+import { GUILD_PRICE_SENTENCE } from '@/lib/raidmimicStory';
 import { B, Bullets, LEGAL_LINK, LegalShell, Section } from '../_legal/LegalParts';
 
 export function generateMetadata(): Metadata {
@@ -37,7 +37,7 @@ export default function RaidmimicRefundsPage() {
 
       <Section title="How billing works">
         <Bullets>
-          <li><B>Pro · Guild</B> is ${GUILD_PRICE} a month. <B>Monthly only</B>: there is no yearly plan.</li>
+          <li><B>Pro · Guild</B> is {GUILD_PRICE_SENTENCE}. <B>Monthly only</B>: there is no yearly plan.</li>
           <li>It renews every month until you cancel.</li>
         </Bullets>
       </Section>

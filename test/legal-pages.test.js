@@ -133,8 +133,9 @@ describe('what the pages must say', () => {
     expect(src).toMatch(/renews every month until you cancel/i);
     expect(src).toMatch(/Cancel any time, in one click/);
     expect(src).toMatch(/keep Pro until the end of the month you have paid for/);
-    expect(src).toMatch(/\$\{GUILD_PRICE\}/);
-    expect(GUILD_PRICE).toBe(25);
+    expect(src).toMatch(/\{GUILD_PRICE_SENTENCE\}/);
+    expect(GUILD_PRICE).toBe(5);
+    expect(src).toMatch(/early-bird price moving to the list price/);   // the guild lead, 2026-11-18: raise it if it blows the budget
     expect(src).toMatch(/What you must not do/);
     expect(src).toMatch(/Scrape the service/);
     expect(src).toMatch(/\{RIGHTS_NOTICE\}/);
