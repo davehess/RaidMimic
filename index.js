@@ -19755,7 +19755,11 @@ async function _handleAgentLiveState(req, res) {
     // The target's position for the Map (agent 3.7.166+: target_map in the Map's server frame, target_type, target_zone).
     // Memory only, never a column: the upsert below takes `rows`, and these fields are not on it. No usable target
     // (none, id 0, a player, a corpse) clears this character's sample. Never fails the POST.
-    try {
+    // Every raider's Map acts on these samples (agent 4.0.99, §621), so a character linked to ANOTHER member's account
+    // gives none: it is not this uploader's to speak for. Unlinked alts and a failed lookup pass, as for fight uploads.
+    let foreignChar = false;
+    try { foreignChar = await _characterBelongsToAnotherMember(identity, character); } catch { foreignChar = false; }
+    if (!foreignChar) try {
       _raidTargets().noteSample({ character, zone: st?.target_zone, target_id: targetId, target_name: targetName,
         target_type: st?.target_type, target_map: st?.target_map });
     } catch (err) { console.warn('[raid-targets] note failed:', err?.message); }
@@ -20251,7 +20255,8 @@ function _noteRaiderDeaths(deaths) {
   if (!Array.isArray(deaths)) return;
   for (const d of deaths) {
     if (!d || !d.name) continue;
-    const ts = Date.parse(d.ts) || Date.now();
+    // Never later than now: a future time would hold "died recently" (rebuff first) open indefinitely.
+    const ts = Math.min(Date.parse(d.ts) || Date.now(), Date.now());
     const k = String(d.name).toLowerCase();
     if (ts > (_lastRaiderDeath.get(k) || 0)) _lastRaiderDeath.set(k, ts);
   }
