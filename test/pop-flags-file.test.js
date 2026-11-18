@@ -459,13 +459,14 @@ describe('the dashboard\'s "Capture latest PoP flags" and the website\'s "Sync f
     expect(M._latestPopFlagsExport(dir, 'rethlan')).toBeNull();
   });
   it('reads it through the same table, whatever its age (the days window is for log lines)', () => {
-    const dir = eqDir([['Aldenmar-PoPFlags.txt', zealFile('Aldenmar', ago(40 * 86400_000), A)]]);
+    const t40 = ago(40 * 86400_000);
+    const dir = eqDir([['Aldenmar-PoPFlags.txt', zealFile('Aldenmar', t40, A)]]);
     const { M } = load(worldFor(dir));
     const s = sinkOf();
     const n = M._rescanPopFlagsExports([cand(dir, 'Aldenmar')], s, { upload: true });
     expect(n).toBe(1);
-    expect(s.events.map(e => e.ts).every(t => t === ago(40 * 86400_000).toISOString())).toBe(true);
-    expect(s.events).toEqual(viaLog(A, 'Aldenmar', ago(40 * 86400_000)));
+    expect(s.events.map(e => e.ts).every(t => t === t40.toISOString())).toBe(true);
+    expect(s.events).toEqual(viaLog(A, 'Aldenmar', t40));
     expect(s.found).toBeGreaterThan(20);
   });
   it('one read per character and folder, even with several logs; none for a character without a file', () => {
