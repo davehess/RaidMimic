@@ -12,6 +12,9 @@ import { requireMember } from '@/lib/member';
 import { loadSpawn2 } from '@/lib/fullReads';
 import { MOB_CLASS_NAMES, decodeMobSpecialChips, sortMobSpecialChips, deUnderscore } from '@/lib/npcDecode';
 import { ERA_LABEL } from '@/lib/itemDecode';
+import {
+  loadNpcSeenDrops, loadScriptSpawns, loadScriptLootForNpc, loadRewardsForNpc, handInLabel,
+} from '@/lib/scriptData';
 
 import { pageMetadata } from '@/lib/pageMetaData';
 
@@ -95,8 +98,27 @@ export default async function DbNpcPage({ params }: { params: Promise<{ id: stri
     spawns.sort((a, b) => (b.chance - a.chance) || String(a.zone_short).localeCompare(String(b.zone_short)));
   }
 
+  // Script data and seen drops: each fails soft to an empty list (table or RPC not applied yet).
+  const [seenDrops, scriptSp, scriptLoot, rewards] = await Promise.all([
+    loadNpcSeenDrops(sb, npcId),
+    loadScriptSpawns(sb, npcId),
+    loadScriptLootForNpc(sb, npcId),
+    loadRewardsForNpc(sb, npcId, npc.name),
+  ]);
+  // Names for the items a reward asks you to hand in (rewards carry their own item name).
+  const handInIds = new Set<number>();
+  for (const r of rewards) for (const g of r.gives_for ?? []) handInIds.add(g.item_id);
+  const handInNames = new Map<number, string>();
+  if (handInIds.size) {
+    const { data: hi } = await sb.from('eqemu_items').select('id, name').in('id', [...handInIds]);
+    for (const r of ((hi ?? []) as { id: number; name: string }[])) handInNames.set(r.id, r.name);
+  }
+
   // Zone long-names + era for both spawns and the id-encoded fallback zone.
-  const zoneShorts = new Set<string>(spawns.map(s => s.zone_short).filter((z): z is string => !!z));
+  const zoneShorts = new Set<string>([
+    ...spawns.map(s => s.zone_short).filter((z): z is string => !!z),
+    ...scriptSp.spawns.map(s => s.zone_short),
+  ]);
   const zoneByShort = new Map<string, ZoneRow>();
   if (zoneShorts.size) {
     const { data: zs } = await sb.from('eqemu_zone').select('short_name, long_name, expansion').in('short_name', [...zoneShorts]);
@@ -272,6 +294,47 @@ export default async function DbNpcPage({ params }: { params: Promise<{ id: stri
         ) : <p className="text-dim text-xs">No spawn points in the mirror (instanced or script-spawned mob).</p>}
       </section>
 
+      {/* Spawned by script: from the server's quest scripts, NOT from the spawn table above. */}
+      {(scriptSp.spawns.length > 0 || scriptSp.mentions.length > 0) && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Spawned by script {scriptSp.spawns.length ? `(${scriptSp.spawns.length})` : ''}</h2>
+          {scriptSp.spawns.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-dim text-[11px] uppercase tracking-wide text-left">
+                  <th className="py-1 pr-3 font-normal">Zone</th>
+                  <th className="py-1 pr-3 font-normal">Loc (x, y, z)</th>
+                  <th className="py-1 pr-3 font-normal">Script</th>
+                  <th className="py-1 font-normal">When</th>
+                </tr></thead>
+                <tbody>
+                  {scriptSp.spawns.slice(0, 40).map((s, i) => (
+                    <tr key={i} className="border-t border-border/40">
+                      <td className="py-1 pr-3 text-text">{zoneLabel(s.zone_short)}</td>
+                      <td className="py-1 pr-3 text-dim tabular-nums">
+                        {s.loc_kind === 'fixed' && s.x != null && s.y != null && s.z != null
+                          ? `${Math.round(s.x)}, ${Math.round(s.y)}, ${Math.round(s.z)}`
+                          : s.loc_kind === 'at_existing_mob' ? 'where another mob stands' : 'worked out by the script'}
+                      </td>
+                      <td className="py-1 pr-3 text-dim tabular-nums">{s.script_ref}</td>
+                      <td className="py-1 text-dim">{s.trigger ? s.trigger.replace(/\s+--.*$/, '') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {scriptSp.spawns.length > 40 && <p className="text-dim text-[11px] mt-2">Showing 40 of {scriptSp.spawns.length}.</p>}
+            </div>
+          )}
+          {scriptSp.mentions.length > 0 && (
+            <p className="text-dim text-[11px] mt-2">
+              Mentioned in scripts, no spawn call found: {scriptSp.mentions.slice(0, 6).map(m => m.script_ref).join(', ')}
+              {scriptSp.mentions.length > 6 ? ` and ${scriptSp.mentions.length - 6} more` : ''}.
+            </p>
+          )}
+          <p className="text-dim text-[11px] mt-2">Read from the server&apos;s quest scripts. Whether a script spawn is gated (flags, other mobs, a timer) is in the script.</p>
+        </section>
+      )}
+
       {/* Loot */}
       <section className="bg-panel border border-border rounded-lg p-4">
         <h2 className="text-sm text-orange mb-2">Loot {drops.length ? `(${drops.length})` : ''}</h2>
@@ -298,6 +361,77 @@ export default async function DbNpcPage({ params }: { params: Promise<{ id: stri
           </div>
         ) : <p className="text-dim text-xs">No loot table in the mirror.</p>}
       </section>
+
+      {/* Given by script: items the mob's script puts on it, outside the loot table. */}
+      {scriptLoot.length > 0 && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Given by script ({scriptLoot.length})</h2>
+          <ul className="text-sm space-y-1">
+            {scriptLoot.map((l, i) => (
+              <li key={`${l.item_id}-${i}`}>
+                <Link href={`/db/item/${l.item_id}`} className="text-text hover:text-blue hover:underline">{l.item_name || `Item #${l.item_id}`}</Link>
+                <span className="text-dim text-[11px] ml-2">{l.script_ref}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Seen dropping in our raids: counts and dates, no names. */}
+      {seenDrops.length > 0 && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Seen dropping in our raids</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-dim text-[11px] uppercase tracking-wide text-left">
+                <th className="py-1 pr-3 font-normal">Item</th>
+                <th className="py-1 pr-3 font-normal text-right">Seen</th>
+                <th className="py-1 font-normal text-right">Last</th>
+              </tr></thead>
+              <tbody>
+                {seenDrops.map(s => (
+                  <tr key={s.item_id} className="border-t border-border/40">
+                    <td className="py-1 pr-3 text-text">
+                      <Link href={`/db/item/${s.item_id}`} className="hover:text-blue hover:underline">{s.item_name || `Item #${s.item_id}`}</Link>
+                      {!s.in_db && <span className="ml-2 text-[11px] text-gold">not in DB</span>}
+                    </td>
+                    <td className="py-1 pr-3 text-right tabular-nums text-text">
+                      {s.observed > 0 ? `${s.observed}×` : ''}
+                      {s.observed > 0 && s.probable > 0 ? ' + ' : ''}
+                      {s.probable > 0 ? `${s.probable}× probable` : ''}
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-dim">{s.last_seen ? s.last_seen.slice(0, 10) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-dim text-[11px] mt-2">
+            Probable: linked in raid chat within 45 s of a kill of this mob, corpse not confirmed. &quot;not in DB&quot;: the loot table and the scripts do not list it.
+          </p>
+        </section>
+      )}
+
+      {/* Quest rewards this NPC's script hands out (literal ids only). */}
+      {rewards.some(r => r.item_id) && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Quest rewards ({rewards.filter(r => r.item_id).length})</h2>
+          <ul className="text-sm space-y-1">
+            {rewards.filter(r => r.item_id).slice(0, 40).map((r, i) => {
+              const give = handInLabel(r.gives_for, id => handInNames.get(id) || `#${id}`);
+              return (
+                <li key={i} className="border-b border-border/30 pb-1">
+                  {give ? <>give <span className="text-text">{give}</span><span className="text-dim"> → </span></> : null}
+                  <Link href={`/db/item/${r.item_id}`} className="text-green/90 hover:underline">{r.item_name || `Item #${r.item_id}`}</Link>
+                  {r.choice && <span className="text-dim text-[11px]"> (one of several)</span>}
+                  {!!r.exp && <span className="text-purple/80 text-[11px]"> · {r.exp.toLocaleString()} exp</span>}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-dim text-[11px] mt-2">Read from the server&apos;s quest scripts. The hand-in is the nearest check above the reward, so a reward may need more than it shows.</p>
+        </section>
+      )}
 
       {/* Quest turn-ins this NPC accepts */}
       {turnins.length > 0 && (
