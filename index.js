@@ -25801,6 +25801,7 @@ const httpServer = http.createServer(async (req, res) => {
     const handler = which === 'spell-catalog' ? _handleAgentSpellCatalog
       : which === 'item-clickies' ? _handleAgentItemClickies
       : which === 'item-catalog' ? _handleAgentItemCatalog : null;
+    if (which === 'quest-scripted') return require('./utils/questScriptedCatalog').handle(req, res);
     if (!handler) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'unknown catalog' }));

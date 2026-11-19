@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.9': [
+    'Internal: the bot now publishes a list of mobs and drops that the server\'s quest scripts create, so local Mimic installs can carry it.',
+  ],
   '4.1.8': [
     'Internal: the bot counts its own web requests and slow database reads for the site owner\'s platform page, and messages the site owner once when a new Raid Mimic guild is stuck at setup for a day.',
   ],
