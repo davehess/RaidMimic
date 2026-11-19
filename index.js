@@ -10250,6 +10250,22 @@ const _popStatus = () => _popStatusInst || (_popStatusInst = require('./utils/po
   supabase: require('./utils/supabase'),
   guildId: require('./utils/supabase').guildId,
 }));
+// GET /api/agent/pop-zone-flags?zone=<gate key>&names=a,b,c -> { zone, members: { <lower name>: 'flagged'|'missing'|'unknown' } }
+// The Command Center's "in the raid but not flagged for this zone" (utils/popZoneFlags.js). One gate, up to 80 names.
+let _popZoneFlagsInst = null;
+const _popZoneFlags = () => _popZoneFlagsInst || (_popZoneFlagsInst = require('./utils/popZoneFlags').create({
+  supabase: require('./utils/supabase'),
+  guildId: require('./utils/supabase').guildId,
+  status: _popStatus(),
+}));
+async function _handleAgentPopZoneFlags(req, res) {
+  const identity = await mimicLink.requireAgentAuth(req, res);
+  if (!identity) return;
+  const q = new URL(req.url, 'http://x').searchParams;
+  const out = await _popZoneFlags().answer({ zone: q.get('zone'), names: String(q.get('names') || '').split(',') });
+  res.writeHead(out ? 200 : 400, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(out || { error: 'not a gated zone' }));
+}
 async function _handleAgentPopFlags(req, res) {
   const identity = await mimicLink.requireAgentAuth(req, res);
   if (!identity) return;
@@ -26414,6 +26430,15 @@ const httpServer = http.createServer(async (req, res) => {
     try { return await _handleAgentPopFlags(req, res); }
     catch (err) {
       console.error('[pop-flags] handler error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'internal error' }));
+    }
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/api/agent/pop-zone-flags')) {
+    try { return await _handleAgentPopZoneFlags(req, res); }
+    catch (err) {
+      console.log('[pop-zone-flags] handler error:', err && err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'internal error' }));
     }

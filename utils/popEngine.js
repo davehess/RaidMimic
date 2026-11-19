@@ -4712,6 +4712,647 @@ function zoneViews(held) {
 	});
 }
 //#endregion
+//#region web/lib/popGatePieces.ts
+const WINGS = {
+	key: "solro_wings",
+	needs: "all five cauldron wings"
+};
+const REQ_PIECES = {
+	trial_justice: [
+		{
+			key: "mavuin_case",
+			label: "Mavuin's case",
+			kind: "task",
+			proof: ["mavuin_1"],
+			to: "Mavuin",
+			needs: "Mavuin's case (hail him)",
+			verified: true
+		},
+		{
+			key: "justice_trial",
+			label: "A trial won",
+			kind: "task",
+			proof: ["mavuin_2"],
+			needs: "a Justice trial won",
+			verified: true
+		},
+		{
+			key: "mavuin_hail",
+			label: "Tribunal + Mavuin",
+			kind: "handin",
+			proof: ["mavuin_3"],
+			to: "Mavuin",
+			needs: "the Tribunal and then Mavuin",
+			verified: true
+		}
+	],
+	grummus_dead: [{
+		key: "grummus_kill",
+		label: "Grummus dead",
+		kind: "kill",
+		proof: ["grummus_dead", "cl_grummus"],
+		needs: "a Grummus kill",
+		verified: true
+	}],
+	carprin_cycle: [{
+		key: "carprin_key",
+		label: "Tarkil Adan's key",
+		kind: "task",
+		proof: ["bertox_key_1"],
+		needs: "the Carprin cycle, then Tarkil Adan",
+		verified: true,
+		note: "Silent step: only the Seer or a #popflags read shows it"
+	}],
+	hedge_event: [{
+		key: "hedge_maze",
+		label: "Hedge maze + Thelin",
+		kind: "task",
+		proof: ["thelin_2"],
+		pending: "cl_maze",
+		needs: "the hedge maze (hail Adroha first)",
+		verified: true
+	}],
+	fuirstel_5: [
+		{
+			key: "f_grummus",
+			label: "Grummus + projection",
+			kind: "kill",
+			proof: ["fuirstel_2"],
+			pending: "cl_grummus",
+			kills: ["grummus_dead"],
+			needs: "a Grummus kill (hail Adler Fuirstel first)",
+			verified: true
+		},
+		{
+			key: "f_ward",
+			label: "Ward to Elder Fuirstel",
+			kind: "handin",
+			proof: ["fuirstel_3"],
+			to: "Elder Fuirstel",
+			needs: "the ward taken to Elder Fuirstel",
+			verified: true
+		},
+		{
+			key: "f_bertox",
+			label: "Bertoxxulous + projection",
+			kind: "kill",
+			proof: ["fuirstel_4"],
+			pending: "cl_bertox",
+			kills: ["bert_dead"],
+			needs: "a Bertoxxulous kill",
+			verified: true
+		},
+		{
+			key: "f_elder",
+			label: "Elder Fuirstel thanks",
+			kind: "handin",
+			proof: ["fuirstel_5"],
+			to: "Elder Fuirstel",
+			needs: "Elder Fuirstel (hail him again)",
+			verified: true
+		}
+	],
+	thelin_4: [
+		{
+			key: "t_maze",
+			label: "Maze + Thelin",
+			kind: "task",
+			proof: ["thelin_2"],
+			pending: "cl_maze",
+			needs: "the hedge maze (hail Adroha first)",
+			verified: true
+		},
+		{
+			key: "t_terris",
+			label: "Terris Thule + projection",
+			kind: "kill",
+			proof: ["thelin_3"],
+			pending: "cl_terris",
+			kills: ["tthule_dead"],
+			needs: "a Terris Thule kill",
+			verified: true
+		},
+		{
+			key: "t_thelin",
+			label: "Thelin thanks",
+			kind: "handin",
+			proof: ["thelin_4"],
+			to: "Thelin",
+			needs: "Thelin (hail him in Tranquility)",
+			verified: true
+		}
+	],
+	askr_quest: [
+		{
+			key: "askr_giants",
+			label: "Storm giants + Askr",
+			kind: "kill",
+			proof: ["karana_1"],
+			needs: "the storm giants (then Askr)",
+			verified: true
+		},
+		{
+			key: "askr_talisman",
+			label: "Askr's talisman",
+			kind: "handin",
+			proof: ["karana_2"],
+			to: "Askr",
+			needs: "the giant pieces taken to Askr",
+			verified: true
+		},
+		{
+			key: "askr_shrine",
+			label: "Shrine touched",
+			kind: "task",
+			proof: ["karana_3"],
+			needs: "the talisman touched to the shrine",
+			verified: true
+		}
+	],
+	aerindar_dead: [{
+		key: "aerindar_kill",
+		label: "Aerin`Dar + projection",
+		kind: "kill",
+		proof: ["aerindar_1", "aerindar_2"],
+		pending: "cl_aerindar",
+		kills: ["aerindar_dead"],
+		needs: "an Aerin`Dar kill",
+		verified: true,
+		note: "Silent step: only the Seer or a #popflags read shows it"
+	}],
+	hoh_trials: [
+		{
+			key: "hoh_t1",
+			label: "Rydda`Dar",
+			kind: "task",
+			proof: ["hoh_trial_1"],
+			needs: "Rydda`Dar's trial",
+			verified: false
+		},
+		{
+			key: "hoh_t2",
+			label: "Villagers",
+			kind: "task",
+			proof: ["hoh_trial_2"],
+			needs: "the villagers' trial",
+			verified: false
+		},
+		{
+			key: "hoh_t3",
+			label: "Nomads",
+			kind: "task",
+			proof: ["hoh_trial_3"],
+			needs: "the nomads' trial",
+			verified: false
+		}
+	],
+	behemoth_dead: [{
+		key: "behemoth_kill",
+		label: "Behemoth + Giwin",
+		kind: "kill",
+		proof: ["zeks_2"],
+		pending: "cl_behemoth",
+		kills: ["behemoth_dead"],
+		needs: "a Manaetic Behemoth kill (hail Giwin first)",
+		verified: true
+	}],
+	cipher_1: [
+		{
+			key: "c_saryrn",
+			label: "Saryrn's half",
+			kind: "kill",
+			proof: ["saryrn_1"],
+			pending: "cl_saryrn",
+			kills: ["saryrn_dead"],
+			needs: "a Saryrn kill",
+			verified: true
+		},
+		{
+			key: "c_marr",
+			label: "Marr's half",
+			kind: "kill",
+			proof: ["mmarr_1"],
+			pending: "cl_mmarr",
+			kills: ["marr_dead"],
+			needs: "a Marr kill",
+			verified: true
+		},
+		{
+			key: "c_maelin",
+			label: "Maelin joins the halves",
+			kind: "handin",
+			proof: ["cipher_1"],
+			to: "Maelin",
+			needs: "Maelin's cipher",
+			verified: true
+		}
+	],
+	zeks_6: [
+		{
+			key: "z_vallon",
+			label: "Vallon's notes",
+			kind: "kill",
+			proof: ["zeks_3"],
+			pending: "cl_vallon",
+			kills: ["vallon_dead"],
+			needs: "a Vallon kill",
+			verified: true
+		},
+		{
+			key: "z_tallon",
+			label: "Tallon's notes",
+			kind: "kill",
+			proof: ["zeks_4"],
+			pending: "cl_tallon",
+			kills: ["tallon_dead"],
+			needs: "a Tallon kill",
+			verified: true
+		},
+		{
+			key: "z_maelin",
+			label: "Maelin reads the notes",
+			kind: "handin",
+			proof: ["zeks_6"],
+			to: "Maelin",
+			needs: "Maelin's Zek reading",
+			verified: true,
+			note: "Maelin only offers it once you hold the cipher"
+		}
+	],
+	solro_dead: [
+		{
+			key: "s_wing_xuzl",
+			label: "Xuzl's wing",
+			kind: "task",
+			proof: ["sol_room_1"],
+			needs: "Xuzl's wing",
+			verified: true,
+			group: WINGS
+		},
+		{
+			key: "s_wing_arlyxir",
+			label: "Arlyxir's wing",
+			kind: "task",
+			proof: ["sol_room_2"],
+			needs: "Arlyxir's wing",
+			verified: true,
+			group: WINGS
+		},
+		{
+			key: "s_wing_dresolik",
+			label: "Dresolik's wing",
+			kind: "task",
+			proof: ["sol_room_3"],
+			needs: "Dresolik's wing",
+			verified: true,
+			group: WINGS
+		},
+		{
+			key: "s_wing_rizlona",
+			label: "Rizlona's wing",
+			kind: "task",
+			proof: ["sol_room_4"],
+			needs: "Rizlona's wing",
+			verified: true,
+			group: WINGS
+		},
+		{
+			key: "s_wing_jiva",
+			label: "Jiva's wing",
+			kind: "task",
+			proof: ["sol_room_5"],
+			needs: "Jiva's wing",
+			verified: true,
+			group: WINGS
+		},
+		{
+			key: "s_miak",
+			label: "Miak's talk",
+			kind: "task",
+			proof: ["pofire_1"],
+			needs: "Miak's talk in Tranquility",
+			verified: true
+		},
+		{
+			key: "s_rallos",
+			label: "Rallos Zek step",
+			kind: "kill",
+			proof: ["zeks_7"],
+			pending: "cl_rallos",
+			kills: ["rallos_dead"],
+			needs: "a Rallos Zek kill (after the Zek reading)",
+			verified: true
+		},
+		{
+			key: "s_solusek",
+			label: "Solusek Ro + projection",
+			kind: "kill",
+			proof: ["pofire_2"],
+			pending: "cl_solusek",
+			kills: ["solro_dead"],
+			needs: "a Solusek Ro kill",
+			verified: true
+		}
+	],
+	zebuxoruk_2: [
+		{
+			key: "p_karana",
+			label: "Karana's notes",
+			kind: "kill",
+			proof: ["karana_4"],
+			pending: "cl_karana",
+			kills: ["agnarr_dead"],
+			needs: "an Agnarr kill (then Karana)",
+			verified: true
+		},
+		{
+			key: "p_mithaniel",
+			label: "Mithaniel's notes",
+			kind: "kill",
+			proof: ["mmarr_book_1"],
+			pending: "cl_mmarr_book",
+			kills: ["marr_dead"],
+			needs: "a Marr kill",
+			verified: true
+		},
+		{
+			key: "p_rallos",
+			label: "Rallos Zek step",
+			kind: "kill",
+			proof: ["zeks_7"],
+			pending: "cl_rallos",
+			kills: ["rallos_dead"],
+			needs: "a Rallos Zek kill (after the Zek reading)",
+			verified: true,
+			note: "Needs the Zek reading (Maelin, and so the cipher) first"
+		},
+		{
+			key: "p_lore",
+			label: "Maelin reads the notes",
+			kind: "handin",
+			proof: ["zebuxoruk_1"],
+			to: "Maelin",
+			needs: "Maelin's reading of both notes",
+			verified: true
+		},
+		{
+			key: "p_power",
+			label: "Maelin's power source",
+			kind: "handin",
+			proof: ["zebuxoruk_2"],
+			to: "Maelin",
+			needs: "Maelin's power source",
+			verified: true
+		}
+	],
+	arbitor_dead: [{
+		key: "e_arbitor",
+		label: "Arbitor of Earth",
+		kind: "kill",
+		proof: ["earthb_key_1"],
+		kills: ["arbitor_dead"],
+		needs: "an Arbitor of Earth kill (with the four rings)",
+		verified: false,
+		note: "The four earth rings are not tracked"
+	}],
+	time_1: [
+		{
+			key: "time_fire",
+			label: "Fire: Fennin Ro",
+			kind: "kill",
+			proof: ["fennin_dead", "globe_loot"],
+			needs: "a Fennin Ro kill",
+			verified: false
+		},
+		{
+			key: "time_water",
+			label: "Water: Coirnav",
+			kind: "kill",
+			proof: ["coirnav_dead", "sphere_loot"],
+			needs: "a Coirnav kill",
+			verified: false
+		},
+		{
+			key: "time_earth",
+			label: "Earth: Rathe Council",
+			kind: "kill",
+			proof: ["rathe_dead", "stone_loot"],
+			needs: "the Rathe Council",
+			verified: false
+		},
+		{
+			key: "time_air",
+			label: "Air: Xegony",
+			kind: "kill",
+			proof: ["xegony_dead", "cloud_loot"],
+			needs: "a Xegony kill",
+			verified: false
+		},
+		{
+			key: "time_machine",
+			label: "Meldrath's machine",
+			kind: "handin",
+			proof: ["time_1"],
+			to: "Meldrath",
+			needs: "Meldrath's time machine",
+			verified: true,
+			note: "The portal also needs level 65"
+		}
+	]
+};
+Object.values(REQ_PIECES).flat();
+/** A requirement flag with no entry above still gets one piece, so a new gate never renders empty. */
+function fallbackPiece(flag) {
+	const label = POP_FLAGS[flag]?.label ?? flag;
+	return {
+		key: `flag:${flag}`,
+		label,
+		kind: "task",
+		proof: [flag],
+		needs: label,
+		verified: false
+	};
+}
+/** The pieces of one requirement flag. */
+function piecesOfFlag(flag) {
+	return REQ_PIECES[flag] ?? [fallbackPiece(flag)];
+}
+POP_ZONES.filter((z) => z.requires.length > 0);
+/** A gate's pieces: each requirement flag's pieces, in order. */
+function gatePieces(zone) {
+	return zone.requires.flatMap(piecesOfFlag);
+}
+//#endregion
+//#region web/lib/popGateStatus.ts
+function chainTo(key) {
+	for (const chain of Object.values(POP_STEPS)) {
+		const i = chain.findIndex((s) => s.key === key);
+		if (i >= 0) return chain.slice(0, i + 1);
+	}
+	return [];
+}
+function stepsFor(p, held) {
+	const keys = p.all ? p.proof : p.proof.slice(0, 1);
+	const seen = /* @__PURE__ */ new Set();
+	const out = [];
+	for (const k of keys) for (const s of chainTo(k)) {
+		if (seen.has(s.key)) continue;
+		seen.add(s.key);
+		out.push({
+			label: s.label,
+			where: s.where ?? null,
+			note: s.note ?? null,
+			done: held.has(s.key)
+		});
+	}
+	return out;
+}
+const SCRIPT_IMPLIES = {
+	zeks_6: ["cipher_1"],
+	zebuxoruk_2: ["zeks_7"]
+};
+/** Every key a set of held keys proves, following the series (a later value carries the earlier ones) and the stage →
+*  catalog flag table, but never from a KILL flag to the step after the kill. */
+function stagesHeld(keys) {
+	const out = /* @__PURE__ */ new Set();
+	const stack = [...keys];
+	while (stack.length) {
+		const k = stack.pop();
+		if (out.has(k)) continue;
+		out.add(k);
+		if (POP_FLAGS[k]?.kind === "kill") continue;
+		for (const n of STAGE_IMPLIES[k] ?? []) stack.push(n);
+		for (const n of STEP_IMPLIES[k] ?? []) stack.push(n);
+		for (const n of SCRIPT_IMPLIES[k] ?? []) stack.push(n);
+	}
+	return out;
+}
+function requiredFor(zoneKey) {
+	const flags = /* @__PURE__ */ new Set();
+	const zones = /* @__PURE__ */ new Set();
+	const addZone = (z) => {
+		if (zones.has(z)) return;
+		zones.add(z);
+		for (const f of POP_ZONE_BY_KEY[z]?.requires ?? []) addFlag(f);
+	};
+	const addFlag = (f) => {
+		if (flags.has(f)) return;
+		flags.add(f);
+		const z = POP_FLAGS[f]?.zone;
+		if (z) addZone(z);
+	};
+	addZone(zoneKey);
+	return flags;
+}
+/** What the character is known to hold: their flags, plus every piece of every gate /who proves they went through. */
+function heldFor(input) {
+	const seed = new Set(input.flags);
+	for (const zone of input.seen ?? []) for (const flag of requiredFor(zone)) {
+		seed.add(flag);
+		for (const p of piecesOfFlag(flag)) for (const k of p.proof) seed.add(k);
+	}
+	return stagesHeld(seed);
+}
+function pieceStatus(p, held, fullRead) {
+	const base = {
+		key: p.key,
+		label: p.label,
+		kind: p.kind,
+		needs: p.needs,
+		to: p.to ?? null,
+		verified: p.verified,
+		note: p.note ?? null,
+		group: p.group ?? null
+	};
+	const have = p.proof.filter((k) => held.has(k)).length;
+	if (p.all ? have === p.proof.length : have > 0) return {
+		...base,
+		state: "done",
+		detail: null,
+		killOnly: false
+	};
+	const owed = { steps: stepsFor(p, held) };
+	if (p.pending && held.has(p.pending)) return {
+		...base,
+		...owed,
+		state: "pending",
+		detail: "Kill credited. The Seer is holding it: ask her to unlock memories",
+		killOnly: false
+	};
+	if ((p.kills ?? []).some((k) => held.has(k))) return {
+		...base,
+		...owed,
+		state: "unknown",
+		detail: "The kill is on record; the hail after it is not",
+		killOnly: true
+	};
+	const part = p.all && have > 0 ? `${have} of ${p.proof.length}` : null;
+	return {
+		...base,
+		...owed,
+		state: fullRead ? "missing" : "unknown",
+		detail: part,
+		killOnly: false
+	};
+}
+const list = (xs) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+const uniq = (xs) => [...new Set(xs)];
+function owedNeeds(owed, statuses) {
+	const out = [];
+	for (const s of owed) {
+		const g = s.group;
+		if (!g) {
+			out.push(s.needs);
+			continue;
+		}
+		const allOwed = statuses.filter((x) => x.group?.key === g.key).every((x) => owed.includes(x));
+		out.push(allOwed ? g.needs : s.needs);
+	}
+	return uniq(out);
+}
+/** "Only the Seer and Maelin left", "needs a Marr kill, then the Seer and Maelin", or what is not recorded. */
+function verdictFor(statuses) {
+	const left = statuses.filter((s) => s.state !== "done");
+	if (left.length === 0) return {
+		tone: "done",
+		text: "Nothing left here"
+	};
+	if (left.every((s) => s.state === "unknown") && left.length === statuses.length) return {
+		tone: "unsure",
+		text: "Nothing recorded yet. Paste the Seer's recital to fill this in"
+	};
+	const owed = left.filter((s) => s.state === "missing" && s.kind !== "handin");
+	const unknown = left.filter((s) => s.state === "unknown");
+	const after = [...left.some((s) => s.state === "pending") ? ["the Seer"] : [], ...uniq(left.filter((s) => s.state === "missing" && s.kind === "handin").map((s) => s.to ?? s.label))];
+	if (owed.length) {
+		const tail = [after.length ? `then ${list(after)}` : "", unknown.length ? `${unknown.length} not recorded` : ""].filter(Boolean);
+		return {
+			tone: "blocked",
+			text: `No, needs ${list(owedNeeds(owed, statuses))}${tail.length ? `, ${tail.join(", ")}` : ""}`
+		};
+	}
+	if (unknown.length) return {
+		tone: "unsure",
+		text: `Not sure: ${list(unknown.map((s) => s.label))} ${unknown.length === 1 ? "is" : "are"} not recorded${after.length ? `; ${list(after)} still to go` : ""}`
+	};
+	return {
+		tone: "handins",
+		text: `Yes, only ${list(after)} left`
+	};
+}
+/** One gate for one character. */
+function gateReport(zone, input) {
+	const held = heldFor(input);
+	const pieces = gatePieces(zone).map((p) => pieceStatus(p, held, !!input.fullRead));
+	return {
+		gate: zone.key,
+		name: zone.name,
+		short: zone.short,
+		pieces,
+		verdict: verdictFor(pieces)
+	};
+}
+//#endregion
 exports.GUIDE_ITEMS = GUIDE_ITEMS;
 exports.NEXT_LINES = NEXT_LINES;
 exports.PENDING_MEMORIES = PENDING_MEMORIES;
@@ -4724,6 +5365,7 @@ exports.STEP_IMPLIES = STEP_IMPLIES;
 exports.TIER_LABELS = TIER_LABELS;
 exports.WHO_ZONE_NAMES = WHO_ZONE_NAMES;
 exports.flagsFromSightings = flagsFromSightings;
+exports.gateReport = gateReport;
 exports.guideStepFor = guideStepFor;
 exports.guideStepsProven = guideStepsProven;
 exports.heldClosure = heldClosure;
