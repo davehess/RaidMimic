@@ -19284,6 +19284,7 @@ function _serializeCommandCenterState() {
                       !!_lastRaidPipe && (nowMs - (_lastRaidPipe.at || 0)) < 60_000;
       return _hailBoardSnapshot(_nowOnServerClock(), ownRaid ? _raidRosterMembers : null);
     })(),
+    zone_flags:    _zoneFlagsSnapshot(activeChar, Date.now()),   // null outside a flag-gated zone or until the bot answers
     cures,
     // Per-cleric Divine Intervention readiness — chips on the board.
     di:            diStatusSnapshot(),
@@ -36862,6 +36863,16 @@ const COMMAND_HTML = `<!doctype html>
   .hail-dim{font-size:9px;color:#7d8590;margin-top:4px}
   .hail-foot{font-size:8px;color:#6e7681;margin-top:3px;padding-top:2px;
     border-top:1px solid rgba(110,118,129,0.25)}
+  /* 🚩 Zone flags: who in the raid lacks the flag for the zone you stand in (the guild lead, 2026-11-19). Only people
+     confirmed without it are named; no record is a muted count, never a claim. 11px, nothing smaller. */
+  .flag-card .fl-line{font-size:11px;color:rgb(201 209 217);margin:2px 0}
+  .flag-card .fl-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .flag-card .fl-line.pass,.flag-card .fl-line.pass b{color:rgb(126 231 135)}
+  .flag-card .fl-line.fail,.flag-card .fl-line.fail b{color:rgb(248 113 113)}
+  .flag-card .fl-line.depends,.flag-card .fl-line.depends b{color:rgb(255 166 87)}
+  .flag-card .fl-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:11px;line-height:1.5}
+  .flag-card .fl-chip{padding:0 5px;border-radius:3px;background:rgba(248,81,73,0.22);color:rgb(230 237 243);white-space:nowrap}
+  .flag-card .fl-dim{font-size:11px;color:rgb(154 164 173);margin-top:3px}
   /* drag/lock/setup chrome — shared pattern. */
   #drag-controls{display:none;position:fixed;top:4px;left:4px;gap:4px;z-index:60}
   body.unlocked #drag-controls{display:flex}
@@ -37470,6 +37481,33 @@ const COMMAND_HTML = `<!doctype html>
     }, function(){ done('failed', true); });
   }
 
+  // The zone-flags card. The agent sends state.zone_flags (null outside a gated zone). Only counts and names from
+  // known records; "At least" whenever some have no record. Same input, same HTML.
+  function zoneFlagsHtml(z){
+    if (!z || !(z.size > 0)) return '';
+    var key = 'zoneflags', col = _isCollapsed(key), miss = z.missing || [], unk = z.unknown || 0;
+    var h = '<div class="card flag-card"><div class="head">' + secToggle(key, '🚩 ' + z.zone, miss.length ? 'not flagged ' + miss.length : 'all flagged') + '</div>';
+    if (col) return h + '</div>';
+    var d = z.door;
+    if (d) {
+      var lead = (unk ? 'At least <b>' : 'Flagged <b>') + z.flagged + ' of ' + z.size + '</b> (' + d.pct + '%)';
+      var tail = d.verdict === 'pass' ? 'raid can enter'
+        : d.verdict === 'fail' ? 'cannot enter until ' + (unk ? 'at least ' : '') + d.need + ' more ' + (d.need === 1 ? 'is' : 'are') + ' flagged'
+        : 'enters if ' + d.need + ' of the ' + unk + ' with no record ' + (d.need === 1 ? 'is' : 'are') + ' flagged';
+      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Planes of Air, Water, Fire, Earth and Time let a raid in while 85% of it holds the flag, counting everyone in the raid.">' + lead + ': ' + tail + '</div>';
+    }
+    if (miss.length) {
+      h += '<div class="fl-line">Not flagged for ' + esc(z.zone) + ': <b>' + miss.length + '</b></div><div class="fl-chips">';
+      for (var i = 0; i < miss.length && i < 12; i++) h += '<span class="fl-chip">' + esc(miss[i]) + '</span>';
+      if (miss.length > 12) h += '<span class="fl-dim">+' + (miss.length - 12) + ' more</span>';
+      h += '</div>';
+    } else if (!unk) {
+      h += '<div class="fl-line pass">Everyone has the ' + esc(z.zone) + ' flag</div>';
+    }
+    if (unk) h += '<div class="fl-dim" title="We have no flag record for these raiders, so we cannot say they are unflagged.">No flag record: ' + unk + '</div>';
+    return h + '</div>';
+  }
+
   function render(s){
     if (!s || s.character == null) {
       contentEl.innerHTML = '<div id="empty">No focused character yet — launch EQ + Zeal and target a mob.</div>';
@@ -37541,6 +37579,7 @@ const COMMAND_HTML = `<!doctype html>
     } else if (_hailMore.size) {
       _hailMore.clear();
     }
+    html += zoneFlagsHtml(s.zone_flags);
 
     // Raid-wide DA/invuln broadcasts — every tank currently reporting status
     // via their own raid-chat macro (a member's ">> DA up << 18 secs" etc),
@@ -63619,6 +63658,98 @@ function planarFlagRule(size, flagged) {
     max_unflagged: maxUnflagged, passes,
     spare: passes ? maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,
   };
+}
+// ── Zone-flag note: who in the raid lacks the flag for the zone you are standing in (the guild lead, 2026-11-19) ──────
+// The zone id Zeal reports -> the PoP gate (web/lib/popFlags.ts POP_ZONES key) that guards it. Zones with no gate are
+// absent, so the card is never drawn there. Only ids 215-219 use the 85% raid-in door (popRaidEntry.ts).
+const _ZONE_GATE_KEY = { 200: 'cod', 207: 'torment', 208: 'valor', 209: 'bot', 210: 'storms', 211: 'hoh', 212: 'solro', 214: 'tactics',
+  215: 'air', 216: 'water', 217: 'fire', 218: 'earth', 219: 'time', 220: 'hohb', 221: 'ponb', 222: 'poeb' };
+const _ZONE_DOOR_IDS = new Set([215, 216, 217, 218, 219]);
+// members: raid names as Zeal shows them. byName: lowercase name -> 'flagged' | 'missing' | 'unknown', from the bot's
+// pop-zone-flags answer. Anyone the answer does not name is 'unknown' (never 'missing': an absent record proves nothing).
+// null when this zone has no gate, the raid is empty, or the bot has not answered. The door verdict counts only
+// known records: 'pass' holds whichever way the unknowns turn out, 'fail' holds even if every unknown were flagged.
+function zoneFlagCard(zoneId, zoneName, members, byName) {
+  const key = _ZONE_GATE_KEY[Number(zoneId)];
+  if (!key || !Array.isArray(members) || !members.length || !byName) return null;
+  const missing = [];
+  let flagged = 0, unknown = 0;
+  for (const name of members) {
+    const v = byName[String(name).toLowerCase()];
+    if (v === 'flagged') flagged++;
+    else if (v === 'missing') missing.push(String(name));
+    else unknown++;
+  }
+  missing.sort((a, b) => a.localeCompare(b));
+  const size = members.length;
+  const out = { key, zone: zoneName || key, size, flagged, missing, unknown, door: null };
+  if (_ZONE_DOOR_IDS.has(Number(zoneId))) {
+    const sure = planarFlagRule(size, flagged);
+    const best = planarFlagRule(size, flagged + unknown);
+    out.door = { pct: Math.floor((flagged * 100) / size), verdict: sure.passes ? 'pass' : (best.passes ? 'depends' : 'fail'),
+      need: sure.passes ? 0 : (best.passes ? sure.short : best.short) };
+  }
+  return out;
+}
+// The bot's answer for the current zone's gate, cached per gate + names. A read, 20 s apart at most, 60 s fresh; an
+// older bot (404) is left alone for ten minutes and the card simply stays away.
+const _zoneFlags = { key: '', gate: '', at: 0, tried: 0, byName: null, inflight: false, offUntil: 0 };
+function _zoneFlagsFetch(gate, names) {
+  const opts = _uploadOpts;
+  if (!opts || !opts.botUrl || !opts.token || _zoneFlags.inflight) return;
+  const now = Date.now();
+  // Names go as Zeal shows them: the bot matches its tables by exact name. The answer comes back keyed lower-case.
+  const seen = new Set();
+  const list = names.map(n => String(n)).filter(n => !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()))
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).slice(0, 80);
+  const key = gate + '|' + list.join(',').toLowerCase();
+  if (now < _zoneFlags.offUntil || now - _zoneFlags.tried < 20_000) return;
+  if (key === _zoneFlags.key && now - _zoneFlags.at < 60_000) return;
+  let down = false;
+  try { down = _controlStandDown().down; } catch { void 0; }
+  if (down) return;
+  _zoneFlags.inflight = true;
+  _zoneFlags.tried = now;
+  const done = () => { _zoneFlags.inflight = false; };
+  try {
+    const u = new URL(opts.botUrl.replace(/\/encounter(\?.*)?$/, '/pop-zone-flags') + '?zone=' + encodeURIComponent(gate) + '&names=' + encodeURIComponent(list.join(',')));
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request({ method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search, timeout: 8000,
+      headers: { 'Authorization': `Bearer ${opts.token}`, 'Accept': 'application/json', 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` } }, (res) => {
+      let body = '';
+      res.on('data', c => { body += c; });
+      res.on('end', () => {
+        done();
+        if (res.statusCode === 404) { _zoneFlags.offUntil = Date.now() + 10 * 60_000; _zoneFlags.byName = null; return; }
+        if (res.statusCode !== 200) return;
+        try {
+          const j = JSON.parse(body);
+          const by = {};
+          for (const k of Object.keys((j && j.members) || {}).slice(0, 100)) {
+            const v = j.members[k];
+            if (v === 'flagged' || v === 'missing' || v === 'unknown') by[String(k).toLowerCase()] = v;
+          }
+          _zoneFlags.key = key; _zoneFlags.gate = gate; _zoneFlags.at = Date.now(); _zoneFlags.byName = by;
+        } catch { void 0; }
+      });
+    });
+    req.on('error', done);
+    req.on('timeout', () => { req.destroy(); });
+    req.end();
+  } catch { done(); }
+}
+// The card for the Command Center: the played character's zone and the live Zeal raid roster. Never for a guest's
+// session, and only while the roster sample is fresh.
+function _zoneFlagsSnapshot(character, nowMs) {
+  if (!character || _isGuestChar(character)) return null;
+  const st = _zealState[Object.keys(_zealState || {}).find(k => k.toLowerCase() === String(character).toLowerCase())];
+  const zoneId = st && Number(st.zone) > 0 ? Number(st.zone) : null;
+  const gate = zoneId ? _ZONE_GATE_KEY[zoneId] : null;
+  if (!gate || !_lastRaidPipe || !Array.isArray(_lastRaidPipe.members) || nowMs - (_lastRaidPipe.at || 0) > 60_000) return null;
+  const names = _lastRaidPipe.members.map(m => m && m.name).filter(Boolean);
+  if (!names.length) return null;
+  _zoneFlagsFetch(gate, names);
+  return _zoneFlags.gate === gate ? zoneFlagCard(zoneId, _zoneName(zoneId), names, _zoneFlags.byName) : null;
 }
 function _hailBoardSnapshot(nowMs, raidNames) {
   const out = [];
