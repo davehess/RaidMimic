@@ -253,6 +253,14 @@ writes.
 
 ## Release & deploy pipeline
 
+### Quest-scripted spawns and loot (2026-11-19)
+- **What:** what the server's quest scripts spawn and drop that the `eqemu_*` mirror cannot show (980 scripted NPC ids with no
+  spawn row, 158 script `AddItem` rows, 227 timer overrides). Read from the scripts at a pinned commit, not from guides.
+- **Where:** `data/quest-scripted.json` (built by `scripts/quest-scripted-extract.js`; audit `docs/AUDIT-quest-script-gaps-2026-11-19.md`;
+  shape test `test/quest-scripted-data.test.js`). Served at `GET /api/public/catalog/quest-scripted` by `utils/questScriptedCatalog.js`
+  (no sign-in; `{version, fetched_at, count, entries: spawns, script_refs, loot, timer_overrides, source, notes}`, strong ETag, 304;
+  `test/quest-scripted-catalog.test.js`). Mimic bundling and the agent's local route are on `beta`.
+
 ### Only the newest 3 Mimic betas keep a release (2026-10-30; DECISIONS §479)
 - **What:** 28 betas in three days pushed the stable (still marked Latest) to page 3 of the GitHub releases list. Pick A + B:
   (A) the Download button and step 1 on the raidmimic setup page, the `wolfpack.quest/mimic` fallback and the README open
