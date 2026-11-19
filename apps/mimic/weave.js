@@ -530,8 +530,11 @@
   WeaveEngine.prototype.snapshot = function (now) {
     var c = this.core(), d = this.active(now) ? derive(c, now) : null;
     // derive() rolls the predicted swing forward, so lateness is measured from the last REAL 2H line.
-    var overdue = d && c.last2H != null && now - c.last2H > c.interval2H + Math.max(OVERDUE_MS, 0.6 * c.interval2H);
-    var held = d ? (this.held || (overdue ? { reason: 'Not swinging', at: c.last2H + c.interval2H } : null)) : null;
+    // Not swinging reads as idle (the lane hides, as before a fight; the guild lead, 2026-11-18: "showing without attacking"),
+    // but the fight and its tally are kept until the 12 s gap, so a short break does not split one fight in two.
+    var overdue = !!(d && c.last2H != null && now - c.last2H > c.interval2H + Math.max(OVERDUE_MS, 0.6 * c.interval2H));
+    if (overdue && !this.held) d = null;
+    var held = d && this.held ? this.held : null;
     return {
       active: !!d, phase: d ? (held ? 'held' : d.phase) : 'idle', at: now, held: held,
       core: c, measured: this.measured(), open: d ? d.open : null, close: d ? d.close : null, next2H: d ? d.next2H : null,
