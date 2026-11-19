@@ -737,9 +737,22 @@ function wallDefs(key, i, m) {
   d.append(S('defs')); d.firstChild.append(g); document.body.append(d);
   return id;
 }
+// Where our kiting bard circled during each Earth ring on Nov 18 (the guild lead asked for it mid-raid), from the
+// raid's position track (raid_track_minutes, a sample every ~6 s here), in the map frame: c = centre, r = median
+// distance from it, d = the sampled spots inside 200 units of the centre. Samples are too far apart to draw the lap
+// itself, so the page shows the spots and the fitted circle. No character name, by rule.
+const KITE_NOV18 = {
+  'Stone Ring': { c: [896, -239], r: 65, d: '926,-171 897,-292 750,-151 894,-281 744,-165 940,-236 806,-155 831,-266 915,-291 749,-119 950,-211 812,-300 823,-323 786,-315 839,-306 900,-279 888,-136 815,-263 889,-269 826,-71 899,-200 761,-144 954,-118 910,-181 781,-190 937,-259 889,-127 815,-256 791,-222 916,-154 878,-174 903,-141 843,-290 914,-288 856,-285 911,-260 748,-248 880,-278 871,-260 947,-175 906,-184 854,-292 938,-149 963,-235 969,-273 969,-248 968,-241 961,-217 950,-201 919,-219 904,-180 902,-189 887,-209 885,-209 928,-230 854,-265 855,-217 820,-254 951,-182 789,-271 934,-148 846,-231 928,-285 830,-288 851,-287 874,-317 863,-298 841,-281 901,-177 947,-229 918,-294 857,-290 941,-140 927,-183 942,-273 947,-151 785,-216 953,-257 957,-226 904,-297 926,-356 958,-244 937,-145 887,-292 969,-199 941,-231 953,-241 895,-157 870,-303 835,-274 832,-266 823,-133 944,-256 843,-315 843,-297 905,-288 853,-215 932,-192 929,-195 952,-270 880,-289 935,-203 853,-225 967,-242 952,-287 874,-287 889,-203 957,-264 964,-252 939,-211 952,-258 901,-166 950,-195 846,-216 878,-292 871,-254 935,-279 880,-308 872,-235 943,-291 968,-249 955,-276 909,-162 955,-209 940,-224 954,-210 885,-197 902,-155 907,-179 851,-179 938,-309 942,-276 914,-309 892,-277 935,-306 851,-278 935,-252 835,-137 880,-182 868,-220 832,-258 953,-278 850,-297 922,-210 912,-319 846,-215 854,-302 853,-211 949,-266 855,-304 833,-220 949,-267 882,-286 877,-302 932,-223 953,-247 878,-289 849,-258 831,-302 874,-290 860,-285 944,-281 981,-201 954,-245 943,-260 892,-292 846,-230 898,-205' },
+  'Mud Ring': { c: [-74, -211], r: 108, d: '-87,-127 -19,-300 -149,-48 -135,-32 -30,-292 9,-319 77,-324 -96,-291 -124,-269 -148,-59 -99,-97 -74,-204 -190,-99 -145,-183 -81,-94 45,-166 -51,-132 -111,-108 -87,-148 -105,-24 -99,-15 -21,-38 -69,-267 -105,-27 -39,-37 -40,-19 -70,-53 -191,-81 -65,-29 -94,-42 -98,-108 -139,-111 -60,-200 -60,-259 -27,-67 -109,-250 -79,-295 -56,-297 -63,-281 -55,-294 -67,-289 -90,-283 -65,-308 -87,-318 -87,-316 -104,-304 -101,-312 -103,-320 -92,-330 -68,-327 -75,-317 -62,-326 -62,-334 -62,-331 -62,-330 -72,-274 -78,-269 -194,-81 -56,-14 -57,-162 -4,-233 -139,-194 -111,-238 -109,-223 -82,-216 -83,-217 -85,-223' },
+  'Vine Ring': { c: [-75, -243], r: 60, d: '-67,-158 -38,-324 -54,-301 -93,-211 -13,-293 -120,-282 -27,-201 -75,-296 -70,-198 -66,-304 -113,-302 -123,-270 -117,-283 -94,-186 -21,-284 -81,-302 -80,-205 -11,-281 -13,-277 -23,-266 -50,-289 -76,-195 -29,-292 -104,-201 -6,-271 -116,-263 -127,-201 -56,-192 0,-237 -55,-299 -117,-187 -23,-218 -60,-291 -114,-204 -65,-177 9,-252 -116,-252 -89,-207 -65,-135 59,-252 -41,-197 -135,-217 -52,-211 -84,-197 -100,-194 -112,-245 -13,-256 -39,-235 -9,-222 -75,-157 -122,-209 -129,-284 -161,-250 -61,-286 -143,-295 -30,-263 -28,-307 -119,-286 -141,-243 -35,-200 -158,-240 -88,-301 31,-293 -139,-187 -141,-280 -145,-251 -79,-270 -116,-291 -83,-192 -73,-300 -133,-202 -123,-165 -70,-186 -75,-191 -55,-292 -134,-232' },
+  'Dust Ring': { c: [-60, -240], r: 64, d: '-90,-168 -28,-203 -45,-318 -35,-275 -28,-214 -41,-199 -55,-201 -152,-262 -30,-213 -147,-270 -146,-212 -26,-293 -150,-227 12,-286 24,-244 -124,-190 -49,-185 -111,-274 -124,-210 -1,-265 -87,-213 -61,-205 -72,-188 -100,-204 -51,-327 -72,-207 3,-253 -114,-192 -66,-161 -118,-273 -92,-216 -95,-293 -73,-195 -100,-257 7,-232 -34,-171 -33,-300 -21,-203 -8,-199 -122,-253 -21,-199 -115,-264 9,-294 26,-250 -117,-236 -104,-265 17,-240 -18,-192 -23,-312 -106,-203 -79,-293 -67,-174 10,-246 -125,-272 -46,-165 21,-281 -128,-269 -14,-216 -89,-304 -11,-235 -132,-276 -35,-201 -47,-304 -137,-253 -2,-239 -75,-310 -5,-203 -106,-274 -80,-184 -59,-311 23,-282 -73,-192 -36,-193 -96,-214 -42,-303 -30,-286' },
+};
+const kiteFor = ev => KITE_NOV18[String((ev && ev.title) || '').split(' (')[0]] || null;
 // One small map per ring: the zone walls cropped to that event's points, each step's points marked with its number.
-function drawRingMap(slot, key, i, m, pts) {
-  const xs = pts.flatMap(p => p.box ? [p.box[0], p.box[2]] : [p.x]), ys = pts.flatMap(p => p.box ? [p.box[1], p.box[3]] : [p.y]);
+// `kite` (optional): the Nov 18 kite circle and its sampled spots, drawn under the step markers.
+function drawRingMap(slot, key, i, m, pts, kite) {
+  const kd = kite ? kite.d.split(' ').map(s => s.split(',').map(Number)) : [];
+  const xs = pts.flatMap(p => p.box ? [p.box[0], p.box[2]] : [p.x]).concat(kd.map(q => q[0])), ys = pts.flatMap(p => p.box ? [p.box[1], p.box[3]] : [p.y]).concat(kd.map(q => q[1]));
   let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const pad = Math.max(40, Math.max(x1 - x0, y1 - y0) * 0.18), MIN = 300;
   x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
@@ -749,6 +762,10 @@ function drawRingMap(slot, key, i, m, pts) {
   const el = S('svg', { viewBox: `${x0} ${y0} ${w} ${h}`, role: 'img', class: 'ringmap', style: `aspect-ratio:${w}/${h}`,
     'aria-label': 'Map of the marked spots, numbered by step' });
   el.append(S('use', { href: '#' + wallDefs(key, i, m) }));
+  if (kite) {
+    for (const [x, y] of kd) el.append(S('circle', { cx: x, cy: y, r: u * 0.22, fill: 'var(--blue)', opacity: 0.55 }));
+    el.append(S('circle', { cx: kite.c[0], cy: kite.c[1], r: kite.r, fill: 'none', stroke: 'var(--blue)', 'stroke-width': u * 0.3, 'stroke-dasharray': `${u * 0.9} ${u * 0.5}` }));
+  }
   const placed = [];
   for (const p of pts) {
     if (p.box) {
@@ -765,7 +782,8 @@ function drawRingMap(slot, key, i, m, pts) {
   slot.append(el);
   const steps = [...new Set(pts.map(p => p.step))].sort((a, b) => a - b);
   const leg = document.createElement('div'); leg.className = 'legend';
-  leg.innerHTML = steps.map(n => `<span><i style="background:var(--purple)"></i>${circ(n)} ${n ? 'step ' + n : 'start'}${pts.some(p => p.step === n && p.lab) ? ' (numbers are trap families)' : ''}</span>`).join('');
+  leg.innerHTML = steps.map(n => `<span><i style="background:var(--purple)"></i>${circ(n)} ${n ? 'step ' + n : 'start'}${pts.some(p => p.step === n && p.lab) ? ' (numbers are trap families)' : ''}</span>`).join('')
+    + (kite ? `<span><i style="background:var(--blue)"></i>kite path, Nov 18 (a circle about ${kite.r * 2} across)</span>` : '');
   slot.append(leg);
 }
 
@@ -825,7 +843,7 @@ function renderPlane(key) {
   (plane.events || []).forEach((ev, ei) => {
     const slot = host.querySelector(`[data-evmap="${key}-${ei}"]`); if (!slot) return;
     const mi = Math.max(0, P.maps.findIndex(m => m.zone === ev.zone));
-    drawRingMap(slot, key, mi, P.maps[mi], evp[ei].pts);
+    drawRingMap(slot, key, mi, P.maps[mi], evp[ei].pts, key === 'earth' ? kiteFor(ev) : null);
   });
 }
 
