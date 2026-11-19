@@ -95,7 +95,7 @@ describe('wpAbilityGroups (Top Abilities cards)', () => {
   it('labels damage shields apart from abilities, by name or by the tank card sources', () => {
     const g = wpAbilityGroups({ thorns: st(3, 90), 'non-melee': st(2, 50), 'Aegis of Fire': st(1, 40), 'Stunning Blow': st(1, 700) }, ['Aegis of Fire']);
     expect(g.abilities.map((a) => a[0])).toEqual(['Stunning Blow']);
-    expect(g.shields.map((a) => a[0])).toEqual(['thorns', 'Aegis of Fire', 'non-melee']);
+    expect(g.shields.map((a) => a[0])).toEqual(['thorns', 'non-melee', 'Aegis of Fire']);
   });
   it('a melee-only player has no abilities and no shields (rendered as one line)', () => {
     const g = wpAbilityGroups({ slash: st(2, 20), pierce: st(1, 5) });
