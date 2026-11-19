@@ -262,10 +262,16 @@
   // timer to pause. The press in flight is dropped; the next 2H swing clears the hold (the hub, on a changed last2H).
   WeaveEngine.prototype.hold = function (reason, t) {
     if (!this.active(t)) return false;
+    // The game repeats a line (the range one on every swing attempt): the hold keeps its FIRST time.
+    if (this.held && this.held.reason === reason) return true;
     this.held = { reason: reason, at: t };
-    this.pending = null;
+    // Out of range, the swing timer keeps ticking (the guild lead, 2026-11-18: "Keep running the attacks on weaving for 4
+    // seconds after being out of range, the timer still ticks"): the press in flight stays, and the lane only pauses once
+    // RANGE_GRACE_MS have passed without a swing (snapshot).
+    if (reason !== 'Out of range') this.pending = null;
     return true;
   };
+  var RANGE_GRACE_MS = 4000;
   WeaveEngine.prototype.setConfig = function (cfg, t) {
     this.cfg = cleanCfg(cfg);
     this._buffHaste(this.cfg.hasteN, t == null ? Date.now() : t);
@@ -534,7 +540,7 @@
     // but the fight and its tally are kept until the 12 s gap, so a short break does not split one fight in two.
     var overdue = !!(d && c.last2H != null && now - c.last2H > c.interval2H + Math.max(OVERDUE_MS, 0.6 * c.interval2H));
     if (overdue && !this.held) d = null;
-    var held = d && this.held ? this.held : null;
+    var held = d && this.held && !(this.held.reason === 'Out of range' && now - this.held.at < RANGE_GRACE_MS) ? this.held : null;
     return {
       active: !!d, phase: d ? (held ? 'held' : d.phase) : 'idle', at: now, held: held,
       core: c, measured: this.measured(), open: d ? d.open : null, close: d ? d.close : null, next2H: d ? d.next2H : null,

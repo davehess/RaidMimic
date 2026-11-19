@@ -320,8 +320,7 @@ describe('the hub: pipe objects in, states out', () => {
     h.note(chat('Aldenmar', 265, TWO()));
     advance(IV);
     h.note(chat('Aldenmar', 265, TWO()));
-    for (const [line, reason] of [['Your target is too far away, get closer!', 'Out of range'],
-      ['You cannot see your target.', 'No line of sight'], ['Auto attack is off.', 'Auto attack off']]) {
+    for (const [line, reason] of [['You cannot see your target.', 'No line of sight'], ['Auto attack is off.', 'Auto attack off']]) {
       advance(200);
       expect(h.note(chat('Aldenmar', 13, line)), line).toBe(true);
       const st = sent[sent.length - 1];
@@ -335,6 +334,27 @@ describe('the hub: pipe objects in, states out', () => {
     expect(h.note(chat('Aldenmar', 265, TWO()))).toBe(true);
     expect(sent[sent.length - 1].held).toBe(null);
     expect(sent[sent.length - 1].phase).not.toBe('held');
+  });
+  // The guild lead, 2026-11-18: "Keep running the attacks on weaving for 4 seconds after being out of range, the timer still ticks".
+  it('out of range keeps the lane running for 4 s from the FIRST range line, then pauses; a swing in time clears it', () => {
+    const { h, sent, advance } = hub();
+    h.setEnabled(true);
+    h.note(chat('Aldenmar', 265, TWO()));
+    advance(IV);
+    h.note(chat('Aldenmar', 265, TWO()));
+    const e = h.engines.get('aldenmar').eng;
+    advance(100);
+    expect(h.note(chat('Aldenmar', 13, 'Your target is too far away, get closer!'))).toBe(true);
+    const t0 = e.held.at;
+    expect(sent[sent.length - 1].held).toBe(null);                                   // still running
+    advance(1500);
+    h.note(chat('Aldenmar', 13, 'Your target is too far away, get closer!'));        // repeated each attempt
+    expect(e.held.at).toBe(t0);                                                       // the grace counts from the first
+    expect(e.snapshot(t0 + 3900).held).toBe(null);
+    expect(e.snapshot(t0 + 4100).held.reason).toBe('Out of range');
+    advance(500);
+    expect(h.note(chat('Aldenmar', 265, TWO()))).toBe(true);                          // back in range, swinging
+    expect(e.held).toBe(null);
   });
   it('goes idle (hides) when the next 2H swing is well overdue, keeping the fight, and pauses on "No target"', () => {
     const { h, sent, advance } = hub();
