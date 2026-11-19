@@ -46,7 +46,7 @@ describe('wiring', () => {
     const src = stripJs(read('web/app/db/item/[id]/page.tsx'));
     expect(src).toMatch(/loadSeenDrops\(/);
     expect(src).toMatch(/Seen in our raids/);
-    expect(src).toMatch(/not in the published loot table/);
+    expect(src).toMatch(/not in DB/);
   });
   it('the migration reads no character column and is service-role only', () => {
     const sql = stripSql(read('supabase/migrations/20261119120000_item_seen_drops.sql'));

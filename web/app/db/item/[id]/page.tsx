@@ -17,6 +17,7 @@ import { supabaseServer } from '@/lib/supabase-server';
 import { requireMember } from '@/lib/member';
 import { loadDropperCounts, loadItemDrops } from '@/lib/fullReads';
 import { loadSeenDrops } from '@/lib/seenDrops';
+import { loadScriptLootForItem, loadRewardsForItem, handInLabel } from '@/lib/scriptData';
 import {
   type ItemCard, decodeMask, decodeSlots, fmtPrice, fmtWeight,
   isNoDrop, isNoRent, isLoreItem, loreText,
@@ -118,7 +119,32 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
   if (!card && !itemRow) notFound();
 
   const name = card?.name ?? itemRow?.name ?? `Item #${itemId}`;
-  const seenDrops = await loadSeenDrops(sb, itemId, card?.name ?? itemRow?.name ?? null);
+  const [seenDrops, scriptLoot, rewards] = await Promise.all([
+    loadSeenDrops(sb, itemId, card?.name ?? itemRow?.name ?? null),
+    loadScriptLootForItem(sb, itemId),
+    loadRewardsForItem(sb, itemId),
+  ]);
+  // Names for what the scripts reference: the mobs that carry the item, the zones, and the hand-in items.
+  const scriptNpcIds = [...new Set([...scriptLoot, ...rewards].map(r => r.npc_id).filter((n): n is number => !!n))];
+  const scriptNpcName = new Map<number, string>();
+  if (scriptNpcIds.length) {
+    const { data: sn } = await sb.from('eqemu_npc_types').select('id, name').in('id', scriptNpcIds);
+    for (const r of ((sn ?? []) as { id: number; name: string }[])) scriptNpcName.set(r.id, deUnderscore(r.name));
+  }
+  const scriptZoneShorts = [...new Set([...scriptLoot, ...rewards].map(r => r.zone_short))];
+  const scriptZoneLabel = new Map<string, string>();
+  if (scriptZoneShorts.length) {
+    const { data: sz } = await sb.from('eqemu_zone').select('short_name, long_name').in('short_name', scriptZoneShorts);
+    for (const r of ((sz ?? []) as { short_name: string; long_name: string | null }[])) scriptZoneLabel.set(r.short_name, r.long_name || r.short_name);
+  }
+  const handInIds = [...new Set(rewards.flatMap(r => (r.gives_for ?? []).map(g => g.item_id)))];
+  const handInNames = new Map<number, string>();
+  if (handInIds.length) {
+    const { data: hi } = await sb.from('eqemu_items').select('id, name').in('id', handInIds);
+    for (const r of ((hi ?? []) as { id: number; name: string }[])) handInNames.set(r.id, r.name);
+  }
+  const scriptNpcLabel = (r: { npc_id: number | null; npc_name?: string | null }) =>
+    (r.npc_id && scriptNpcName.get(r.npc_id)) || r.npc_name || (r.npc_id ? `NPC #${r.npc_id}` : 'a zone script');
 
   // STR/STA/… are populated on every item and were never rendered: #8733 shows
   // STA 20 / WIS 15 on pqdi.cc and nothing here.
@@ -326,6 +352,46 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
         ) : <p className="text-dim text-xs">No drop sources in the mirror.</p>}
       </section>
 
+      {/* Given by script: the mob's script puts it on the corpse, outside the loot table. */}
+      {scriptLoot.length > 0 && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Given by script ({scriptLoot.length})</h2>
+          <ul className="text-sm space-y-1">
+            {scriptLoot.map((l, i) => (
+              <li key={i}>
+                <span className="text-text">
+                  {l.npc_id ? <Link href={`/db/npc/${l.npc_id}`} className="hover:text-blue hover:underline">{scriptNpcLabel(l)}</Link> : scriptNpcLabel(l)}
+                </span>
+                <span className="text-dim text-[11px] ml-2">{scriptZoneLabel.get(l.zone_short) ?? l.zone_short} · {l.script_ref}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Quest reward: scripts that hand this item out for a turn-in (literal ids only). */}
+      {rewards.length > 0 && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Quest reward ({rewards.length})</h2>
+          <ul className="text-sm space-y-1">
+            {rewards.map((r, i) => {
+              const give = handInLabel(r.gives_for, id => handInNames.get(id) || `#${id}`);
+              return (
+                <li key={i} className="border-b border-border/30 pb-1">
+                  <span className="text-text">
+                    {r.npc_id ? <Link href={`/db/npc/${r.npc_id}`} className="hover:text-blue hover:underline">{scriptNpcLabel(r)}</Link> : scriptNpcLabel(r)}
+                  </span>
+                  {give ? <> <span className="text-dim">takes</span> <span className="text-text">{give}</span></> : null}
+                  {r.choice && <span className="text-dim text-[11px]"> (one of several)</span>}
+                  <span className="text-dim text-[11px] ml-2">{scriptZoneLabel.get(r.zone_short) ?? r.zone_short}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-dim text-[11px] mt-2">Read from the server&apos;s quest scripts; the hand-in is the nearest check above the reward.</p>
+        </section>
+      )}
+
       {/* Seen in our raids — kills our raids have actually seen drop this, beside the published table. */}
       {seenDrops.length > 0 && (
         <section className="bg-panel border border-border rounded-lg p-4">
@@ -343,7 +409,7 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
                   <tr key={s.npc_id} className="border-t border-border/40">
                     <td className="py-1 pr-3 text-text">
                       {s.npc_name || `NPC #${s.npc_id}`}
-                      {!s.in_published && <span className="ml-2 text-[11px] text-gold">not in the published loot table</span>}
+                      {!s.in_published && <span className="ml-2 text-[11px] text-gold">not in DB</span>}
                     </td>
                     <td className="py-1 pr-3 text-dim">{zoneName(s.npc_id)}</td>
                     <td className="py-1 pr-3 text-right tabular-nums text-text">

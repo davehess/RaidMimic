@@ -6435,6 +6435,14 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   body-specific numbers blanked (`mob.body_pick`; `mobinfo.html` prints "(L55 or L63)"). The spawn id is not used: it names an
   entity, not a catalog row. Test: `test/mob-same-name-bodies.test.js`.
 
+### Script tables, mob-page seen drops, quest rewards (beta, 2026-11-19)
+- Tables `eqemu_script_spawns` / `eqemu_script_loot` / `eqemu_script_rewards` (migration `20261119140000`, committed, not yet applied) hold what the
+  quest scripts do outside the mirror. Source `data/quest-scripted.json` (`scripts/quest-scripted-extract.js`, `--merge-into` adds the `rewards`
+  section); loader `scripts/sync-script-tables.js` upserts and removes rows of an older `source_sha`. Reads: `web/lib/scriptData.ts`.
+- `/db/npc/[id]`: Spawned by script, Given by script, "Seen dropping in our raids" (RPC `npc_seen_drops`, migration `20261119140100`; same bases and
+  guild pairing as the item version, names matched to `eqemu_items` by exact name) with a "not in DB" tag when neither `eqemu_npc_drops` nor
+  `eqemu_script_loot` has the pair, and Quest rewards. `/db/item/[id]` gets Given by script and Quest reward. All fail soft. Test: `test/script-tables.test.js`.
+
 ### Seen drops on item pages (beta, 2026-11-19)
 - `/db/item/[id]` "Seen in our raids" (`web/lib/seenDrops.ts`, RPC `item_seen_drops`, migration `20261119120000`, committed, not yet applied): mobs our
   raids saw drop the item, with counts and last date, tagged "not in the published loot table" when `eqemu_npc_drops` lacks the pair.
