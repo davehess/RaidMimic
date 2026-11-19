@@ -437,6 +437,14 @@ client.once(Events.ClientReady, async (readyClient) => {
   await registerCommands();
   startSpawnChecker(readyClient);
   scheduleMidnightSummary(readyClient);
+  // Stalled Raid Mimic guilds -> DM the site owner(s), at most hourly, once per guild (utils/platformStalls.js). Silent when
+  // SITE_OWNER_DISCORD_IDS is unset.
+  try {
+    const _stalls = require('./utils/platformStalls');
+    const _stallPass = () => { if (_stalls.ownerIds().length) _stalls.runStallCheck({ supabase: require('./utils/supabase'), client: readyClient }).catch(() => {}); };
+    setTimeout(_stallPass, 2 * 60_000).unref?.();
+    setInterval(_stallPass, 60 * 60_000).unref?.();
+  } catch { /* optional */ }
   const { startWolfpackMembersSync } = require('./utils/wolfpackMembers');
   startWolfpackMembersSync(readyClient);
   startOpenDkpSync();
@@ -25355,6 +25363,8 @@ function _voiceReportRoutes() {
 }
 
 const httpServer = http.createServer(async (req, res) => {
+  // Data out by route (utils/routeStats.js): wraps res.write/res.end once, in memory only, so every reply is counted.
+  require('./utils/routeStats').instrument(req, res);
   // Per-IP limiter FIRST: over the limit costs one 429 and no further work. /health is exempt (Railway's healthcheck).
   if (!/^\/healthz?(?:[?#]|$)/.test(req.url || '')) {
     const _ip = clientIp(req);
@@ -26572,6 +26582,21 @@ const httpServer = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ error: 'internal error' }));
       }
     }
+  }
+
+  // Platform admin (the guild lead, 2026-11-18): read-only counters + bot health for web /admin/platform. Signed with an
+  // HMAC of PLATFORM_STATS_SECRET (utils/platformStatsAuth.js; unset = always 401); anything else gets a bare 401.
+  if (req.method === 'GET' && /^\/api\/platform\/stats(?:[?#]|$)/.test(req.url || '')) {
+    const okSig = require('./utils/platformStatsAuth').verify(String(req.headers['x-platform-sig'] || ''), process.env.PLATFORM_STATS_SECRET);
+    if (!okSig) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"error":"unauthorized"}'); }
+    let breaker = null, mem = null;
+    try { breaker = require('./utils/supabase').breakerState(); } catch { /* */ }
+    try { mem = require('./utils/memStats').memSnapshot(); } catch { /* */ }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({
+      routes: require('./utils/routeStats').report(),
+      bot: { version: require('./package.json').version, uptime_sec: Math.round(process.uptime()), mem, breaker },
+    }));
   }
 
   // JSON health with resilience state (#73/#58) — Supabase circuit-breaker
