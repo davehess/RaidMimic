@@ -40,6 +40,19 @@ describe('quest-scripted catalog route', () => {
     } finally { srv.close(); }
   });
 
+  it('a new file mtime (every Docker build) does not change the ETag when the data is the same', () => {
+    const { load } = require('../utils/questScriptedCatalog');
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qs-'));
+    const f = path.join(dir, 'quest-scripted.json');
+    fs.writeFileSync(f, JSON.stringify({ source: { read_at: '2026-11-19' }, spawns: [{ npc_id: 1 }], loot: [] }));
+    fs.utimesSync(f, new Date('2026-01-01'), new Date('2026-01-01'));
+    const a = load(f).etag;
+    fs.utimesSync(f, new Date('2026-06-01'), new Date('2026-06-01'));
+    expect(load(f).etag).toBe(a);
+    expect(JSON.parse(load(f).body).fetched_at).toBe('2026-11-19T00:00:00.000Z');
+  });
+
   it('503s without crashing when the file is missing', async () => {
     const srv = http.createServer((req, res) => handle(req, res, '/nonexistent/quest-scripted.json')).listen(0);
     try {

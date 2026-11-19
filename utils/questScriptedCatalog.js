@@ -19,7 +19,9 @@ function load(file = FILE) {
   const d = readJsonFresh(file);
   const body = JSON.stringify({
     version: 1,
-    fetched_at: st.mtime.toISOString(),
+    // The dataset's own read date, not the file's mtime: a Docker build resets mtime, so every deploy would
+    // change the ETag and make every Mimic re-download ~0.9 MB of unchanged data.
+    fetched_at: (d.source && d.source.read_at) ? new Date(d.source.read_at).toISOString() : st.mtime.toISOString(),
     count: d.spawns.length,
     entries: d.spawns,
     script_refs: d.script_refs || [],
