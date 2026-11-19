@@ -121,7 +121,8 @@ describe('every link lands somewhere', () => {
     const walk = (dir, rel = '') => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
       e.isDirectory() ? walk(path.join(dir, e.name), path.join(rel, e.name))
         : e.name === 'page.tsx' ? ['/admin' + (rel ? '/' + rel.split(path.sep).join('/') : '')] : []);
-    const pages = walk(ADMIN).filter(p => p !== '/admin' && p !== '/admin/who');
+    // /admin/platform is the site owner's page (SITE_OWNER_DISCORD_IDS), deliberately not in the officers' sidebar.
+    const pages = walk(ADMIN).filter(p => p !== '/admin' && p !== '/admin/who' && p !== '/admin/platform');
     expect(pages.length).toBeGreaterThanOrEqual(30);
     for (const p of pages) expect(listed.has(p), `${p} is not in the sidebar`).toBe(true);
   });

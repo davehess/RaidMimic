@@ -29,6 +29,12 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.8': [
+    'Internal: the bot counts its own web requests and slow database reads for the site owner\'s platform page, and messages the site owner once when a new Raid Mimic guild is stuck at setup for a day.',
+  ],
+  '4.1.7': [
+    'Internal: the shared map only takes a raider\'s target from that raider\'s own characters, and a death time can no longer be set in the future.',
+  ],
   '4.1.6': [
     'Buff queue: a raider who died in the last 30 minutes and is still nearly bare goes to the top (after same-zone) to be rebuffed.',
     'Internal: the buff queue is sent again only when something changed, the raid roster is saved every 6 seconds instead of 2, and the spell and item catalogs stop re-downloading when nothing changed.',
