@@ -38073,6 +38073,7 @@ function startWebDashboard(port) {
       // files by /api/local/*. Read-only, never uploads.
       if (req.url && (req.url === '/local' || req.url.indexOf('/local/') === 0 || req.url.indexOf('/local?') === 0)) return _serveLocalSite(req, res);
       if (req.url && req.url.split('?')[0] === '/api/local/inventory') return _handleLocalInventory(req, res);
+      if (_localQuestScriptedRoute(req, res)) return;
       if (req.url && req.url.split('?')[0] === '/api/local/pop-flags') return _handleLocalPopFlags(req, res);
       if (req.url && req.url.split('?')[0] === '/api/local/account-list') return _handleLocalAccountList(req, res);
       if (req.url === '/api/state') {
@@ -48426,6 +48427,84 @@ function fetchItemCatalog({ botUrl, token }) {
       req.end();
     } catch (err) { console.warn('[item-catalog] setup error:', err && err.message); resolve(); }
   });
+}
+
+// ── Quest-scripted spawns and loot (2026-11-19) ──────────────────────────────────────────────────────────────────
+// What the server's quest scripts spawn and drop that the eqemu_* mirror cannot show (bot data/quest-scripted.json).
+// Same pattern as the item catalog: the installer bundles logsync.quest-scripted.json next to the agent (seeded by
+// Mimic), boot reads it, a daily ETag refresh from the bot's PUBLIC catalog route (no sign-in) replaces it, and a
+// failed or missing copy leaves the last good one in place. Local pages read it at GET /api/local/quest-scripted.
+const QUEST_SCRIPTED_FILE = path.join(__dirname, 'logsync.quest-scripted.json');
+let _questScripted = null;      // { fetched_at, etag, entries, ...the dataset's other sections }
+let _questScriptedBody = '';    // serialized once, served as is
+
+function _questScriptedSet(raw) {
+  _questScripted = raw;
+  _questScriptedBody = JSON.stringify(raw);
+}
+
+function loadQuestScriptedFromDisk(file) {
+  try {
+    const f = file || QUEST_SCRIPTED_FILE;
+    if (!fs.existsSync(f)) return false;
+    const raw = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (!raw || !Array.isArray(raw.entries)) return false;
+    _questScriptedSet(raw);
+    console.log(`[quest-scripted] loaded ${raw.entries.length} scripted spawns from disk (cached ${raw.fetched_at || '?'})`);
+    return true;
+  } catch (err) {
+    console.warn('[quest-scripted] disk load failed:', err && err.message);
+    return false;
+  }
+}
+
+function fetchQuestScripted({ botUrl, file }) {
+  const url = botUrl && botUrl.replace(/\/api\/agent\/[^/?]*(\?.*)?$/, '/api/public/catalog/quest-scripted');
+  if (!url || url === botUrl) return Promise.resolve();
+  const target = file || QUEST_SCRIPTED_FILE;
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const mod = u.protocol === 'https:' ? https : http;
+      const headers = { 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` };
+      if (_questScripted && _questScripted.etag) headers['If-None-Match'] = _questScripted.etag;
+      const req = mod.request({
+        method: 'GET', hostname: u.hostname, port: u.port,
+        path: u.pathname + u.search, headers, timeout: 60000,
+      }, (res) => {
+        if (res.statusCode !== 200) { res.resume(); return resolve(); }   // 304 = unchanged; anything else keeps the copy
+        const etag = (res.headers && res.headers.etag) || null;
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            if (!Array.isArray(data.entries) || !data.entries.length) return resolve();
+            data.etag = etag;
+            _questScriptedSet(data);
+            try {
+              fs.writeFileSync(target + '.tmp', _questScriptedBody);
+              fs.renameSync(target + '.tmp', target);
+            } catch (e) { void e; /* disk cache best-effort */ }
+            console.log(`[quest-scripted] fetched ${data.entries.length} scripted spawns from bot`);
+          } catch (err) { console.warn('[quest-scripted] parse failed:', err && err.message); }
+          resolve();
+        });
+      });
+      req.on('error',   () => resolve());
+      req.on('timeout', () => { req.destroy(); resolve(); });
+      req.end();
+    } catch (err) { console.warn('[quest-scripted] setup error:', err && err.message); resolve(); }
+  });
+}
+
+// GET /api/local/quest-scripted -> the dataset, or { loaded:false, entries:[] } when this install has no copy.
+// Read-only; the dashboard server's one guard (_localGuardBlock) has already run.
+function _localQuestScriptedRoute(req, res) {
+  if (!req || req.method !== 'GET' || !req.url || req.url.split('?')[0] !== '/api/local/quest-scripted') return false;
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(_questScripted ? _questScriptedBody : '{"loaded":false,"entries":[]}');
+  return true;
 }
 
 // Local item search for the wishlist picker. No network, no database.
@@ -66465,6 +66544,7 @@ async function main() {
     _loadSpellCatalogFromDisk();
     _loadItemClickiesFromDisk();
     loadItemCatalogFromDisk();
+    loadQuestScriptedFromDisk();
   }
   // Restore the Pet tracker's in-memory state (last /pet health, observed buff
   // landings, running combat stats) so a Mimic restart or LD reconnect brings
@@ -66476,6 +66556,7 @@ async function main() {
     fetchSpellCatalog({ botUrl, token }).catch(() => {});
     fetchItemClickies({ botUrl, token }).catch(() => {});
     fetchItemCatalog({ botUrl, token }).catch(() => {});
+    fetchQuestScripted({ botUrl }).catch(() => {});
     startReporterHeartbeat();   // #72 — poll the bot for our upload roles (fail-open)
     setInterval(() => { try { uploadRollSets(); } catch {} }, 60_000).unref();   // #91 off-night roll capture
     setInterval(() => { try { uploadLooted(); } catch {} }, 60_000).unref();     // #91 looted-line capture
@@ -66486,6 +66567,7 @@ async function main() {
       fetchSpellCatalog({ botUrl, token }).catch(() => {});
       fetchItemClickies({ botUrl, token }).catch(() => {});
       fetchItemCatalog({ botUrl, token }).catch(() => {});
+      fetchQuestScripted({ botUrl }).catch(() => {});
     }, 24 * 60 * 60 * 1000).unref();
   }
   // Operator's declared main (if the launcher passed --character) — used to
@@ -71341,6 +71423,9 @@ async function _partyRoute(req, res) {
 
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
+  // Quest-scripted spawns and loot (2026-11-19): see the block above searchItemCatalog.
+  loadQuestScriptedFromDisk, fetchQuestScripted, _localQuestScriptedRoute, _questScriptedForTest: () => _questScripted,
+  _questScriptedResetForTest: () => { _questScripted = null; _questScriptedBody = ''; },
   // Raid Mimic party (2026-11-15): see the block above module.exports.
   _buffQueueTtl, _buffQueueFast, _maybeUploadRaidRoster, _resetBuffQueueFastForTest: () => { _buffQueueFastUntil = 0; },
   MiniWebSocket, createPartyClient, partyBuildPub, partyMembersList, _partyMembers, _partyShareState, _setRaidPipeForTest: (v) => { _lastRaidPipe = v; }, PARTY_AUTO_SOLO_MS, PARTY_MAX_MEMBERS, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
