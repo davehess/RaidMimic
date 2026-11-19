@@ -520,7 +520,7 @@ function drawPane(p: Pane, o: PaneArgs): boolean {
       ctx.stroke();
       continue;
     }
-    const r = Math.min(16, 6 + 2 * Math.sqrt(tg.n));
+    const r = Math.min(8, 4 + Math.sqrt(tg.n));
     ctx.strokeStyle = BG;
     ctx.lineWidth = 1.5;
     diamond(ctx, px, py, r);
