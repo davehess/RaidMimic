@@ -7,12 +7,18 @@
 const fs = require('fs');
 const path = require('path');
 
-const root = process.argv[2];
-const out = process.argv[3];
+// --merge-into <quest-scripted.json>: write only the `rewards` section (and its notes) into that
+// already-joined file instead of the raw dump, so the spawn/loot sections the audit joined stay as they are.
+const argv = process.argv.slice(2);
+const mergeAt = argv.indexOf('--merge-into');
+const mergeInto = mergeAt >= 0 ? argv[mergeAt + 1] : null;
+if (mergeAt >= 0) argv.splice(mergeAt, 2);
+const root = argv[0];
+const out = argv[1];
 // optional 3rd arg: {zone_dir: {id}} so ids written in a script that fall in its own zone's npc range
 // (zoneid*1000 .. +999) are listed as references (catches table-driven spawns the call scan cannot resolve)
-const zones = process.argv[4] ? JSON.parse(fs.readFileSync(process.argv[4], 'utf8')) : {};
-if (!root || !out) { console.error('usage: quest-scripted-extract.js <quests-dir> <out.json>'); process.exit(2); }
+const zones = argv[2] ? JSON.parse(fs.readFileSync(argv[2], 'utf8')) : {};
+if (!root || !out) { console.error('usage: quest-scripted-extract.js <quests-dir> <out.json> [zones.json] [--merge-into quest-scripted.json]'); process.exit(2); }
 
 function walk(dir, acc) {
   for (const n of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -114,6 +120,12 @@ function enclosing(lines, line) {
 
 const files = walk(root, []).sort();
 const spawns = [], loot = [], tables = [], refs = [], overrides = [];
+// Turn-in rewards: `X:QuestReward(npc, copper, silver, gold, platinum, item, exp)` or `QuestReward(npc, {..})`,
+// and `X:SummonCursorItem(id)`. Only literal ids/amounts are kept; the rest is counted in rewardNotes.
+const rewards = [];
+const rewardNotes = { calls: 0, computed_item: 0, computed_coin: 0, computed_exp: 0, turnin_items_not_literal: 0, no_turnin_found: 0, not_a_per_npc_file: 0 };
+const COIN = ['copper', 'silver', 'gold', 'platinum'];
+const litNum = (t) => { t = (t || '').trim(); return NUM.test(t) ? Number(t) : null; };
 for (const f of files) {
   const rel = path.relative(root, f).split(path.sep).join('/');
   const zone = rel.split('/')[0];
@@ -168,6 +180,70 @@ for (const f of files) {
     });
   }
 
+  // The script's own npc: <zone>/<name>.lua is a per-npc script (a bare number is the npc id itself).
+  // Anything deeper (encounters/, items/) or a zone-level file names no single npc.
+  const rparts = rel.split('/');
+  const rbase = rparts[rparts.length - 1].replace(/\.lua$/i, '');
+  const perNpc = rparts.length === 2 && !/^(player|global_npc|global_player|script_init|zone|init)$/i.test(rbase);
+  const fileNpc = !perNpc ? { id: null, name: null }
+    : /^\d+$/.test(rbase) ? { id: Number(rbase), name: null }
+    : { id: null, name: rbase.replace(/^#/, '').replace(/_/g, ' ') };
+
+  // `check_turn_in(e.self, e.trade, {item1 = N, item2 = N})` calls, so each reward can say what hands it out
+  const turnins = [];
+  const reTi = /\bcheck_turn_in\s*\(/g;
+  while ((m = reTi.exec(s))) {
+    const body = callBody(s, m.index + m[0].length - 1); if (body === null) continue;
+    const line = lineOf(s, m.index);
+    const items = new Map(); let literal = true;
+    for (const it of body.matchAll(/\bitem\d+\s*=\s*([^,}\s]+)/g)) {
+      const v = resolve(it[1], consts, line);
+      if (v === null) literal = false; else if (v > 0) items.set(v, (items.get(v) || 0) + 1);
+    }
+    turnins.push({ line, fn: enclosing(lines, line), items: [...items].map(([item_id, qty]) => ({ item_id, qty })), literal });
+  }
+
+  const reQ = /\b(?:\w+[:.])?(QuestReward|SummonCursorItem)\s*\(/g;
+  while ((m = reQ.exec(s))) {
+    const body = callBody(s, m.index + m[0].length - 1); if (body === null) continue;
+    const a = splitArgs(body); const line = lineOf(s, m.index);
+    rewardNotes.calls++;
+    const rec = { zone, npc_id: fileNpc.id, npc_name: fileNpc.name, kind: m[1] === 'QuestReward' ? 'reward' : 'cursor',
+                  item_ids: [], choice_of: null, exp: null, coin: null, script: rel + ':' + line, gives_for: null };
+    let itemExpr = null, expExpr = null; const coinExpr = {};
+    if (m[1] === 'SummonCursorItem') itemExpr = a[0];
+    else if ((a[1] || '').trim().startsWith('{')) {
+      const inner = a[1].trim().replace(/^\{/, '').replace(/\}$/, '');
+      for (const kv of splitArgs(inner)) {
+        const eq = kv.match(/^\s*(\w+)\s*=\s*([\s\S]*)$/); if (!eq) continue;
+        const [, k, v] = eq;
+        if (COIN.includes(k)) coinExpr[k] = v; else if (k === 'exp') expExpr = v;
+        else if (k === 'itemid') itemExpr = v;
+        else if (k === 'items') { const ids = splitArgs(v.trim().replace(/^\{/, '').replace(/\}$/, '')).map(t => resolve(t, consts, line));
+          if (ids.length && ids.every(x => x !== null)) { rec.item_ids = ids; } else rewardNotes.computed_item++; }
+      }
+    } else {
+      COIN.forEach((k, i) => { if (a[i + 1] !== undefined) coinExpr[k] = a[i + 1]; });
+      itemExpr = a[5]; expExpr = a[6];
+    }
+    if (itemExpr && itemExpr.trim() !== '0') {
+      const r = resolveIds(itemExpr.trim(), consts, line);
+      if (r.ids) { rec.item_ids = r.ids.filter(v => v > 0); rec.choice_of = r.choice ? rec.item_ids : null; } else rewardNotes.computed_item++;
+    }
+    if (expExpr != null && expExpr.trim() !== '0') { const v = litNum(expExpr); if (v === null) rewardNotes.computed_exp++; else rec.exp = v; }
+    for (const k of COIN) {
+      if (coinExpr[k] === undefined || coinExpr[k].trim() === '0') continue;
+      const v = litNum(coinExpr[k]);
+      if (v === null) rewardNotes.computed_coin++; else (rec.coin = rec.coin || {})[k] = v;
+    }
+    if (!perNpc) rewardNotes.not_a_per_npc_file++;
+    const fn = enclosing(lines, line);
+    let ti = null;
+    for (const t of turnins) if (t.fn === fn && t.line <= line && line - t.line <= 80) ti = t;
+    if (ti) { if (!ti.literal) rewardNotes.turnin_items_not_literal++; rec.gives_for = ti.items; } else rewardNotes.no_turnin_found++;
+    if (rec.item_ids.length || rec.exp !== null || rec.coin) rewards.push(rec);
+  }
+
   // table-driven loot: a file whose AddItem argument is a lookup ([npc] = item or [npc] = { item, count })
   if (loot.some(l => l.script.startsWith(rel + ':') && l.item_id === null && /^[A-Za-z_]\w*(\[|$)/.test(l.item_expr || ''))) {
     let tbl = null;
@@ -180,5 +256,22 @@ for (const f of files) {
     });
   }
 }
-fs.writeFileSync(out, JSON.stringify({ files: files.length, spawns, loot, tables, refs, overrides }));
-console.error('files', files.length, 'spawn calls', spawns.length, 'loot calls', loot.length);
+if (mergeInto) {
+  const d = JSON.parse(fs.readFileSync(mergeInto, 'utf8'));
+  d.rewards = rewards;
+  const note = 'rewards: literal ids and amounts only. Not literal (counted, not listed): '
+    + `${rewardNotes.computed_item} item args, ${rewardNotes.computed_coin} coin args, ${rewardNotes.computed_exp} exp args. `
+    + `${rewardNotes.no_turnin_found} of ${rewardNotes.calls} calls have no check_turn_in earlier in the same handler (gives_for null); `
+    + `${rewardNotes.turnin_items_not_literal} turn-in checks carry a non-literal item. `
+    + `${rewardNotes.not_a_per_npc_file} calls sit in a file that names no single npc (encounters/, items/, zone-level). `
+    + 'gives_for is the nearest check_turn_in above the call in the same function, not a proof the reward needs exactly that hand-in.';
+  d.notes = (d.notes || []).filter(n => !String(n).startsWith('rewards:')).concat(note);
+  // Same layout the file already has: one array element per line, objects compact.
+  const body = Object.entries(d).map(([k, v]) => Array.isArray(v)
+    ? `  ${JSON.stringify(k)}: [\n${v.map(x => '    ' + JSON.stringify(x)).join(',\n')}\n  ]`
+    : `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(',\n');
+  fs.writeFileSync(mergeInto, `{\n${body}\n}\n`);
+} else {
+  fs.writeFileSync(out, JSON.stringify({ files: files.length, spawns, loot, tables, refs, overrides, rewards, rewardNotes }));
+}
+console.error('files', files.length, 'spawn calls', spawns.length, 'loot calls', loot.length, 'rewards', rewards.length, JSON.stringify(rewardNotes));
