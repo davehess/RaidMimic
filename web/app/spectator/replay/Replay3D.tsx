@@ -464,7 +464,9 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
           bossDot.setMatrixAt(nb++, tmpM.compose(tmpV, tmpQ, tmpS.set(r, r, r)));
           continue;
         }
-        const r = radiusAt(tmpV) * 1.8 * (1 + Math.min(t.n, 8) * 0.18);
+        // About a raider dot, a little bigger per raider on it (the guild lead, 2026-11-19: "the diamonds for the
+        // targets are huge and can't really be seen"); the name label carries the rest.
+        const r = radiusAt(tmpV) * 1.05 * (1 + Math.min(t.n, 8) * 0.05);
         tgt.setMatrixAt(nt++, tmpM.compose(tmpV, tmpQ, tmpS.set(r, r * 1.5, r)));
       }
       tgt.count = nt;
