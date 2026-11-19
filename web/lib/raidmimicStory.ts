@@ -98,12 +98,12 @@ export function priceLabel(price: number | null, per = 'month'): string {
 /** The two Pro · Guild sizes, list price first, for every page that states a price. */
 export const GUILD_PRICES = [
   { id: 'guild', was: GUILD_PRICE, now: EARLY_GUILD_PRICE, label: `last ${GUILD_HISTORY_DAYS} days of raids` },
-  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: 'every raid kept' },
+  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: 'every raid and its full replay, stored and hosted' },
 ] as const;
 /** One line of text for prose: "$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10) with every raid kept". */
 export const GUILD_PRICE_SENTENCE =
   `$${EARLY_GUILD_PRICE} a month (early bird; $${GUILD_PRICE} list) with the last ${GUILD_HISTORY_DAYS} days of raids, ` +
-  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with every raid kept`;
+  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with every raid and its full replay stored and hosted`;
 
 export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string; prices?: typeof GUILD_PRICES }
 export const TIERS = (): Tier[] => [

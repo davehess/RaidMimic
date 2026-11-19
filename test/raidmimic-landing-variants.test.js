@@ -121,7 +121,7 @@ describe('the money', () => {
     expect(g.prices[0].label).toBe(`last ${S.GUILD_HISTORY_DAYS} days of raids`);
     expect(g.points).toContain('Merged parses for every fight');
     expect(g.note).toBe('Early-bird prices. Monthly only.');   // no free month since 2026-11-17 (§612)
-    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10 list) with every raid kept');
+    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10 list) with every raid and its full replay stored and hosted');
     expect(t.find(x => x.id === 'free').price).toBe('$0');
   });
   it('there is no individual tier or price (DECISIONS §552), and no live pricing copy sells storage or "costs us money"', () => {
