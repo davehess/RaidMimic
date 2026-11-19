@@ -22,7 +22,7 @@ AS $$
     GROUP BY lo.npc_id
   ),
   links AS (
-    SELECT c.ts
+    SELECT c.ts, c.guild_id
     FROM chat_messages c
     WHERE c.channel = 'raid'
       AND p_item_name IS NOT NULL AND length(p_item_name) > 0
@@ -35,12 +35,14 @@ AS $$
     JOIN LATERAL (
       SELECT e2.id, e2.npc_id, e2.ended_at
       FROM encounters e2
-      WHERE e2.ended_at <= l.ts AND e2.ended_at >= l.ts - interval '45 seconds' AND e2.npc_id IS NOT NULL
+      WHERE e2.guild_id = l.guild_id   -- a link pairs only with a kill of the same guild
+        AND e2.ended_at <= l.ts AND e2.ended_at >= l.ts - interval '45 seconds' AND e2.npc_id IS NOT NULL
       ORDER BY e2.ended_at DESC LIMIT 1
     ) e ON true
     WHERE NOT EXISTS (
       SELECT 1 FROM encounters e3
-      WHERE e3.started_at > e.ended_at AND e3.started_at <= l.ts AND e3.id <> e.id
+      WHERE e3.guild_id = l.guild_id
+        AND e3.started_at > e.ended_at AND e3.started_at <= l.ts AND e3.id <> e.id
     )
   ),
   prob AS (

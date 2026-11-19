@@ -358,8 +358,7 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
             </table>
           </div>
           <p className="text-dim text-[11px] mt-2">
-            Plain counts are awards that named the mob. Probable = linked in raid chat within 45 s of that one kill; the
-            corpse is not confirmed.
+            Probable: linked in raid chat within 45 s of that kill, corpse not confirmed.
           </p>
         </section>
       )}
