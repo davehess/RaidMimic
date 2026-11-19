@@ -53,6 +53,7 @@ export default function LocalReplay() {
   const [err, setErr] = useState<string | null>(null);
   const [nightKey, setNightKey] = useState<string | null>(null);
   const [sessionFrom, setSessionFrom] = useState<number | null>(null);
+  const [seekReq, setSeekReq] = useState<{ t: number; n: number } | null>(null);
   const [coded, setCoded] = useState<{ at: number; code: string }[]>([]);
 
   const load = useCallback(() => {
@@ -73,6 +74,25 @@ export default function LocalReplay() {
     return () => window.removeEventListener('focus', load);
   }, [load]);
 
+  // "Watch in replay" on a death (HowIDied) asks for a time: `?at=<epoch ms>` in the address, or the event while the page is open.
+  const [wantAt, setWantAt] = useState<number | null>(null);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    const read = () => { const v = Number(new URLSearchParams(window.location.search).get('at')); if (Number.isFinite(v) && v > 0) setWantAt(v); };
+    const onEvt = (e: Event) => { const v = Number((e as CustomEvent).detail); if (Number.isFinite(v) && v > 0) setWantAt(v); };
+    read();
+    window.addEventListener('wp-replay-at', onEvt);
+    return () => window.removeEventListener('wp-replay-at', onEvt);
+  }, []);
+  // Once the nights are in, open the session that holds that time and move the playhead there (one request, then forgotten).
+  useEffect(() => {
+    if (wantAt == null || !nights) return;
+    const hit = nights.flatMap(n => n.sessions.map(s => ({ n, s }))).find(({ s }) => wantAt >= s.from && wantAt < s.to);
+    if (hit) { setMissing(false); setNightKey(hit.n.night_key); setSessionFrom(hit.s.from); setSeekReq(r => ({ t: wantAt, n: (r?.n ?? 0) + 1 })); }
+    else setMissing(true);
+    setWantAt(null);
+  }, [wantAt, nights]);
+
   const night = useMemo(() => nights?.find(n => n.night_key === nightKey) ?? nights?.[0] ?? null, [nights, nightKey]);
   const session = useMemo(() => {
     if (!night) return null;
@@ -83,12 +103,12 @@ export default function LocalReplay() {
   const nightCodes = night ? codesIn(Date.parse(night.first), Date.parse(night.last) + MINUTE_MS) : [];
   const sessionCodes = session ? codesIn(session.from, session.to) : [];
   const bounded = useMemo<BoundedReplay | null>(
-    () => (night && session ? { night: sessionNight(night, session), urls: localUrls(), flat: true } : null),
-    [night, session]);
+    () => (night && session ? { night: sessionNight(night, session), urls: localUrls(), flat: true, seek: seekReq } : null),
+    [night, session, seekReq]);
 
   return (
     <div className="space-y-4">
-      <section className="bg-panel border border-border rounded-lg p-6">
+      <section id="my-replay" className="bg-panel border border-border rounded-lg p-6">
         <div className="flex items-start gap-3">
           <h2 className="text-2xl text-gold mb-1"><span aria-hidden>🎬 </span>My replay</h2>
           <button type="button" onClick={load}
@@ -133,6 +153,7 @@ export default function LocalReplay() {
         )}
       </section>
 
+      {missing && <p className="rounded-md border border-border bg-panel p-4 text-sm text-orange">Mimic has no recording of that moment (Zeal was not connected).</p>}
       {err && (
         <p className="rounded-md border border-border bg-panel p-4 text-sm text-orange">
           Could not read the recording: {err}. Is Mimic running?

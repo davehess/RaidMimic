@@ -21030,7 +21030,12 @@ tr:hover td { background:#1f242c }
    right-aligned numbers (so every value looked one column to the right of its header). */
 table.wp-abtbl { table-layout:fixed; }
 table.wp-abtbl th:first-child, table.wp-abtbl td:first-child { width:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-table.wp-abtbl th.wp-r, table.wp-abtbl td.wp-r { width:76px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.wp-abgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px 14px; margin-top:6px; align-items:start; }
+.wp-abgrid > div:not(.wp-abcard) { grid-column:1/-1; }
+.wp-abcard { border:1px solid var(--border); border-radius:6px; padding:6px 8px 4px; min-width:0; }
+.wp-abcard h3 { margin:0 0 4px; font-size:13px; text-transform:none; }
+.wp-abcard tr.dim td, .wp-abcard tr.dim td.num { color:var(--dim); }
+table.wp-abtbl th.wp-r, table.wp-abtbl td.wp-r { width:56px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 table.wp-abtbl th.wp-r { color:var(--dim); }
 /* wpMoreList: "▾ N more" row with a gentle pulsing underline; expands in place. */
 .wp-more-btn { display:block; width:100%; position:relative; background:transparent; border:0; color:var(--blue,#58a6ff); font:inherit; font-size:12px; text-align:left; padding:4px 8px 6px; cursor:pointer; }
@@ -24540,6 +24545,33 @@ function buildHealersHtml(s) {
   return h;
 }
 
+// Top Abilities: split one player's { name: {count,total} } into real abilities (named specials, spells,
+// procs), ONE folded plain-melee total, and damage-shield rows. Class skills (kick, bash, backstab, frenzy,
+// the monk/rogue multi-word ones) are NOT plain verbs, they stay abilities. \`dsNames\` are this player's known
+// damage-shield sources. Sorting breaks ties by name so the HTML is byte-stable across polls.
+const WP_PLAIN_MELEE = new Set(['hit','slash','crush','pierce','punch','strike','bite','claw','gore','maul','slam','smash',
+  'peck','gnaw','sting','trample','snap','stomp','chomp','swing','tear','rend','spit','swipe','buffet','thrash','mangle',
+  'pummel','whip','tail-whip','jab','chop','slice','hack','thrust','gouge','lash','sweep','stab','rap','smite','bludgeon',
+  'crunch','nick','tail-slap','tail-swipe','tail-thrash']);
+const WP_DS_NAME_RX = /^(thorns?|thistles?|brambles?|spikes?|barbs?|non-melee)\\b|\\b(shield of|coat|feedback|psalm)\\b/i;
+function wpAbilityGroups(top, dsNames) {
+  const ds = {};
+  (dsNames || []).forEach(function (n) { ds[String(n).toLowerCase()] = true; });
+  const abilities = [], shields = [];
+  let melee = null;
+  Object.keys(top || {}).forEach(function (k) {
+    const st = top[k], low = k.toLowerCase();
+    if (WP_PLAIN_MELEE.has(low)) {
+      melee = melee || { count: 0, total: 0 };
+      melee.count += st.count; melee.total += st.total;
+    } else if (ds[low] || WP_DS_NAME_RX.test(k)) shields.push([k, st]);
+    else abilities.push([k, st]);
+  });
+  const byTotal = function (a, b) { return (b[1].total - a[1].total) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); };
+  abilities.sort(byTotal); shields.sort(byTotal);
+  return { abilities: abilities, melee: melee, shields: shields };
+}
+
 function renderDeeps(s) {
   let h = '<div class="grid"><div class="card wide" data-index="DPS"><h2>💥 DEEPS — Damage Breakdown (this session)</h2>';
   h += '<div class="subtle">Per-attacker melee / spell / proc / DoT damage and crit stats. Names with spaces (NPCs) are filtered out.</div>';
@@ -24589,22 +24621,30 @@ function renderDeeps(s) {
   if (withAbilities.length > 0) {
     h += '<div class="card wide" data-index="Abilities"><h2>🎯 Top Abilities per Player</h2>';
     h += '<div class="subtle">Aggregated by named ability across the session. Hits, total damage, average.</div>';
-    // Each player is one block (heading + a fixed-layout table, see table.wp-abtbl), so every player's
-    // columns line up; the first 3 players show, the rest sit behind "N more players", and inside a block
-    // the top 5 abilities show with the remaining ones behind "N more".
-    const playerBlocks = withAbilities.slice(0, 10).map(function ([name, d]) {
-      const abs = Object.entries(d.topAbilities).sort((a, b) => b[1].total - a[1].total).slice(0, 8);
-      const abRows = abs.map(function ([ab, st]) {
+    // One compact card per player in a responsive grid (.wp-abgrid): real abilities first, plain melee
+    // verbs folded into one "melee" line, damage shields labelled as such. The first 8 cards show, the
+    // rest sit behind "N more players"; inside a card the top 5 abilities show, the rest behind "N more".
+    const dsAll = s.damageShield || {};
+    const playerBlocks = withAbilities.slice(0, 30).map(function ([name, d]) {
+      const g = wpAbilityGroups(d.topAbilities, Object.keys(dsAll[name] || {}));
+      const row = function (label, st, cls) {
         const avg = st.count > 0 ? Math.round(st.total / st.count) : 0;
-        const label = ab === 'non-melee' ? ab + ' (DS / DoT / procs)' : ab;
-        return '<tr><td title="' + esc(label) + '">' + esc(label) + '</td><td class="num wp-r"><b>' + fmtK(st.total) + '</b></td>' +
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td title="' + esc(label) + '">' + esc(label) + '</td><td class="num wp-r"><b>' + fmtK(st.total) + '</b></td>' +
                '<td class="num wp-r">' + st.count + '</td><td class="num wp-r">' + fmtK(avg) + '</td></tr>';
-      });
-      return '<div><h3 style="color:var(--orange);margin-top:14px">' + esc(name) + '</h3>' +
+      };
+      const abRows = g.abilities.map(function (a) { return row(a[0], a[1]); });
+      if (g.melee) abRows.push(row('melee', g.melee, 'dim'));
+      g.shields.forEach(function (a) { abRows.push(row(a[0] === 'non-melee' ? 'DS / DoT / procs' : a[0] + ' (DS)', a[1], 'dim')); });
+      if (!g.abilities.length && !g.shields.length && g.melee) {
+        const mavg = g.melee.count > 0 ? Math.round(g.melee.total / g.melee.count) : 0;
+        return '<div class="wp-abcard"><h3 class="name">' + esc(name) + '</h3><div class="dim" style="font-size:13px">melee only: <span class="num">' + fmtK(g.melee.total) +
+               '</span> over ' + g.melee.count + ' hits, avg ' + fmtK(mavg) + '</div></div>';
+      }
+      return '<div class="wp-abcard"><h3 class="name">' + esc(name) + '</h3>' +
              '<table class="wp-abtbl"><tr><th>Ability</th><th class="wp-r">Total</th><th class="wp-r">Hits</th><th class="wp-r">Avg</th></tr>' +
              wpMoreList('deeps|abil|' + name, abRows, { show: 5, cols: 4 }) + '</table></div>';
     });
-    h += wpMoreList('deeps|players', playerBlocks, { show: 3, noun: 'more players' });
+    h += '<div class="wp-abgrid">' + wpMoreList('deeps|players', playerBlocks, { show: 8, noun: 'more players' }) + '</div>';
     h += '</div>';
   }
 
@@ -68280,7 +68320,7 @@ function _deathNoteEvent(character, ev, o = {}) {
     _deathLast.set(cl, t);
     const st = _zealState[character] || _zealState[Object.keys(_zealState).find(n => n.toLowerCase() === cl)] || null;
     const story = _deathBuildStory({ character, at: t, killer: ev.attacker || null, hits: _deathHits.get(cl) || [],
-      frames: _deathFrames.filter(f => f.c === cl), zone: st ? _mapZoneShort(st.zone) : null, target: st && st.target_name ? String(st.target_name) : null });
+      frames: _deathFrames.filter(f => f.c === cl), zone: _deathZone(st, cl), target: st && st.target_name ? String(st.target_name) : null });
     // The id is the death time in ms; two of this PC's characters dying in the same second (one AE on a multibox) take the
     // next free millisecond instead of overwriting each other.
     try {
@@ -68293,6 +68333,12 @@ function _deathNoteEvent(character, ev, o = {}) {
     return story;
   }
   return null;
+}
+// The zone a death is filed under: the map's short name for Zeal's zone, else the zone's full name, else the last
+// "You have entered <zone>." line this character's log printed (a PC with no Zeal still has that line).
+function _deathZone(st, cl) {
+  const z = st ? _mapZoneShort(st.zone) || _zoneName(st.zone) : null;
+  return z || _relvLogZone.get(cl) || null;
 }
 function _deathStore() { return _localTrack.store || _localStoreDefault(); }
 // Pure: the story record from the buffers.
@@ -71304,7 +71350,7 @@ module.exports = {
   AGENT_VERSION,
   // Local store + own position recorder (2026-10-21): see the block above module.exports.
   _trackBackfillRun, _trackBackfillSeen, _applyTuningResponse, _localStore, _localStoreOpen, _localTrackFrame, _localTrackMinuteRow, _localTrackNightKey, _localTrackTick, _localTrackClose, _localTrackPush,
-  _localTrackNights, _localTrackWindow, _localTrackBosses, _localTrackMap, _mapPaths, _localTrackRoute, _localTrackSetStoreForTest, _deathNoteEvent, _deathNoteFrame, _deathBuildStory, _localDeathsRoute, _deathHits, _deathLast, _deathPrefsForTest: (p) => { stats.characterPrefs = p; }, _localRecorderStart, _localRecorderStop,
+  _localTrackNights, _localTrackWindow, _localTrackBosses, _localTrackMap, _mapPaths, _localTrackRoute, _localTrackSetStoreForTest, _deathNoteEvent, _deathNoteFrame, _deathBuildStory, _relvLogZone, _localDeathsRoute, _deathHits, _deathLast, _deathPrefsForTest: (p) => { stats.characterPrefs = p; }, _localRecorderStart, _localRecorderStop,
   // My parses on the local site + the guild's record kept beside it (2026-10-21): see the block above module.exports.
   _localParsesAnswer, _localParsesRoute, _localFights, _localFoldPlayers, _localParseDiff, _localHubMatch, _localHubClean, _localHubApply, _localHubEncounters, _localHubSync,
   _localHubStatus, _localHubResetForTest, LOCAL_HUB_KIND, LOCAL_HUB_STATE_KIND, LOCAL_HUB_MATCH_MS,

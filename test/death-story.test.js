@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { readSource, stripJs, AGENT_INDEX } from './_source-slice.js';
+import { readSource, stripJs, AGENT_INDEX, ROOT } from './_source-slice.js';
 
 const require = createRequire(import.meta.url);
 const agent = require('../packages/wolfpack-logsync/index.js');
@@ -104,6 +104,42 @@ describe('routes', () => {
     expect(one.json.hits[0].amount).toBe(77);
     expect(call('/api/local/deaths/999').status).toBe(404);
     expect(call('/api/local/other').handled).toBe(false);
+  });
+});
+
+describe('zone on the death row', () => {
+  const die = () => agent._deathNoteEvent('Aldenmar', slain(T0));
+  it('uses the zone the log last announced when Zeal has none', () => {
+    agent._relvLogZone.set('aldenmar', 'plane of storms');
+    expect(die().zone).toBe('plane of storms');
+  });
+  it('prefers the map zone from Zeal, and stays null with no source at all', () => {
+    agent._relvLogZone.delete('aldenmar');
+    expect(die().zone).toBeNull();
+  });
+});
+
+describe('death page (web/local replay)', () => {
+  const died = stripJs(readSource(path.join(ROOT, 'web/local/app/replay/HowIDied.tsx')));
+  const replay = stripJs(readSource(path.join(ROOT, 'web/local/app/replay/LocalReplay.tsx')));
+  it('puts the killing blow label above the bars, not on them', () => {
+    expect(died).toMatch(/<text x=\{W - 6\} y=\{11\}[^>]*>killing blow</);
+    expect(died).toMatch(/translate\(0,\$\{TOP\}\)/);
+  });
+  it('runs the health line to the death edge', () => {
+    expect(died).toMatch(/`\$\{W\},\$\{H\}`/);
+  });
+  it('scales the plot to your own track and draws a far target as a labelled edge marker', () => {
+    expect(died).toMatch(/MIN_SPAN = 200/);
+    expect(died).toMatch(/inFrame\(far\.target\)/);
+    expect(died).toMatch(/target \{dist\(far\)/);
+  });
+  it('links each death to the local replay 20 s earlier, and the replay reads it back', () => {
+    expect(died).toMatch(/REPLAY_LEAD_MS = 20_000/);
+    expect(died).toMatch(/Watch in replay/);
+    expect(replay).toMatch(/get\('at'\)/);
+    expect(replay).toMatch(/seek: seekReq/);
+    expect(replay).toMatch(/id="my-replay"/);
   });
 });
 
