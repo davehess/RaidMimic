@@ -16,6 +16,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { supabaseServer } from '@/lib/supabase-server';
 import { requireMember } from '@/lib/member';
 import { loadDropperCounts, loadItemDrops } from '@/lib/fullReads';
+import { loadSeenDrops } from '@/lib/seenDrops';
 import {
   type ItemCard, decodeMask, decodeSlots, fmtPrice, fmtWeight,
   isNoDrop, isNoRent, isLoreItem, loreText,
@@ -117,6 +118,7 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
   if (!card && !itemRow) notFound();
 
   const name = card?.name ?? itemRow?.name ?? `Item #${itemId}`;
+  const seenDrops = await loadSeenDrops(sb, itemId, card?.name ?? itemRow?.name ?? null);
 
   // STR/STA/… are populated on every item and were never rendered: #8733 shows
   // STA 20 / WIS 15 on pqdi.cc and nothing here.
@@ -323,6 +325,43 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
           </div>
         ) : <p className="text-dim text-xs">No drop sources in the mirror.</p>}
       </section>
+
+      {/* Seen in our raids — kills our raids have actually seen drop this, beside the published table. */}
+      {seenDrops.length > 0 && (
+        <section className="bg-panel border border-border rounded-lg p-4">
+          <h2 className="text-sm text-orange mb-2">Seen in our raids</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-dim text-[11px] uppercase tracking-wide text-left">
+                <th className="py-1 pr-3 font-normal">NPC</th>
+                <th className="py-1 pr-3 font-normal">Zone</th>
+                <th className="py-1 pr-3 font-normal text-right">Seen</th>
+                <th className="py-1 font-normal text-right">Last</th>
+              </tr></thead>
+              <tbody>
+                {seenDrops.map(s => (
+                  <tr key={s.npc_id} className="border-t border-border/40">
+                    <td className="py-1 pr-3 text-text">
+                      {s.npc_name || `NPC #${s.npc_id}`}
+                      {!s.in_published && <span className="ml-2 text-[11px] text-gold">not in the published loot table</span>}
+                    </td>
+                    <td className="py-1 pr-3 text-dim">{zoneName(s.npc_id)}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums text-text">
+                      {s.observed > 0 ? `${s.observed}×` : ''}
+                      {s.observed > 0 && s.probable > 0 ? ' + ' : ''}
+                      {s.probable > 0 ? `${s.probable}× probable` : ''}
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-dim">{s.last_seen ? s.last_seen.slice(0, 10) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-dim text-[11px] mt-2">
+            Probable: linked in raid chat within 45 s of that kill, corpse not confirmed.
+          </p>
+        </section>
+      )}
 
       {/* Quests — what this is FOR, and what hands it out. */}
       <QuestsMerged hits={scriptHits} gives={gives} gets={gets} ioLabel={ioLabel} />

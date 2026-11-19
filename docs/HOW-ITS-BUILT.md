@@ -6426,3 +6426,10 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   (`fetchMobInfo(…, npcId)`, own cache key, never the pack) and, while undecided, hands the overlay both bands with the
   body-specific numbers blanked (`mob.body_pick`; `mobinfo.html` prints "(L55 or L63)"). The spawn id is not used: it names an
   entity, not a catalog row. Test: `test/mob-same-name-bodies.test.js`.
+
+### Seen drops on item pages (beta, 2026-11-19)
+- `/db/item/[id]` "Seen in our raids" (`web/lib/seenDrops.ts`, RPC `item_seen_drops`, migration `20261119120000`, committed, not yet applied): mobs our
+  raids saw drop the item, with counts and last date, tagged "not in the published loot table" when `eqemu_npc_drops` lacks the pair.
+  Two bases kept apart: observed (`loot_observations` rows that carry `npc_id`, source `opendkp`) and probable (a raid-chat link within 45 s
+  after the one kill that ended last, no other fight started between). `looted_items` has no mob and trash kills land every ~30 s, so it is not used.
+  Fails soft until the migration is applied. Test: `test/seen-drops.test.js`.
