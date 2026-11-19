@@ -474,7 +474,7 @@ describe('wiring', () => {
       core: { last2H: now - 300, lastFist: null, interval2H: IV, haste: 1.7, fistInterval: 2600 / 1.7, marginMs: 150 } });
     await new Promise(r => setTimeout(r, 80));
     expect(rects.length).toBeGreaterThan(3);
-    expect(rects.some(r => Math.abs(r.x - (Math.round(260 * 0.2) - 1.5)) < 0.01 && r.w === 3)).toBe(true);   // the "now" mark
+    expect(rects.some(r => Math.abs(r.x - (Math.round(260 * 0.13) - 1.5)) < 0.01 && r.w === 3)).toBe(true);   // the "now" mark
     expect(texts).toEqual([]);
   });
   it('me.html: the lane is a canvas, off for other classes, on for a Monk and a Beastlord, placed by layoutWeave, and the settings ride to main', () => {
@@ -883,7 +883,7 @@ describe('scoring like Basketweaver: bare misses placed, unseen rounds not clips
   });
   it('the painter: four swings ahead, WEAVE +damage and a green flash on a landed weave, and the up direction', () => {
     const d = stripJs(readSource(path.join(MIMIC, 'weaveDraw.js')));
-    expect(d).toContain('var LOOK_SWINGS = 4;');
+    expect(d).toContain('var LOOK_SWINGS = 4.5;');
     expect(d).toContain('var look = LOOK_SWINGS * st.core.interval2H');
     expect(d).toContain("ctx.fillText('WEAVE' + (o.dmg ? ' +' + o.dmg : ''), w / 2, head / 2);");
     expect(d).toContain("+ (t.addedDps ? '  +' + t.addedDps + ' dps' : '')");
