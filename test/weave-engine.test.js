@@ -286,7 +286,7 @@ describe('fights', () => {
     expect(e.snapshot(9500).active).toBe(true);
     expect(e.tick(9500)).toBe(false);
     const last = e.lastSwingAt;
-    expect(e.snapshot(last + 11900).active).toBe(true);
+    expect(e.active(last + 11900)).toBe(true);           // the fight lasts 12 s; its lane hides sooner (not swinging)
     expect(e.snapshot(last + 12100).active).toBe(false);
     expect(e.tick(last + 12100)).toBe(true);
     expect(e.tally).toMatchObject({ presses: 0, landed: 0, clips: 0, misses: 0, voided: 0 });
@@ -336,7 +336,7 @@ describe('the hub: pipe objects in, states out', () => {
     expect(sent[sent.length - 1].held).toBe(null);
     expect(sent[sent.length - 1].phase).not.toBe('held');
   });
-  it('pauses as "Not swinging" when the next 2H swing is well overdue, and on "No target"', () => {
+  it('goes idle (hides) when the next 2H swing is well overdue, keeping the fight, and pauses on "No target"', () => {
     const { h, sent, advance } = hub();
     h.setEnabled(true);
     h.note(chat('Aldenmar', 265, TWO()));
@@ -344,8 +344,11 @@ describe('the hub: pipe objects in, states out', () => {
     h.note(chat('Aldenmar', 265, TWO()));
     const e = h.engines.get('aldenmar').eng;
     const iv = e.core().interval2H;
-    expect(e.snapshot(e.last2H + iv + 200).held).toBe(null);                      // a swing a little late: still live
-    expect(e.snapshot(e.last2H + iv + Math.max(1000, 0.6 * iv) + 50).held.reason).toBe('Not swinging');
+    expect(e.snapshot(e.last2H + iv + 200).active).toBe(true);                    // a swing a little late: still live
+    const late = e.snapshot(e.last2H + iv + Math.max(1000, 0.6 * iv) + 50);
+    expect(late.active).toBe(false);                                              // not swinging: the lane hides
+    expect(late.phase).toBe('idle');
+    expect(e.active(e.last2H + iv + Math.max(1000, 0.6 * iv) + 50)).toBe(true);   // the fight (and its tally) is kept
     advance(300);
     expect(h.note(chat('Aldenmar', 13, 'You must first click on the being you wish to attack!'))).toBe(true);
     expect(sent[sent.length - 1].held.reason).toBe('No target');
