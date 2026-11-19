@@ -41,6 +41,7 @@ const ENTRY = [
   "export { PENDING_MEMORIES, pendingHint, pendingNext, heldClosure, zoneViews } from './popRecital';",
   "export { POP_ZONES, POP_FLAGS, TIER_LABELS } from './popFlags';",
   "export { GUIDE_ITEMS } from './popGuide';",
+  "export { gateReport } from './popGateStatus';",
   "export { SELF_TICK_KEYS, selfFlagsFromTicks } from './popSelfFlags';",
   "export { WHO_ZONE_NAMES, flagsFromSightings } from './popWho';",
 ].join('\n');

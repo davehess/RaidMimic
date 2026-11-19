@@ -204,7 +204,7 @@ function create({ supabase, guildId, now = Date.now, cacheMs = CACHE_MS }) {
     return { version: versionOf({ characters, unlinked }), characters, unlinked };
   }
 
-  return { streamFor, invalidate, _cache: cache };
+  return { streamFor, invalidate, load, _cache: cache };
 }
 
 module.exports = { buildStatus, create, versionOf, DOOR_STEPS, MAX_CHARACTERS, CACHE_MS };
