@@ -631,6 +631,10 @@ const CHARM_SPELLS = new Map([
   ["solon`s bewitching bravura", { cls: 'bard', dur: 60 }],
   ["solon's song of the sirens",  { cls: 'bard', dur: 18 }],
   ["solon`s song of the sirens",  { cls: 'bard', dur: 18 }],
+  // Call of the Banshee (spell 3371, bard 64, charm to level 57): the same 10-tick rule as Bravura, and the same
+  // "'s eyes glaze over." land line. Missing here, a bard singing it was tracked as Bravura (the guild lead,
+  // 2026-11-19: "Bard charm is assuming solons but we have a new one").
+  ["call of the banshee",         { cls: 'bard', dur: 60 }],
   // NOT charm, don't re-add: the "Dreams of" line (Ayonae L60 / Thule L64 /
   // Terris L65) is the bard MEZ — briefly shipped here 2026-07-13 after
   // misreading a field report, which would have staged a false pending-charm
@@ -2251,14 +2255,16 @@ function _gaugeOwnerIsBard(name) {
 }
 // A bard's charm that was not caught being cast (the pet was already charmed when it was seen, or
 // the song began outside the 12s window) still gets a real duration: the charm song in their twist,
-// else Solon's Bewitching Bravura. Without one the tracker showed "~" and kept its callouts quiet
+// else the best one for their level (Call of the Banshee from 64, else Solon's Bewitching Bravura).
+// Without one the tracker showed "~" and kept its callouts quiet
 // ("charm breaking", "recharm now" are off on a guessed duration) — the guild lead, 2026-09-29:
 // "i did not get a recharm pet tts at 4 seconds left". Null for anyone who is not a bard.
 function _bardCharmSongFor(owner) {
   if (!_gaugeOwnerIsBard(owner)) return null;
   const st = _bardMelody.get(String(owner || '').toLowerCase());
   const names = (st && Array.isArray(st.order)) ? st.order.map((o) => o && o.name).filter(Boolean) : [];
-  const song = names.find((n) => CHARM_SPELLS.has(String(n).toLowerCase())) || "Solon's Bewitching Bravura";
+  const song = names.find((n) => CHARM_SPELLS.has(String(n).toLowerCase()))
+    || ((_levelOf(owner) || 0) >= 64 ? 'Call of the Banshee' : "Solon's Bewitching Bravura");
   const ci = CHARM_SPELLS.get(String(song).toLowerCase());
   return ci ? { charm_class: ci.cls, duration_sec: ci.dur, charm_spell_name: song } : null;
 }
