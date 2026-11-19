@@ -40,6 +40,20 @@ describe('elementals ring mini-maps', () => {
     expect([p.x, p.y]).toEqual([lurker[0], lurker[1]]);
   });
 
+  it('each of the four Earth rings has its Nov 18 kite circle, matched by the event title', () => {
+    const { kiteFor } = evalBlock(sliceBlock(raw, 'const KITE_NOV18 = {', "split(' (')[0]] || null;"), ['kiteFor']);
+    const rings = planes.earth.plane.events.filter(e => /^(Stone|Mud|Vine|Dust) Ring/.test(e.title));
+    expect(rings.length).toBe(4);
+    for (const ev of rings) {
+      const k = kiteFor(ev);
+      expect(k, ev.title).toBeTruthy();
+      expect(k.d.split(' ').length).toBeGreaterThan(50);
+      expect(k.r).toBeGreaterThan(0);
+    }
+    expect(kiteFor(planes.earth.plane.events.find(e => /^Arbitor/.test(e.title)))).toBeNull();
+    expect(stripJs(raw)).toMatch(/drawRingMap\(slot, key, mi, P\.maps\[mi\], evp\[ei\]\.pts, key === 'earth' \? kiteFor\(ev\) : null\)/);
+  });
+
   it('every earth ring step is free of raw coordinate pairs after the rewrite', () => {
     for (const ev of planes.earth.plane.events) {
       const r = evPoints(ev);
