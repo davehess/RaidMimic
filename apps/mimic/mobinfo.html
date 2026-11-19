@@ -184,7 +184,11 @@
   .rcrow .rn{display:block;font-size:11px;color:#e9d5ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rcrow .rz{display:block;font-size:9px;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
   .rcempty{font-size:11px;color:var(--wp-dim);font-style:italic;padding:18px 0 5px}
-  body.wp-in-canvas .pager,body.wp-in-canvas #tabRecent{display:none !important}
+  /* The whole Target Info panel keeps its ◀ ▶ pager and ⟲ tab (the guild lead, 2026-11-19: "the target info in canvas
+     is missing the scroll back through previous targets/kills"); a piece cut from the page has neither (the kill
+     log is its own piece). The ✕ is not drawn here, so the pager gives its corner gutter back. */
+  body.wp-in-canvas.wp-piece #tabRecent{display:none !important}
+  body.wp-in-canvas .pager{margin-right:0}
   body.wp-in-canvas .rclist{padding-top:0}
   /* loot list — slightly smaller text, tighter rows so the table fits more
      items at a glance. Top padding keeps the first row out from under the ✕
@@ -993,6 +997,7 @@
   try { var _pgf = window.localStorage.getItem('wpTargetPgFilter'); if (PG_LABEL[_pgf]) _pg.filter = _pgf; } catch (e) {}
   // A piece cut from this page (?wpsect=) shows one part of the live target and has no pager.
   var _pgOff = !!_wpQs.get('wpsect');
+  if (_pgOff) document.body.classList.add('wp-piece');
   var pagerEl = document.getElementById('pager');
   var pgPrevBtn = document.getElementById('pgPrev'), pgNextBtn = document.getElementById('pgNext');
   var pgFilterBtn = document.getElementById('pgFilter'), pgLiveBtn = document.getElementById('pgLive');
