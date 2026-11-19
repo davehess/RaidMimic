@@ -55,6 +55,8 @@
   .wall.md { stroke: var(--mid); stroke-width: .9; }
   .wall.dp { stroke: var(--deep); stroke-width: 1; }
   .wall.faint { opacity: .14; }
+  .evmap { margin: 6px 0 8px; }
+  .evmap .ringmap { display: block; width: 100%; max-height: 320px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
   .route { fill: none; stroke: var(--gold); stroke-width: 3.2; stroke-dasharray: 10 8; vector-effect: non-scaling-stroke; }
   .track { fill: none; stroke: var(--green); stroke-width: 1.6; opacity: .55; vector-effect: non-scaling-stroke; }
   .pocket { fill: color-mix(in srgb, var(--red) 16%, transparent); stroke: var(--red); stroke-width: 1.2; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
@@ -684,10 +686,93 @@ function planeSlowText(n) {
   return m >= 100 ? 'can\'t be slowed' : m > 0 ? `shrugs off ${m}% of a slow` : 'takes a full slow';
 }
 
+// ── ring mini-maps (the guild lead, 2026-11-18: "instead of position you should show a map") ──
+// The step texts carry positions as the database prints them: "(x,y)", "(x,y,z)", bare "x,y,z", "a/b" for two values, and a
+// box "x A..B, y C..D". The wall maps are drawn in the map frame, which is the database frame with both signs flipped
+// (the named list says so itself: Lurker "DB (339,92,82)" is named.map [-339,-92,82]; zone-in is the safe point negated).
+// So a DB point (x,y) is plotted at (-x,-y). The one exception states its frame in the text: "Trap spots (map frame x,y,z)".
+const CIRC = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳', circ = n => n === 0 ? 'Ⓢ' : n <= 20 ? CIRC[n - 1] : '(' + n + ')';
+const N_ = '-?\\d+(?:\\.\\d+)?', NS_ = `${N_}(?:/${N_})*`;
+const RNG_ = `${N_}(?:\\.\\.|-)${N_}`;   // a range: "-575..-657" or "2084-2107"
+const ITEM_ = `(?:DB\\s+)?(?:x\\s*${RNG_}[,/]\\s*y\\s*${RNG_}(?:,\\s*z\\s*${N_})?|\\(\\s*${RNG_},\\s*${RNG_}(?:,\\s*${N_})?\\s*\\)|\\(\\s*${NS_},\\s*${NS_}(?:,\\s*${NS_})?\\s*\\)|(?<![\\w.,/-])(?<!flags )(?!\\d{1,3}(?:,\\d{3}){2,}\\b)${NS_},${NS_},${NS_}(?![\\w/]))`;
+const RUN_ = `${ITEM_}(?:\\s*(?:,|and|or)\\s*${ITEM_})*`;
+function itemPoints(item) {   // one coordinate item -> [{x,y}] or [{box}] in the map frame
+  const r = [...item.matchAll(new RegExp(`(${N_})(?:\\.\\.|-)(${N_})`, 'g'))];
+  if (r.length >= 2 && /^(?:DB\s+)?(?:x|\(\s*-?\d+(?:\.\d+)?(?:\.\.|-))/.test(item)) { const [a, b] = r[0].slice(1).map(Number), [c, d] = r[1].slice(1).map(Number); return [{ box: [-Math.max(a, b), -Math.max(c, d), -Math.min(a, b), -Math.min(c, d)] }]; }
+  const g = item.match(new RegExp(`(${NS_}),\\s*(${NS_})`)), out = [];
+  for (const x of g[1].split('/')) for (const y of g[2].split('/')) out.push({ x: -Number(x), y: -Number(y) });
+  return out;
+}
+// A step's coordinates -> its points, and the step text with the numbers replaced by a pointer to the map.
+function evPoints(ev) {
+  const pts = [];
+  const conv = (s, si) => {   // si -1 is the "Starts:" line, marked S
+    const n = si + 1;
+    if (/map frame x,y,z/.test(s)) {   // trap families: "1 Needlescale: x,y,z; x,y,z. 2 Dust: ..." already in the map frame, labelled by family
+      const [head, tail] = s.split(/:\s(.*)/s);
+      const out = [];
+      for (const ch of tail.split(/(?<=\.)\s(?=\d+ )/)) {
+        const m = ch.match(/^(\d+) ([^:]+):\s*(.*?)\.?$/); if (!m) continue;
+        const dots = [...m[3].matchAll(new RegExp(`(${N_}),(${N_}),${N_}`, 'g'))];
+        for (const d of dots) pts.push({ step: n, x: Number(d[1]), y: Number(d[2]), lab: m[1] });
+        out.push(m[1] + ' ' + m[2] + (/[a-z]/i.test(m[3]) ? ': ' + m[3].replace(new RegExp(`${N_},${N_},${N_}`), 'the dot numbered ' + m[1]) : ''));
+      }
+      return head.replace('(map frame x,y,z)', '(the dots on the map, numbered by family)') + ': ' + out.join('; ') + '.';
+    }
+    return s.replace(new RegExp(RUN_, 'g'), run => {
+      for (const it of run.matchAll(new RegExp(ITEM_, 'g'))) for (const p of itemPoints(it[0])) pts.push({ step: n, ...p });
+      return circ(n) + ' on the map';
+    });
+  };
+  const trigger = ev.trigger ? conv(ev.trigger, -1) : ev.trigger;
+  return { steps: (ev.steps || []).map(conv), trigger, pts };
+}
+// The wall bands of a plane map, drawn once as a <defs> group the mini-maps <use>.
+function wallDefs(key, i, m) {
+  const id = `pw-${key}-${i}`;
+  if (document.getElementById(id)) return id;
+  const d = S('svg', { width: 0, height: 0, style: 'position:absolute', 'aria-hidden': 'true' }), g = S('g', { id });
+  for (const b of ['up', 'md', 'dp']) g.append(S('path', { d: m._bands[b], class: 'wall ' + b }));
+  d.append(S('defs')); d.firstChild.append(g); document.body.append(d);
+  return id;
+}
+// One small map per ring: the zone walls cropped to that event's points, each step's points marked with its number.
+function drawRingMap(slot, key, i, m, pts) {
+  const xs = pts.flatMap(p => p.box ? [p.box[0], p.box[2]] : [p.x]), ys = pts.flatMap(p => p.box ? [p.box[1], p.box[3]] : [p.y]);
+  let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const pad = Math.max(40, Math.max(x1 - x0, y1 - y0) * 0.18), MIN = 300;
+  x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
+  if (x1 - x0 < MIN) { const c = (x0 + x1) / 2; x0 = c - MIN / 2; x1 = c + MIN / 2; }
+  if (y1 - y0 < MIN) { const c = (y0 + y1) / 2; y0 = c - MIN / 2; y1 = c + MIN / 2; }
+  const w = x1 - x0, h = y1 - y0, u = Math.max(w, h) / 38;   // u: marker size in map units
+  const el = S('svg', { viewBox: `${x0} ${y0} ${w} ${h}`, role: 'img', class: 'ringmap', style: `aspect-ratio:${w}/${h}`,
+    'aria-label': 'Map of the marked spots, numbered by step' });
+  el.append(S('use', { href: '#' + wallDefs(key, i, m) }));
+  const placed = [];
+  for (const p of pts) {
+    if (p.box) {
+      el.append(S('rect', { x: p.box[0], y: p.box[1], width: p.box[2] - p.box[0], height: p.box[3] - p.box[1], fill: 'none', stroke: 'var(--purple)', 'stroke-width': u * 0.25, 'stroke-dasharray': `${u * 0.8} ${u * 0.5}` }));
+      p.x = p.box[0]; p.y = p.box[1];
+    }
+    let x = p.x, y = p.y; const near = placed.filter(q => Math.hypot(q[0] - x, q[1] - y) < u * 1.8).length;
+    x += near * u * 2.1; placed.push([x, y]);
+    const lab = String(p.lab || p.step || 'S'), r = u * (lab.length > 1 ? 1.15 : 1);
+    const g = S('g'); g.append(S('circle', { cx: x, cy: y, r, fill: 'var(--purple)', stroke: 'var(--bg)', 'stroke-width': u * 0.25 }));
+    const t = S('text', { x, y: y + u * 0.42, 'text-anchor': 'middle', 'font-size': u * (lab.length > 1 ? 1.0 : 1.2), 'font-weight': 700, 'font-family': 'var(--mono)', fill: 'var(--bg)' });
+    t.textContent = lab; g.append(t); el.append(g);
+  }
+  slot.append(el);
+  const steps = [...new Set(pts.map(p => p.step))].sort((a, b) => a - b);
+  const leg = document.createElement('div'); leg.className = 'legend';
+  leg.innerHTML = steps.map(n => `<span><i style="background:var(--purple)"></i>${circ(n)} ${n ? 'step ' + n : 'start'}${pts.some(p => p.step === n && p.lab) ? ' (numbers are trap families)' : ''}</span>`).join('');
+  slot.append(leg);
+}
+
 function renderPlane(key) {
   const P = PLANES[key], plane = P.plane, host = document.getElementById('plane-' + key);
   if (!host || host.dataset.built) return;
   host.dataset.built = '1';
+  const evp = (plane.events || []).map(evPoints);
   const named = (plane.named || []).filter(n => n.hp >= 50000 || n.role === 'boss' || n.role === 'event');
   const bosses = named.filter(n => n.role === 'boss');
   host.innerHTML = `
@@ -716,8 +801,8 @@ function renderPlane(key) {
     <section>
       <h2>The fights</h2>
       <p class="dim">Times are at our damage rate (set it on the Water tab, or here: <output data-dpsout>${dpsNow().toLocaleString()}</output> a second).</p>
-      ${(plane.events || []).length ? `<div class="phases">${plane.events.map(ev => `<div class="phase"><div class="t">${esc(ev.zone ? ev.zone + ' · ' : '')}${ev.timer_s ? 'clock ' + fmtT(ev.timer_s) : 'event'}</div><h3>${esc(ev.title)}</h3><ul>
-        ${ev.trigger ? `<li><b>Starts:</b> ${esc(ev.trigger)}</li>` : ''}${(ev.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}
+      ${(plane.events || []).length ? `<div class="phases">${plane.events.map((ev, ei) => `<div class="phase"><div class="t">${esc(ev.zone ? ev.zone + ' · ' : '')}${ev.timer_s ? 'clock ' + fmtT(ev.timer_s) : 'event'}</div><h3>${esc(ev.title)}</h3>${evp[ei].pts.length ? `<div class="evmap" data-evmap="${key}-${ei}"></div>` : ''}<ul>
+        ${ev.trigger ? `<li><b>Starts:</b> ${esc(evp[ei].trigger)}</li>` : ''}${evp[ei].steps.map(s => `<li>${esc(s)}</li>`).join('')}
         ${ev.hp_overrides ? `<li><b>Health set by the script:</b> ${esc(ev.hp_overrides)}</li>` : ''}${ev.fail ? `<li><b>Fails when:</b> ${esc(ev.fail)}</li>` : ''}</ul></div>`).join('')}</div>` : ''}
       <div class="named" style="margin-top:12px" data-named="${key}"></div>
     </section>
@@ -736,6 +821,11 @@ function renderPlane(key) {
     </section>`;
   renderPlaneNamed(key);
   P.maps.forEach((m, i) => buildPlaneMap(key, i, m, named));
+  (plane.events || []).forEach((ev, ei) => {
+    const slot = host.querySelector(`[data-evmap="${key}-${ei}"]`); if (!slot) return;
+    const mi = Math.max(0, P.maps.findIndex(m => m.zone === ev.zone));
+    drawRingMap(slot, key, mi, P.maps[mi], evp[ei].pts);
+  });
 }
 
 function renderPlaneNamed(key) {
@@ -764,6 +854,7 @@ function buildPlaneMap(key, i, m, named) {
     x0 = Math.min(x0, ax, bx); x1 = Math.max(x1, ax, bx); y0 = Math.min(y0, ay, by); y1 = Math.max(y1, ay, by);
     const z = (az + bz) / 2; bands[z >= t2 ? 'up' : z >= t1 ? 'md' : 'dp'] += `M${ax} ${ay}L${bx} ${by}`;
   }
+  m._bands = bands;   // the ring mini-maps reuse these
   const span = Math.max(x1 - x0, y1 - y0), pad = span * 0.06, u = span / 70;   // u: marker size in map units
   el.setAttribute('viewBox', `${x0 - pad} ${y0 - pad} ${x1 - x0 + 2 * pad} ${y1 - y0 + 2 * pad}`);
   for (const b of ['up', 'md', 'dp']) el.append(S('path', { d: bands[b], class: 'wall ' + b }));
