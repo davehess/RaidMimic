@@ -280,7 +280,7 @@ token; `enqueueUpload`, `_postLiveState`, the upload drain and the version poll 
 Buff queue / Extended Target routes answer `local_only: true` (the overlays label it). **Mimic:**
 `cfg.localOnly` (set by setup, welcome and the banner's "Stay local-only" via `set-local-only`) makes
 `_setupIssue` count setup as done; `checkAgentUpdate` skips the bot without a token. **Data:** the bot's
-`GET /api/public/catalog/<spell-catalog|item-clickies|item-catalog>` (no sign-in, same cached bodies);
+`GET /api/public/catalog/<spell-catalog|item-clickies|item-catalog|quest-scripted>` (no sign-in, same cached bodies; `quest-scripted` = scripted spawns and loot from the server's quest scripts, read by the agent at `GET /api/local/quest-scripted`);
 `apps/mimic/scripts/stage-catalog.js` (`predist`) bundles them into `staged-agent/catalog/`, and
 `seedBundledCatalog` in `main.js` copies each into the agent folder when newer. **Site:** eqmimic.quest
 pages live in the separate hesstastic repo (`eqmimic/`, `vercel.json`). Tests:
