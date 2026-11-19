@@ -312,6 +312,37 @@ describe('the hub: pipe objects in, states out', () => {
     return { h, sent, at: (t) => { now = t; }, advance: (d) => { now += d; } };
   }
 
+  // The guild lead, 2026-11-18: "when we're out of range or LOS we need to know it on our bar and pause, same for not attacking".
+  it('pauses on out of range, no line of sight and auto attack off, and the next 2H swing re-syncs it', () => {
+    const { h, sent, advance } = hub();
+    h.setEnabled(true);
+    expect(h.note(chat('Aldenmar', 13, 'Your target is too far away, get closer!'))).toBe(false);   // no fight yet: nothing to pause
+    h.note(chat('Aldenmar', 265, TWO()));
+    advance(IV);
+    h.note(chat('Aldenmar', 265, TWO()));
+    for (const [line, reason] of [['Your target is too far away, get closer!', 'Out of range'],
+      ['You cannot see your target.', 'No line of sight'], ['Auto attack is off.', 'Auto attack off']]) {
+      advance(200);
+      expect(h.note(chat('Aldenmar', 13, line)), line).toBe(true);
+      const st = sent[sent.length - 1];
+      expect(st.held && st.held.reason).toBe(reason);
+      expect(st.phase).toBe('held');
+    }
+    advance(200);
+    h.note(chat('Aldenmar', 266, 'Brackwyn crushes a gnoll for 5 points of damage.'));   // someone else's hit: still held
+    expect(sent[sent.length - 1].held).toBeTruthy();
+    advance(IV);
+    expect(h.note(chat('Aldenmar', 265, TWO()))).toBe(true);
+    expect(sent[sent.length - 1].held).toBe(null);
+    expect(sent[sent.length - 1].phase).not.toBe('held');
+  });
+  it('the painter treats a held lane as not live and names the reason', () => {
+    const d = stripJs(readSource(path.join(MIMIC, 'weaveDraw.js')));
+    expect(d).toContain('return !!(st && st.active && !st.held && st.core');
+    expect(d).toContain("if (st.held) return st.held.reason + ' · paused';");
+    expect(d).toContain("var idle = st && st.held ? 'Weaving timer: ' + st.held.reason");
+  });
+
   it('does nothing until something is listening', () => {
     const { h, sent } = hub();
     expect(h.note(chat('Aldenmar', 265, TWO()))).toBe(false);
