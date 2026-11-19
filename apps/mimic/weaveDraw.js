@@ -82,7 +82,7 @@
   var FLASH_MS = 900;
   // The highway and the Thin bar show four 2H swings ahead (were two): Basketweaver shows about four and a half, and ours
   // scrolled twice as fast (the guild lead, 2026-11-09: "our weaving overlay is going faster than theirs").
-  var LOOK_SWINGS = 4;
+  var LOOK_SWINGS = 4.5;   // 2026-11-18: 4.5 swings with now 13% in, measured off a side-by-side screenshot, so the two bars can be compared
   function weaveFlash(c, ctx, st, now, stroke) {
     var o = st && st.outcome;
     if (!o || o.kind !== 'landed' || now - o.at >= FLASH_MS) return;
@@ -210,7 +210,7 @@
   // The highway with nothing but the windows: they scroll right to left into the gold "now" mark, orange ticks are the
   // next 2H swings, and a fresh clip flashes the bar's edge red. No text (an idle reason, if any, is the one exception).
   function drawBar(c, f, st, live, now) {
-    var ctx = f.ctx, w = f.w, h = f.h, hz = Math.round(w * 0.2);
+    var ctx = f.ctx, w = f.w, h = f.h, hz = Math.round(w * 0.13);
     if (!live) {
       var why = idleReason(st);
       if (why) { font(ctx, Math.max(8, Math.min(10, h * 0.8))); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.dim; ctx.fillText(why, 2, h / 2); }
@@ -242,7 +242,7 @@
   function drawHighway(c, f, st, live, now) {
     var ctx = f.ctx, w = f.w, h = f.h, px = Math.max(9, Math.min(13, h * 0.2));
     var head = Math.round(px + 3), barH = Math.max(5, Math.round(h * 0.1)), foot = barH + 4;
-    var laneTop = head, laneH = Math.max(8, h - head - foot), laneBot = laneTop + laneH, hz = Math.round(w * 0.2);
+    var laneTop = head, laneH = Math.max(8, h - head - foot), laneBot = laneTop + laneH, hz = Math.round(w * 0.13);
     ctx.globalAlpha = live ? 0.3 : 0.16; ctx.fillStyle = c.dim; ctx.fillRect(0, laneTop, w, laneH); ctx.globalAlpha = 1;
     if (!live) {
       font(ctx, px); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.dim;
