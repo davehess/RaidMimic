@@ -89,6 +89,17 @@
     if (!o || o.kind !== 'landed' || now - o.at >= FLASH_MS) return;
     ctx.save(); ctx.globalAlpha = 1 - (now - o.at) / FLASH_MS; ctx.strokeStyle = c.green; ctx.lineWidth = 2; stroke(); ctx.restore();
   }
+  // Time to press (the guild lead, 2026-11-18: "This should be more animated like the hud, flashing when its time to hit"):
+  // while the window is open the lane's edge pulses green, with a bright green wash for its first GO_WASH_MS.
+  var GO_WASH_MS = 250;
+  function goFlash(c, ctx, d, now, x, y, w, h) {
+    if (!d || d.phase !== 'go') return;
+    var since = now - d.open;
+    ctx.save();
+    if (since >= 0 && since < GO_WASH_MS) { ctx.globalAlpha = 0.4 * (1 - since / GO_WASH_MS); ctx.fillStyle = c.green; ctx.fillRect(x, y, w, h); }
+    ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(now / 110)); ctx.strokeStyle = c.green; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.restore();
+  }
   // The engine's latest re-sync (SYNC +180 ms, SPEED 1.65 → 3.65 s, /mystats …), for NOTE_MS after it happened.
   var NOTE_MS = 2000;
   function noticeOf(st, now) { var n = st && st.notice; return n && now - n.at < NOTE_MS ? n : null; }
@@ -231,6 +242,7 @@
     ctx.globalAlpha = 1; ctx.fillStyle = c.orange;
     z.swings.forEach(function (s) { ctx.fillRect(xOf(s.at) - 0.75, 0, 1.5, h); });
     ctx.fillStyle = c.text; ctx.fillRect(hz - 1.5, 0, 3, h);   // "now": white, so it never reads as one of the orange swing ticks
+    goFlash(c, ctx, z.derived, now, 0, 0, w, h);
     var o = st.outcome;
     if (o && o.kind === 'clip' && now - o.at < 1500) {
       ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(now / 120)); ctx.strokeStyle = c.red; ctx.lineWidth = 2;
@@ -279,11 +291,14 @@
     var fiv = st.core.fistInterval, lf = st.core.lastFist, fr = lf == null ? 1 : Math.max(0, Math.min(1, (now - lf) / fiv));
     ctx.globalAlpha = 0.3; ctx.fillStyle = c.dim; ctx.fillRect(0, laneBot + 3, w, barH); ctx.globalAlpha = 1;
     ctx.fillStyle = fr >= 1 ? c.green : c.blue; ctx.fillRect(0, laneBot + 3, w * fr, barH);
-    // the head row: the phase, the clip flash, the tally
+    goFlash(c, ctx, z.derived, now, 0, laneTop, w, laneH);
+    // the head row: the phase (PRESS pulses with the lane), the clip flash, the tally
     var phase = z.derived.phase;
     font(ctx, px, true); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillStyle = phase === 'go' ? c.green : phase === 'late' ? c.red : phase === 'wait' ? c.blue : c.orange;
+    if (phase === 'go') ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(now / 110));
     ctx.fillText(phase === 'go' ? 'PRESS' : phase === 'late' ? 'LATE' : phase === 'wait' ? 'WAIT' : 'SWING', 2, head / 2);
+    ctx.globalAlpha = 1;
     var o = st.outcome;
     if (o && o.kind === 'clip' && now - o.at < 1500) {
       ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(now / 120)); ctx.fillStyle = c.red; ctx.textAlign = 'center';
