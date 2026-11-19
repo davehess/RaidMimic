@@ -163,7 +163,11 @@
   // Lines that mean your swings stopped landing on time (the guild lead, 2026-11-18: "when we're out of range or LOS we need to
   // know it on our bar and pause, same for not attacking"). "You cannot see your target." and the auto attack pair are lines our
   // own code already matches; the range line is matched loosely on "too far away".
-  var HOLD_LINES = [[/too far away/i, 'Out of range'], [/^You cannot see your target\./, 'No line of sight'], [/^Auto attack is off\./, 'Auto attack off']];
+  var HOLD_LINES = [[/too far away/i, 'Out of range'], [/^You cannot see your target\./, 'No line of sight'], [/^Auto attack is off\./, 'Auto attack off'],
+    [/^You must first click on the being you wish to attack!/, 'No target']];
+  // A predicted 2H swing this late with no swing line: you stopped swinging (the target died, you ran). The lane pauses as
+  // "Not swinging" instead of painting a red SWING until the fight times out (the guild lead, 2026-11-18: "WHAT HAPPENED HERE").
+  var OVERDUE_MS = 1000;
   function holdReason(text) {
     var b = bare(text);
     for (var i = 0; i < HOLD_LINES.length; i++) if (HOLD_LINES[i][0].test(b)) return HOLD_LINES[i][1];
@@ -525,8 +529,11 @@
   };
   WeaveEngine.prototype.snapshot = function (now) {
     var c = this.core(), d = this.active(now) ? derive(c, now) : null;
+    // derive() rolls the predicted swing forward, so lateness is measured from the last REAL 2H line.
+    var overdue = d && c.last2H != null && now - c.last2H > c.interval2H + Math.max(OVERDUE_MS, 0.6 * c.interval2H);
+    var held = d ? (this.held || (overdue ? { reason: 'Not swinging', at: c.last2H + c.interval2H } : null)) : null;
     return {
-      active: !!d, phase: d ? (this.held ? 'held' : d.phase) : 'idle', at: now, held: d && this.held ? this.held : null,
+      active: !!d, phase: d ? (held ? 'held' : d.phase) : 'idle', at: now, held: held,
       core: c, measured: this.measured(), open: d ? d.open : null, close: d ? d.close : null, next2H: d ? d.next2H : null,
       lastPress: this.lastPress, outcome: this.outcome, tally: this.summary(now),
       cfg: { showTally: this.cfg.showTally, marginMs: this.cfg.marginMs },
