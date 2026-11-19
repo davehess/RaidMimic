@@ -30,7 +30,8 @@
     }
     return colors;
   }
-  function liveOf(st, now) { return !!(st && st.active && st.core && now - st.rx <= STALE_MS); }
+  // A held lane (out of range, no line of sight, auto attack off) is not live: it stops scrolling and says why (2026-11-18).
+  function liveOf(st, now) { return !!(st && st.active && !st.held && st.core && now - st.rx <= STALE_MS); }
   function canvases() { return root.document ? root.document.querySelectorAll('canvas[data-wp-weave]') : []; }
   // The canvas's own character first. If that one is not live but another character off the pipe IS fighting, draw that one:
   // the HUD names the character from the log file and Zeal from the game, and a lane that waits on a name the pipe never
@@ -94,6 +95,7 @@
   // The ring's short idle reason, or '' (nothing to say: waiting for a fight is the normal rest state).
   function idleReason(st) {
     if (!st) return '';
+    if (st.held) return st.held.reason + ' · paused';
     if (st.source === 'needs-zeal') return 'weave: needs Zeal';
     var dg = st.diag;
     if (dg && dg.seen > 0 && dg.matched === 0 && dg.lastVerb) return 'weave: swings say "' + String(dg.lastVerb).slice(0, 12) + '" (HUD ⚙)';
@@ -121,6 +123,7 @@
     ctx.globalAlpha = live ? 0.3 : 0.16; ctx.fillStyle = c.dim; ctx.fillRect(0, laneTop, w, laneBot - laneTop); ctx.globalAlpha = 1;
     if (!live) {
       if (st && st.source === 'needs-zeal') note(c, ctx, 'needs Zeal', w, h);
+      else if (st && st.held) note(c, ctx, st.held.reason, w, h);
       glyph(c, ctx, st, now, w / 2, glyphY, gh);
       return;
     }
@@ -248,7 +251,8 @@
       font(ctx, px); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.dim;
       // Idle with melee seen but none matched: name the word, so a 2H or fist verb we do not know is one setting away.
       var dg = st && st.diag;
-      var idle = st && st.source === 'needs-zeal' ? 'Weaving timer: needs Zeal'
+      var idle = st && st.held ? 'Weaving timer: ' + st.held.reason + ' · paused until your next swing'
+        : st && st.source === 'needs-zeal' ? 'Weaving timer: needs Zeal'
         : dg && dg.seen > 0 && dg.matched === 0 && dg.lastVerb
           ? 'Weaving timer: your swings say "' + String(dg.lastVerb).slice(0, 16) + '" (add it in the HUD ⚙)'
           : 'Weaving timer: waiting for a fight';

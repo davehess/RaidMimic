@@ -160,6 +160,15 @@
   var BAND_FAIL_COLOUR = 1012;
   var BAND_FAIL_RE = /canceling set load|You cannot swap items when|You are too busy to (?:swap items|equip bandolier set)|^The bandolier set \[.*\] does not exist|^Invalid bandolier name/i;
   function isBandolierFailure(colour, text) { return colour === BAND_FAIL_COLOUR || BAND_FAIL_RE.test(bare(text)); }
+  // Lines that mean your swings stopped landing on time (the guild lead, 2026-11-18: "when we're out of range or LOS we need to
+  // know it on our bar and pause, same for not attacking"). "You cannot see your target." and the auto attack pair are lines our
+  // own code already matches; the range line is matched loosely on "too far away".
+  var HOLD_LINES = [[/too far away/i, 'Out of range'], [/^You cannot see your target\./, 'No line of sight'], [/^Auto attack is off\./, 'Auto attack off']];
+  function holdReason(text) {
+    var b = bare(text);
+    for (var i = 0; i < HOLD_LINES.length; i++) if (HOLD_LINES[i][0].test(b)) return HOLD_LINES[i][1];
+    return null;
+  }
   // '2h', 'fist', or null for a kick, a flying kick or any other special — those are not swings.
   function classify(verb, cfg) {
     if (cfg.twoVerbs.indexOf(verb) >= 0) return '2h';
@@ -243,6 +252,15 @@
       // damage the weaved fists did, and the press's reaction (press - the window opening).
       rounds: 0, fistTried: 0, fistHit: 0, weaveDmg: 0, reactSum: 0, reactN: 0 };
     this.fightStart = null;
+    this.held = null;
+  };
+  // Pause the lane mid-fight (out of range, no line of sight, auto attack off). Only during a fight: outside one there is no
+  // timer to pause. The press in flight is dropped; the next 2H swing clears the hold (the hub, on a changed last2H).
+  WeaveEngine.prototype.hold = function (reason, t) {
+    if (!this.active(t)) return false;
+    this.held = { reason: reason, at: t };
+    this.pending = null;
+    return true;
   };
   WeaveEngine.prototype.setConfig = function (cfg, t) {
     this.cfg = cleanCfg(cfg);
@@ -508,7 +526,7 @@
   WeaveEngine.prototype.snapshot = function (now) {
     var c = this.core(), d = this.active(now) ? derive(c, now) : null;
     return {
-      active: !!d, phase: d ? d.phase : 'idle', at: now,
+      active: !!d, phase: d ? (this.held ? 'held' : d.phase) : 'idle', at: now, held: d && this.held ? this.held : null,
       core: c, measured: this.measured(), open: d ? d.open : null, close: d ? d.close : null, next2H: d ? d.next2H : null,
       lastPress: this.lastPress, outcome: this.outcome, tally: this.summary(now),
       cfg: { showTally: this.cfg.showTally, marginMs: this.cfg.marginMs },
@@ -576,6 +594,14 @@
           if (now - e.sentAt >= SEND_MS) { e.wasActive = true; emit(e, e.eng.snapshot(now), now); }
           return true;
         }
+        // Out of range, no line of sight, auto attack off: the swing timer is no longer right, so the lane pauses with the reason
+        // until the next 2H swing re-syncs it (in the swing branch below).
+        var hr = holdReason(d.text);
+        if (hr) {
+          if (!e || !e.eng.hold(hr, now)) return false;
+          emit(e, e.eng.snapshot(now), now);
+          return true;
+        }
         // /mystats: "  Level: 65  AC: …  Class: 7 … Haste: 182 (cap …)". Only YOUR line: a pet you target prints its own, so the
         // class must be the one this engine times (Monk 7, Beastlord 15).
         if (d.text.indexOf('Haste: ') >= 0) {
@@ -604,8 +630,9 @@
         var load = !swing && d.text.indexOf('oading bandolier set') > 0;
         if (!swing && !load) return false;
         if (!e) { e = entry(obj.character, true); e.lastPipe = now; }
-        var before = e.eng.diag.seen;
+        var before = e.eng.diag.seen, prev2H = e.eng.last2H;
         var took = swing ? e.eng.swing(d.text, now) : e.eng.load(d.text, now);
+        if (took && e.eng.held && e.eng.last2H !== prev2H) { e.eng.held = null; emit(e, e.eng.snapshot(now), now); }   // re-synced
         if (took && now - e.sentAt >= SEND_MS) { e.wasActive = true; emit(e, e.eng.snapshot(now), now); }
         // Melee seen but none of it matched: say so now and then, so an idle lane can name the word it heard.
         else if (!took && e.eng.diag.seen > before && !e.eng.active(now) && now - e.sentAt >= 2000) emit(e, e.eng.snapshot(now), now);
