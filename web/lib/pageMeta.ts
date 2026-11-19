@@ -141,6 +141,7 @@ export const ADMIN_TITLES: Record<string, string> = {
   '/admin/adoption':           'Adoption',
   '/admin/agents':             'Agent uploaders',
   '/admin/analytics':          'Page analytics',
+  '/admin/platform':           '[beta] Platform',
   '/admin/anomalies':          'Data anomalies',
   '/admin/attendance':         'Attendance',
   '/admin/audit':              'Audit log',

@@ -37,6 +37,22 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'elementals-maps-2026-11-19',
+    title: 'Elemental Planes: a map for every ring',
+    version: 'Web 2.2.19 · Bot 4.1.8',
+    date: '2026-11-19',
+    headline: 'Each Earth ring on the Elemental Planes page shows a small map of its spawns, with one short line per step.',
+    features: [
+      { name: 'Ring maps', blurb: 'Every ring card draws its spawn points on a map instead of listing coordinates.' },
+      { name: 'Shorter cards, two wide', blurb: 'Each step is one short line, and the cards sit two to a row (one on a phone).' },
+      { name: 'Mud ring note', blurb: 'Muddite Mudlings are AE mezzable and leave when the boss dies.' },
+    ],
+    fixes: [
+      'The shared map takes a raider\'s target only from that raider\'s own characters.',
+      'A raider\'s death time can no longer be set in the future, so "died recently" ends on time.',
+    ],
+  },
+  {
     key: 'raidmimic-guilds-prices-2026-11-18',
     title: 'Raid Mimic: early-bird prices, saving in place, its own 404',
     version: 'Web 2.2.18',
