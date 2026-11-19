@@ -3591,7 +3591,9 @@
             ctx.setLineDash([]); ctx.globalAlpha = 1;
           }
         }
-        if (SH.aggro) {
+        // Your target's own range shows whether the ◯ rings are on or off (the guild lead, 2026-11-18: "TARGETTED MOBS SHOULD
+        // SHOW RANGE REGARDLESS OF THE CIRCLE BEING ON OR OFF"; and the map-levels pick: the target keeps its ring).
+        {
           var tnpc = targetNpc(P.target, S.points, S.byId);
           if (tnpc) aggroRing(tq[0], tq[1], aggroRadius(null, tnpc), assistRadius(null, tnpc), aggroKind(null, tnpc, P.cons, S.facs, P.me), ccFor(P.cc, P.target.name, P.target.id, true), now,
             { target: true, hover: P.target.point_id != null && S.hoverPid != null && String(P.target.point_id) === String(S.hoverPid) });
