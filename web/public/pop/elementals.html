@@ -56,7 +56,7 @@
   .wall.dp { stroke: var(--deep); stroke-width: 1; }
   .wall.faint { opacity: .14; }
   .evmap { margin: 6px 0 8px; }
-  .evmap .ringmap { display: block; width: 100%; max-height: 320px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+  .evmap .ringmap { display: block; width: 100%; max-height: 420px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
   .route { fill: none; stroke: var(--gold); stroke-width: 3.2; stroke-dasharray: 10 8; vector-effect: non-scaling-stroke; }
   .track { fill: none; stroke: var(--green); stroke-width: 1.6; opacity: .55; vector-effect: non-scaling-stroke; }
   .pocket { fill: color-mix(in srgb, var(--red) 16%, transparent); stroke: var(--red); stroke-width: 1.2; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
@@ -112,7 +112,8 @@
   .dpsrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 8px 0 4px; }
   .dpsrow input[type=range] { width: min(360px, 100%); accent-color: var(--blue); }
   .dpsrow output { font-weight: 700; color: #e6edf3; font-variant-numeric: tabular-nums; }
-  .phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .phases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }   /* two wide cards a row (the guild lead, 2026-11-18: "do 2 up next to each other and make them wider") */
+  @media (max-width: 760px) { .phases { grid-template-columns: minmax(0, 1fr); } }
   .phase { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
   .phase .t { font-size: 12px; color: var(--blue); }
   .phase ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
