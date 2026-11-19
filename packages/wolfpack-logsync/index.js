@@ -68320,7 +68320,7 @@ function _deathNoteEvent(character, ev, o = {}) {
     _deathLast.set(cl, t);
     const st = _zealState[character] || _zealState[Object.keys(_zealState).find(n => n.toLowerCase() === cl)] || null;
     const story = _deathBuildStory({ character, at: t, killer: ev.attacker || null, hits: _deathHits.get(cl) || [],
-      frames: _deathFrames.filter(f => f.c === cl), zone: st ? _mapZoneShort(st.zone) : null, target: st && st.target_name ? String(st.target_name) : null });
+      frames: _deathFrames.filter(f => f.c === cl), zone: _deathZone(st, cl), target: st && st.target_name ? String(st.target_name) : null });
     // The id is the death time in ms; two of this PC's characters dying in the same second (one AE on a multibox) take the
     // next free millisecond instead of overwriting each other.
     try {
@@ -68333,6 +68333,12 @@ function _deathNoteEvent(character, ev, o = {}) {
     return story;
   }
   return null;
+}
+// The zone a death is filed under: the map's short name for Zeal's zone, else the zone's full name, else the last
+// "You have entered <zone>." line this character's log printed (a PC with no Zeal still has that line).
+function _deathZone(st, cl) {
+  const z = st ? _mapZoneShort(st.zone) || _zoneName(st.zone) : null;
+  return z || _relvLogZone.get(cl) || null;
 }
 function _deathStore() { return _localTrack.store || _localStoreDefault(); }
 // Pure: the story record from the buffers.
@@ -71344,7 +71350,7 @@ module.exports = {
   AGENT_VERSION,
   // Local store + own position recorder (2026-10-21): see the block above module.exports.
   _trackBackfillRun, _trackBackfillSeen, _applyTuningResponse, _localStore, _localStoreOpen, _localTrackFrame, _localTrackMinuteRow, _localTrackNightKey, _localTrackTick, _localTrackClose, _localTrackPush,
-  _localTrackNights, _localTrackWindow, _localTrackBosses, _localTrackMap, _mapPaths, _localTrackRoute, _localTrackSetStoreForTest, _deathNoteEvent, _deathNoteFrame, _deathBuildStory, _localDeathsRoute, _deathHits, _deathLast, _deathPrefsForTest: (p) => { stats.characterPrefs = p; }, _localRecorderStart, _localRecorderStop,
+  _localTrackNights, _localTrackWindow, _localTrackBosses, _localTrackMap, _mapPaths, _localTrackRoute, _localTrackSetStoreForTest, _deathNoteEvent, _deathNoteFrame, _deathBuildStory, _relvLogZone, _localDeathsRoute, _deathHits, _deathLast, _deathPrefsForTest: (p) => { stats.characterPrefs = p; }, _localRecorderStart, _localRecorderStop,
   // My parses on the local site + the guild's record kept beside it (2026-10-21): see the block above module.exports.
   _localParsesAnswer, _localParsesRoute, _localFights, _localFoldPlayers, _localParseDiff, _localHubMatch, _localHubClean, _localHubApply, _localHubEncounters, _localHubSync,
   _localHubStatus, _localHubResetForTest, LOCAL_HUB_KIND, LOCAL_HUB_STATE_KIND, LOCAL_HUB_MATCH_MS,
