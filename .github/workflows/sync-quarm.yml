@@ -57,6 +57,14 @@ jobs:
         continue-on-error: true
         run: node scripts/sync-quest-scripts.js
 
+      # What the scripts spawn, drop and reward that the dump cannot show (data/quest-scripted.json ->
+      # eqemu_script_spawns / _loot / _rewards; DECISIONS §646, the guild lead's pick A on 2026-11-19).
+      # continue-on-error for the same reason as the step above.
+      - name: Sync script tables
+        id: script_tables
+        continue-on-error: true
+        run: node scripts/sync-script-tables.js
+
       - name: Commit sync state if changed
         run: |
           if [[ -n "$(git status --porcelain data/sync_state.json)" ]]; then
