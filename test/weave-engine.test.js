@@ -336,6 +336,20 @@ describe('the hub: pipe objects in, states out', () => {
     expect(sent[sent.length - 1].held).toBe(null);
     expect(sent[sent.length - 1].phase).not.toBe('held');
   });
+  it('pauses as "Not swinging" when the next 2H swing is well overdue, and on "No target"', () => {
+    const { h, sent, advance } = hub();
+    h.setEnabled(true);
+    h.note(chat('Aldenmar', 265, TWO()));
+    advance(IV);
+    h.note(chat('Aldenmar', 265, TWO()));
+    const e = h.engines.get('aldenmar').eng;
+    const iv = e.core().interval2H;
+    expect(e.snapshot(e.last2H + iv + 200).held).toBe(null);                      // a swing a little late: still live
+    expect(e.snapshot(e.last2H + iv + Math.max(1000, 0.6 * iv) + 50).held.reason).toBe('Not swinging');
+    advance(300);
+    expect(h.note(chat('Aldenmar', 13, 'You must first click on the being you wish to attack!'))).toBe(true);
+    expect(sent[sent.length - 1].held.reason).toBe('No target');
+  });
   it('the painter treats a held lane as not live and names the reason', () => {
     const d = stripJs(readSource(path.join(MIMIC, 'weaveDraw.js')));
     expect(d).toContain('return !!(st && st.active && !st.held && st.core');
