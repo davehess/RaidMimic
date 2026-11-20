@@ -16,7 +16,6 @@ import { nameKey, type AttendeeRow, type BidderView, type KillRow, type LootEntr
 import ReplayBoard, { type BoundedReplay } from '@/app/spectator/replay/ReplayBoard';
 import { snapCut, type RaidChange } from '@/lib/raidSplit';
 import DataSources from './DataSources';
-import HailCard from './HailCard';
 import SplitPanel, { type SplitRequest } from './SplitPanel';
 import NightPanel, { type NightPanelData } from './NightPanel';
 import RaidGroupsBar, { type GroupsView } from './RaidGroupsBar';
@@ -197,8 +196,6 @@ export default function SessionReview({ bundle, night, mode, extras, split, nigh
             hint={split.change} live={split.live} canShare={split.canShare} />
         </div>
       )}
-
-      <HailCard events={bundle.hails} />
 
       <div className="mt-5 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Session details">
         {tabs.map(t => (

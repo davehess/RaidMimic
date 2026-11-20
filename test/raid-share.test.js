@@ -218,7 +218,6 @@ describe('the session loader bounds every read to the window', () => {
     raid_track_minutes: 'minute_at', encounters: 'ended_at', looted_items: 'looted_at', loot_observations: 'posted_at',
     roll_sets: 'started_at', roll_set_overrides: 'started_at', raid_attendance_ticks: 'scheduled_for', opendkp_raids: 'ts',
     opendkp_auctions: 'end_at',   // the bid winners (lib/raidSessionBids.ts)
-    pop_flags: 'earned_at',       // who hailed a flag NPC (lib/raidHails.ts, loadWindowHails)
   };
   for (const [table, col] of Object.entries(TIMED)) {
     it(`${table} is read with ${col} >= from and < to, exactly the window`, () => {
@@ -230,6 +229,10 @@ describe('the session loader bounds every read to the window', () => {
       }
     });
   }
+  it('reads no hail rows: the Flag hails section was removed (the guild lead, 2026-11-20: "none of these are actual hails")', () => {
+    expect(db.queries.filter(q => q.table === 'pop_flags')).toEqual([]);
+    expect(out.bundle.hails).toBeUndefined();
+  });
   it('the tables with no time column are read only for ids a windowed read returned', () => {
     for (const t of ['encounter_players', 'opendkp_ticks', 'opendkp_loot_recent', 'bosses_local']) {
       const qs = db.queries.filter(q => q.table === t);
