@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.11': [
+    'Internal: the bot can now tell when a Mass Group Buff was cast, name who cast it when the log or cast feed shows it, and track each holder\'s cooldown, for Mimic\'s Command Center board.',
+  ],
   '4.1.10': [
     'Internal: Mimic\'s Command Center can ask which raiders hold the current zone\'s flag, so it can show who is not flagged before a zone-in.',
   ],
