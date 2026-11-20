@@ -251,6 +251,18 @@
   .flag-card .fl-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:11px;line-height:1.5}
   .flag-card .fl-chip{padding:0 5px;border-radius:3px;background:rgba(248,81,73,0.22);color:rgb(230 237 243);white-space:nowrap}
   .flag-card .fl-dim{font-size:11px;color:rgb(154 164 173);margin-top:3px}
+  /* Rathe Council (the guild lead, 2026-11-20): one slim row per councilman, by spawn id. 11px, nothing smaller. */
+  .cn-card .cn-row{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.7;color:rgb(201 209 217);font-variant-numeric:tabular-nums}
+  .cn-card .cn-id{width:44px;color:rgb(154 164 173)}
+  .cn-card .cn-bar{flex:1;min-width:40px;height:7px;border-radius:3px;background:rgba(110,118,129,0.3);overflow:hidden}
+  .cn-card .cn-bar i{display:block;height:100%;background:rgb(86 211 100)}
+  .cn-card .cn-row.low .cn-bar i{background:rgb(248 113 113)}
+  .cn-card .cn-hp{width:34px;text-align:right;color:rgb(230 237 243)}
+  .cn-card .cn-t{min-width:62px;color:rgb(255 166 87)}
+  .cn-card .cn-row.dead{color:rgb(154 164 173)}
+  .cn-card .cn-line{font-size:11px;margin:2px 0;color:rgb(201 209 217)}
+  .cn-card .cn-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .cn-card .cn-line.bad{color:rgb(248 113 113);font-weight:700}
   /* drag/lock/setup chrome — shared pattern. */
   #drag-controls{display:none;position:fixed;top:4px;left:4px;gap:4px;z-index:60}
   body.unlocked #drag-controls{display:flex}
@@ -886,6 +898,43 @@
     return h + '</div>';
   }
 
+  // The Rathe Council card. The agent sends state.council only in Plane of Earth B once a councilman is known. Times
+  // arrive as absolute ms and count down against nowMs; an unknown HP reads "?", never 0. Same input, same HTML.
+  function councilHtml(c, nowMs){
+    if (!c || !c.rows || !c.rows.length) return '';
+    function mm(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
+    function clock(ms){ var d = new Date(ms), p = function(n){ return (n < 10 ? '0' : '') + n; }; return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+    var key = 'council', col = _isCollapsed(key);
+    var left = c.back_at && c.back_at > nowMs && c.down < 12 ? ' · 12th within ' + mm(c.back_at - nowMs) : '';
+    var h = '<div class="card cn-card"><div class="head">' + secToggle(key, '🏛 Rathe Council', c.down + '/12 down' + left) + '</div>';
+    if (col) return h + '</div>';
+    h += '<div class="cn-line"><b>' + c.down + '/12 down' + left + '</b></div>';
+    if (c.warn != null) h += '<div class="cn-line bad">Do not kill: only ' + c.warn + ' of 12 seen</div>';
+    if (c.low) h += '<div class="cn-line bad">#' + c.low.id + ' low ' + c.low.hp + '% - hold dps</div>';
+    for (var i = 0; i < c.rows.length; i++) {
+      var r = c.rows[i];
+      if (r.dead_at != null) {
+        if (r.back_at <= nowMs) continue;
+        h += '<div class="cn-row dead"><span class="cn-id">#' + r.id + '</span><span>dead ' + clock(r.dead_at) + '</span><span class="cn-t">back ' + mm(r.back_at - nowMs) + '</span></div>';
+        continue;
+      }
+      var low = c.low && c.low.id === r.id, hp = r.hp;
+      h += '<div class="cn-row' + (low ? ' low' : '') + '"><span class="cn-id">#' + r.id + '</span><span class="cn-bar"><i style="width:' + (hp == null ? 0 : hp) + '%"></i></span>'
+        + '<span class="cn-hp">' + (hp == null ? '?' : hp + '%') + '</span>'
+        + '<span class="cn-t">' + (r.root_end && r.root_end > nowMs ? 'root ' + mm(r.root_end - nowMs) : '') + '</span>'
+        + '<span class="cn-t">' + (r.slow_end && r.slow_end > nowMs ? 'slow ' + mm(r.slow_end - nowMs) : '') + '</span></div>';
+    }
+    return h + '</div>';
+  }
+  var _councilSaid = 0;
+  function councilSpeak(c){
+    var id = c && c.low ? c.low.id : 0;
+    if (id === _councilSaid) return;
+    _councilSaid = id;
+    if (!id) return;
+    try { if (window.speechSynthesis) { var u = new SpeechSynthesisUtterance('Council low, hold dps'); u.rate = 1.05; window.speechSynthesis.speak(u); } } catch (e) {}
+  }
+
   function render(s){
     if (!s || s.character == null) {
       contentEl.innerHTML = '<div id="empty">No focused character yet — launch EQ + Zeal and target a mob.</div>';
@@ -958,6 +1007,8 @@
       _hailMore.clear();
     }
     html += zoneFlagsHtml(s.zone_flags);
+    html += councilHtml(s.council, Date.now());
+    councilSpeak(s.council);
 
     // Raid-wide DA/invuln broadcasts — every tank currently reporting status
     // via their own raid-chat macro (a member's ">> DA up << 18 secs" etc),

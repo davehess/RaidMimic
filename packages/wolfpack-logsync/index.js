@@ -19285,6 +19285,8 @@ function _serializeCommandCenterState() {
       return _hailBoardSnapshot(_nowOnServerClock(), ownRaid ? _raidRosterMembers : null);
     })(),
     zone_flags:    _zoneFlagsSnapshot(activeChar, Date.now()),   // null outside a flag-gated zone or until the bot answers
+    // null outside Plane of Earth B or until a councilman is seen; a throw hides the card, never the Command Center
+    council:       (() => { try { return _councilSnapshot(activeChar, Date.now()); } catch { return null; } })(),
     cures,
     // Per-cleric Divine Intervention readiness — chips on the board.
     di:            diStatusSnapshot(),
@@ -36873,6 +36875,18 @@ const COMMAND_HTML = `<!doctype html>
   .flag-card .fl-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:11px;line-height:1.5}
   .flag-card .fl-chip{padding:0 5px;border-radius:3px;background:rgba(248,81,73,0.22);color:rgb(230 237 243);white-space:nowrap}
   .flag-card .fl-dim{font-size:11px;color:rgb(154 164 173);margin-top:3px}
+  /* Rathe Council (the guild lead, 2026-11-20): one slim row per councilman, by spawn id. 11px, nothing smaller. */
+  .cn-card .cn-row{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.7;color:rgb(201 209 217);font-variant-numeric:tabular-nums}
+  .cn-card .cn-id{width:44px;color:rgb(154 164 173)}
+  .cn-card .cn-bar{flex:1;min-width:40px;height:7px;border-radius:3px;background:rgba(110,118,129,0.3);overflow:hidden}
+  .cn-card .cn-bar i{display:block;height:100%;background:rgb(86 211 100)}
+  .cn-card .cn-row.low .cn-bar i{background:rgb(248 113 113)}
+  .cn-card .cn-hp{width:34px;text-align:right;color:rgb(230 237 243)}
+  .cn-card .cn-t{min-width:62px;color:rgb(255 166 87)}
+  .cn-card .cn-row.dead{color:rgb(154 164 173)}
+  .cn-card .cn-line{font-size:11px;margin:2px 0;color:rgb(201 209 217)}
+  .cn-card .cn-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .cn-card .cn-line.bad{color:rgb(248 113 113);font-weight:700}
   /* drag/lock/setup chrome — shared pattern. */
   #drag-controls{display:none;position:fixed;top:4px;left:4px;gap:4px;z-index:60}
   body.unlocked #drag-controls{display:flex}
@@ -37508,6 +37522,43 @@ const COMMAND_HTML = `<!doctype html>
     return h + '</div>';
   }
 
+  // The Rathe Council card. The agent sends state.council only in Plane of Earth B once a councilman is known. Times
+  // arrive as absolute ms and count down against nowMs; an unknown HP reads "?", never 0. Same input, same HTML.
+  function councilHtml(c, nowMs){
+    if (!c || !c.rows || !c.rows.length) return '';
+    function mm(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
+    function clock(ms){ var d = new Date(ms), p = function(n){ return (n < 10 ? '0' : '') + n; }; return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+    var key = 'council', col = _isCollapsed(key);
+    var left = c.back_at && c.back_at > nowMs && c.down < 12 ? ' · 12th within ' + mm(c.back_at - nowMs) : '';
+    var h = '<div class="card cn-card"><div class="head">' + secToggle(key, '🏛 Rathe Council', c.down + '/12 down' + left) + '</div>';
+    if (col) return h + '</div>';
+    h += '<div class="cn-line"><b>' + c.down + '/12 down' + left + '</b></div>';
+    if (c.warn != null) h += '<div class="cn-line bad">Do not kill: only ' + c.warn + ' of 12 seen</div>';
+    if (c.low) h += '<div class="cn-line bad">#' + c.low.id + ' low ' + c.low.hp + '% - hold dps</div>';
+    for (var i = 0; i < c.rows.length; i++) {
+      var r = c.rows[i];
+      if (r.dead_at != null) {
+        if (r.back_at <= nowMs) continue;
+        h += '<div class="cn-row dead"><span class="cn-id">#' + r.id + '</span><span>dead ' + clock(r.dead_at) + '</span><span class="cn-t">back ' + mm(r.back_at - nowMs) + '</span></div>';
+        continue;
+      }
+      var low = c.low && c.low.id === r.id, hp = r.hp;
+      h += '<div class="cn-row' + (low ? ' low' : '') + '"><span class="cn-id">#' + r.id + '</span><span class="cn-bar"><i style="width:' + (hp == null ? 0 : hp) + '%"></i></span>'
+        + '<span class="cn-hp">' + (hp == null ? '?' : hp + '%') + '</span>'
+        + '<span class="cn-t">' + (r.root_end && r.root_end > nowMs ? 'root ' + mm(r.root_end - nowMs) : '') + '</span>'
+        + '<span class="cn-t">' + (r.slow_end && r.slow_end > nowMs ? 'slow ' + mm(r.slow_end - nowMs) : '') + '</span></div>';
+    }
+    return h + '</div>';
+  }
+  var _councilSaid = 0;
+  function councilSpeak(c){
+    var id = c && c.low ? c.low.id : 0;
+    if (id === _councilSaid) return;
+    _councilSaid = id;
+    if (!id) return;
+    try { if (window.speechSynthesis) { var u = new SpeechSynthesisUtterance('Council low, hold dps'); u.rate = 1.05; window.speechSynthesis.speak(u); } } catch (e) {}
+  }
+
   function render(s){
     if (!s || s.character == null) {
       contentEl.innerHTML = '<div id="empty">No focused character yet — launch EQ + Zeal and target a mob.</div>';
@@ -37580,6 +37631,8 @@ const COMMAND_HTML = `<!doctype html>
       _hailMore.clear();
     }
     html += zoneFlagsHtml(s.zone_flags);
+    html += councilHtml(s.council, Date.now());
+    councilSpeak(s.council);
 
     // Raid-wide DA/invuln broadcasts — every tank currently reporting status
     // via their own raid-chat macro (a member's ">> DA up << 18 secs" etc),
@@ -63751,6 +63804,126 @@ function _zoneFlagsSnapshot(character, nowMs) {
   _zoneFlagsFetch(gate, names);
   return _zoneFlags.gate === gate ? zoneFlagCard(zoneId, _zoneName(zoneId), names, _zoneFlags.byName) : null;
 }
+// ── Rathe Council card, Plane of Earth B (the guild lead, 2026-11-20) ───────────────────────────────────────────────
+// 12 councilmen share one name, so each is tracked by SPAWN ID. Rules from RatheCouncil.lua (SecretsOTheP/quests f94be33):
+// no overall time limit; each death counts for 420 s (COUNCIL_RESPAWN), then that councilman respawns at full HP under a
+// NEW id and must die again; the Avatar comes when 12 deaths are current at once. So the window rolls: the 12th kill is
+// needed within 420 s of the OLDEST current death. Sources, all existing: the bot's extended-target rows (every Mimic's
+// target: spawn_id, hp_pct, debuffs with remaining_secs), this machine's own Zeal targets (_selfTargets), this log's slain
+// line. Root / slow come from the spell catalog's `cc` kinds, never from spell names. HP is null ("?") until seen.
+const COUNCIL_ZONE_ID = 222;
+const COUNCIL_SIZE = 12;
+const COUNCIL_RESPAWN_S = 420;
+const COUNCIL_LOW_HP = 20;              // a councilman at or under this ...
+const COUNCIL_OTHERS_MEDIAN_HP = 50;    // ... while the median of the others known is at or over this: hold dps
+const COUNCIL_MIN_OTHERS = 3;           // fewest other councilmen with a known HP before "ahead of the rest" means anything
+const COUNCIL_KEEP_S = 120;             // a live id unseen this long drops off the card
+const COUNCIL_KILL_HP_MAX = 25;         // a slain line is credited to the lowest-HP live id, if it was at or under this
+const COUNCIL_GONE_HP_MAX = 8;          // an id last seen at or under this ...
+const COUNCIL_GONE_S = 6;               // ... and unseen this long is dead
+const COUNCIL_LOCAL_WIN_S = 10;         // a local Zeal sample this fresh is not overwritten by the bot's older aggregate
+const COUNCIL_SLAIN_DEDUP_MS = 800;     // two logins on one machine print the same slain line
+const _councilNameRx = /^(?:an?\s+)?rathe councilman$/i;
+const _council = { mobs: new Map(), lastSlainAt: 0 };
+const _isCouncilName = (n) => _councilNameRx.test(String(n || '').replace(/^#/, '').replace(/_/g, ' ').trim());
+// sample: { id, hp (0-100 | null), at (ms), src: 'local' | 'ext', root_end?, slow_end? } (ends are absolute ms).
+// Latest sample wins; a root / slow keeps the later end. A dead id ignores samples until its countdown removes it.
+function councilNote(state, s, nowMs) {
+  const id = Number(s && s.id);
+  if (!(id > 0)) return;
+  let m = state.mobs.get(id);
+  if (!m) { m = { id, hp: null, hp_at: 0, src: null, seen_at: 0, dead_at: null, root_end: 0, slow_end: 0 }; state.mobs.set(id, m); }
+  if (m.dead_at != null) return;
+  const at = Number(s.at) || nowMs;
+  m.seen_at = Math.max(m.seen_at, at);
+  const hp = s.hp == null || !Number.isFinite(Number(s.hp)) ? null : Math.max(0, Math.min(100, Number(s.hp)));
+  const localFresh = m.src === 'local' && s.src === 'ext' && nowMs - m.hp_at < COUNCIL_LOCAL_WIN_S * 1000;
+  if (hp != null && at >= m.hp_at && !localFresh) { m.hp = hp; m.hp_at = at; m.src = s.src || 'ext'; }
+  if (s.root_end > m.root_end) m.root_end = s.root_end;
+  if (s.slow_end > m.slow_end) m.slow_end = s.slow_end;
+  if (hp === 0) m.dead_at = at;
+}
+// The slain line: credit it to the live id with the lowest known HP, when that was low enough to be a kill.
+function councilSlain(state, nowMs) {
+  if (nowMs - state.lastSlainAt < COUNCIL_SLAIN_DEDUP_MS) return false;
+  let best = null;
+  for (const m of state.mobs.values()) if (m.dead_at == null && m.hp != null && m.hp <= COUNCIL_KILL_HP_MAX && (!best || m.hp < best.hp)) best = m;
+  if (!best) return false;
+  state.lastSlainAt = nowMs;
+  best.dead_at = nowMs;
+  return true;
+}
+// Gone-while-low ids die, countdowns that ran out remove the corpse (its respawn is a new id), long-unseen ids drop.
+function councilSweep(state, nowMs) {
+  for (const [id, m] of state.mobs) {
+    if (m.dead_at == null) {
+      if (m.hp != null && m.hp <= COUNCIL_GONE_HP_MAX && nowMs - m.seen_at > COUNCIL_GONE_S * 1000) m.dead_at = m.seen_at;
+      else if (nowMs - m.seen_at > COUNCIL_KEEP_S * 1000) state.mobs.delete(id);
+    }
+    if (m.dead_at != null && nowMs - m.dead_at >= COUNCIL_RESPAWN_S * 1000) state.mobs.delete(id);
+  }
+}
+// The card the Command Center draws, or null before any councilman is known. Times are absolute ms so the payload does
+// not change between polls when nothing did; the overlay counts down against its own clock.
+function councilCard(state, nowMs) {
+  const all = [...state.mobs.values()];
+  if (!all.length) return null;
+  const live = all.filter(m => m.dead_at == null).sort((a, b) => a.id - b.id);
+  const dead = all.filter(m => m.dead_at != null).sort((a, b) => a.dead_at - b.dead_at);
+  const known = live.filter(m => m.hp != null);
+  let low = null;
+  for (const m of known) {
+    if (m.hp > COUNCIL_LOW_HP) continue;
+    const others = known.filter(o => o !== m).map(o => o.hp).sort((a, b) => a - b);
+    if (others.length < COUNCIL_MIN_OTHERS) continue;
+    const mid = others.length % 2 ? others[(others.length - 1) / 2] : (others[others.length / 2 - 1] + others[others.length / 2]) / 2;
+    if (mid >= COUNCIL_OTHERS_MEDIAN_HP && (!low || m.hp < low.hp)) low = { id: m.id, hp: Math.round(m.hp) };
+  }
+  const t = (ms) => (ms > nowMs ? ms : null);
+  const rows = live.map(m => ({ id: m.id, hp: m.hp == null ? null : Math.round(m.hp), root_end: t(m.root_end), slow_end: t(m.slow_end) }))
+    .concat(dead.map(m => ({ id: m.id, dead_at: m.dead_at, back_at: m.dead_at + COUNCIL_RESPAWN_S * 1000 })));
+  const seen = all.length;
+  return {
+    seen, down: dead.length,
+    back_at: dead.length ? dead[0].dead_at + COUNCIL_RESPAWN_S * 1000 : null,
+    warn: (!dead.length && seen < COUNCIL_SIZE) ? seen : null,   // "only N of 12 seen": our view is partial, so a count, not a fact
+    low, rows,
+  };
+}
+function _councilSnapshot(character, nowMs) {
+  if (!character || _isGuestChar(character)) return null;
+  const k = Object.keys(_zealState || {}).find(c => c.toLowerCase() === String(character).toLowerCase());
+  const st = k ? _zealState[k] : null;
+  if (!st || Number(st.zone) !== COUNCIL_ZONE_ID) { if (_council.mobs.size) _council.mobs.clear(); return null; }
+  fetchExtendedTarget(character);
+  const cached = _extTargetCache.get(String(character).toLowerCase());
+  if (cached && cached.payload && Array.isArray(cached.payload.targets)) {
+    for (const r of cached.payload.targets) {
+      if (!r || r.stale || !(Number(r.spawn_id) > 0) || !_isCouncilName(r.name)) continue;
+      const s = { id: r.spawn_id, hp: r.hp_pct, at: cached.at, src: 'ext' };
+      for (const d of (r.debuffs || [])) {
+        if (!d || d.attributed === false || !(d.remaining_secs > 0)) continue;
+        const e = _spellByNameLower.get(String(d.name || '').toLowerCase());
+        const cc = e && Array.isArray(e.cc) ? e.cc : [];
+        const end = cached.at + d.remaining_secs * 1000;
+        if (cc.includes('root') && !(end < s.root_end)) s.root_end = end;
+        if (cc.includes('slow') && !(end < s.slow_end)) s.slow_end = end;
+      }
+      councilNote(_council, s, nowMs);
+    }
+  }
+  for (const m of _selfTargets.values()) for (const e of m.values()) {
+    if (e.spawn_id > 0 && _isCouncilName(e.name) && nowMs - e.seen_at < COUNCIL_KEEP_S * 1000) councilNote(_council, { id: e.spawn_id, hp: e.hp_pct, at: e.seen_at, src: 'local' }, nowMs);
+  }
+  councilSweep(_council, nowMs);
+  return councilCard(_council, nowMs);
+}
+// The slain line from this machine's own log; only counts while the card is live (a councilman is tracked).
+function _councilNoteSlainLine(line, nowMs) {
+  if (!_council.mobs.size || line.indexOf('Councilman') === -1 || line.indexOf('slain') === -1) return;
+  const m = line.match(_SLAIN_BY_RX) || line.match(_SLAIN_YOU_RX);
+  if (m && _isCouncilName(m[1])) councilSlain(_council, nowMs);
+}
 function _hailBoardSnapshot(nowMs, raidNames) {
   const out = [];
   for (const w of _hailBoard.windows) {
@@ -67647,6 +67820,7 @@ async function main() {
         // is correctly attributed for the killer-guard (we don't kill our own
         // pet — same-named different mob).
         checkCharmPetDeath(line, b.character);
+        try { _councilNoteSlainLine(line, Date.now()); } catch { void 0; }
 
         // #142 — a boss death clears that mob's countdown timers (tank-buster,
         // deathtouch) so no phantom "next in Xs" lingers on the corpse; and a
