@@ -26,7 +26,6 @@ import {
   type RollLine, type RollOverride, type RollSetRow, type LootedRow,
 } from './rolls';
 import type { ShareWindow } from './raidShare';
-import type { HailEvent } from './raidHails';
 
 // ── Opt-outs ─────────────────────────────────────────────────────────────────
 
@@ -193,8 +192,6 @@ export type SessionBundle = {
   loot: LootEntry[];
   rolls: RollEntry[];
   bidders: BidderView[];
-  /** Who hailed each flag NPC in the window (lib/raidHails.ts): a proxy for "flagged". Absent on a bundle built without it. */
-  hails?: HailEvent[];
 };
 
 // ── Attendance, from the recording ───────────────────────────────────────────
