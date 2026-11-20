@@ -113,15 +113,23 @@
   /* 🎟 Guests (officers only): one row per guest Mimic link, with +1h / +3h. Same right gutter as the rolls card. */
   .card.guests-card{padding-right:28px}
   .guest-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6edf3}
-  .guest-row .gwhen{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
+  .guest-row .gwhen,.mgb-clock{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
   .guest-row .gwhen.soon{color:#f0a52d}
   .guest-row .gwhen.out{color:#f87171}
-  .guest-row .gn{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
+  .guest-row .gn,.mgb-spell,.mgb-basis{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
   .guest-row .guestExt{cursor:pointer;flex-shrink:0;color:#e6edf3;font-size:9px;border:1px solid rgba(110,118,129,0.5);
     border-radius:3px;padding:0 4px;opacity:0.85;user-select:none}
   .guest-row .guestExt:hover{opacity:1;color:#f0c419;border-color:#f0c419}
-  .guest-row .gflash{flex-shrink:0;font-size:9px;color:#56d364}
+  .guest-row .gflash,.mgb-clock.ready{flex-shrink:0;font-size:9px;color:#56d364}
   .guest-row .gflash.bad{color:#f87171}
+  /* MGB board: holders by class, a ready/down clock per row (painted each second, never in the HTML). */
+  .mgb-last{font-size:11px;margin:1px 0 3px}
+  .mgb-last .mgb-basis{margin-right:3px;font-size:11px}
+  .mgb-clock.ready{font-size:11px}
+  .mgb-cls{font-size:11px;margin-top:3px}
+  .mgb-row,.mgb-own{font-size:11px}
+  .mgb-clock{flex-shrink:0;font-size:11px}
+  .mgb-row .mgb-spell{flex-shrink:0;font-size:11px;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roll-row .rollMore{cursor:pointer;color:#8b949e;font-size:9px;flex-shrink:0;opacity:0.8;user-select:none}
   .roll-row .rollMore:hover{opacity:1;color:#e6edf3}
   .roll-row .rollCopy{cursor:pointer;color:#8b949e;font-size:10px;flex-shrink:0;opacity:0.8;user-select:none;margin-right:4px}
@@ -133,7 +141,7 @@
     border-left:1px solid rgba(110,118,129,0.35);padding-left:6px}
   .roll-detail .d{display:flex;gap:6px;font-size:9px;color:#9aa4ad;line-height:1.5}
   .roll-detail .d .v{color:#e6edf3;font-variant-numeric:tabular-nums;margin-left:auto}
-  .roll-detail .d.win .v{color:#f0c419;font-weight:700}
+  .roll-detail .d.win .v,.mgb-cls{color:#f0c419;font-weight:700}
   .roll-detail .d.lose .v{color:#f85149;font-weight:700}
   .roll-detail .d .rng{opacity:.6;flex-shrink:0;font-variant-numeric:tabular-nums}
   /* A tie at the top of a set (the guild lead, 2026-10-14). Orange, bordered and spelled TIE so it reads
@@ -871,6 +879,82 @@
     }, function(){ done('failed', true); });
   }
 
+  // MGB card (the guild lead's pick). s.mgb = { last, holders, own } from the agent, or null (no card). Holders are grouped by
+  // class in this order, then name; every time lives in a data- attribute and paintMgbClocks() writes the text once a second,
+  // so the HTML is byte-identical poll to poll. data-end 0 = ready now (the bot has no cast on record for that name).
+  var MGB_CLASS_ORDER = ['Cleric', 'Druid', 'Shaman', 'Enchanter', 'Necromancer', 'Magician', 'Paladin', 'Ranger', 'Beastlord'];
+  var MGB_BASIS = { own_log: ['✓', "Read from the caster's own log"], cast_stream: ['≈', 'Matched from the raid cast stream'], candidates: ['?', 'Could be any of the raiders named here'] };
+  function mgbClockState(endMs, nowMs){
+    var left = Math.ceil((endMs - nowMs) / 1000);
+    if (!(endMs > 0) || !(left > 0)) return { text: 'ready', ready: true };
+    return { text: 'down ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0'), ready: false };
+  }
+  function mgbAgoText(atMs, nowMs){
+    var s = Math.max(0, Math.floor((nowMs - atMs) / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' ago';
+  }
+  function mgbHtml(m){
+    if (!m || typeof m !== 'object') return '';
+    var holders = Array.isArray(m.holders) ? m.holders : [];
+    var own = m.own && m.own.ready_ms ? m.own : null;
+    var last = m.last && m.last.at_ms ? m.last : null;
+    if (!holders.length && !own && !last) return '';
+    var col = _isCollapsed('mgb');
+    var h = '<div class="card mgb-card"><div class="head">' + secToggle('mgb', 'MGB', holders.length) + '</div>';
+    if (col) return h + '</div>';
+    if (last) {
+      var bm = MGB_BASIS[last.basis] || ['', ''];
+      var who = last.caster || 'unknown';
+      var tip = bm[1] + (last.candidates && last.candidates.length ? ': ' + last.candidates.join(', ') : '');
+      h += '<div class="mgb-last" title="' + esc(tip) + '"><span class="mgb-basis">' + bm[0] + '</span>Last MGB: ' + esc(last.spell || 'unknown spell')
+         + ' by ' + esc(who) + ' <span class="mgb-ago" data-at="' + Math.round(last.at_ms) + '"></span>'
+         + (last.targets > 0 ? ' (' + last.targets + ' raiders)' : '') + '</div>';
+    }
+    if (own) {
+      h += '<div class="list"><div class="row mgb-own"><span class="nm">Your MGB</span><span class="mgb-clock" data-end="' + Math.round(own.ready_ms) + '"></span></div></div>';
+    }
+    var groups = {}, order = [];
+    for (var i = 0; i < holders.length; i++) {
+      var hd = holders[i];
+      if (!hd || !hd.name) continue;
+      var ck = hd.cls || 'Other';
+      if (!groups[ck]) { groups[ck] = []; order.push(ck); }
+      groups[ck].push(hd);
+    }
+    order.sort(function(a, b){
+      var ia = MGB_CLASS_ORDER.indexOf(a), ib = MGB_CLASS_ORDER.indexOf(b);
+      if (ia < 0) ia = a === 'Other' ? 1001 : 1000;
+      if (ib < 0) ib = b === 'Other' ? 1001 : 1000;
+      return ia !== ib ? ia - ib : (a < b ? -1 : (a > b ? 1 : 0));
+    });
+    for (var gi = 0; gi < order.length; gi++) {
+      var rows = groups[order[gi]].slice().sort(function(a, b){ var x = a.name.toLowerCase(), y = b.name.toLowerCase(); return x < y ? -1 : (x > y ? 1 : 0); });
+      h += '<div class="mgb-cls">' + esc(order[gi]) + '</div><div class="list">';
+      for (var ri = 0; ri < rows.length; ri++) {
+        var r = rows[ri];
+        h += '<div class="row mgb-row"><span class="nm">' + esc(r.name) + '</span>'
+           + '<span class="mgb-clock" data-end="' + (r.ready_ms ? Math.round(r.ready_ms) : 0) + '"></span>'
+           + (r.last_spell ? '<span class="mgb-spell" title="' + esc(r.last_spell) + '">' + esc(r.last_spell) + '</span>' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  function paintMgbClocks(){
+    var now = Date.now(), els = contentEl.querySelectorAll('.mgb-clock'), i;
+    for (i = 0; i < els.length; i++) {
+      var st = mgbClockState(Number(els[i].getAttribute('data-end')), now);
+      var cls = 'mgb-clock' + (st.ready ? ' ready' : '');
+      if (els[i].textContent !== st.text) els[i].textContent = st.text;
+      if (els[i].className !== cls) els[i].className = cls;
+    }
+    els = contentEl.querySelectorAll('.mgb-ago');
+    for (i = 0; i < els.length; i++) {
+      var t = mgbAgoText(Number(els[i].getAttribute('data-at')), now);
+      if (els[i].textContent !== t) els[i].textContent = t;
+    }
+  }
+
   // The zone-flags card. The agent sends state.zone_flags (null outside a gated zone). Only counts and names from
   // known records; "At least" whenever some have no record. Same input, same HTML.
   function zoneFlagsHtml(z){
@@ -1296,6 +1380,9 @@
       html += '</div>';
     }
 
+    // MGB board: a throw in the card hides the card, never the Command Center.
+    if (s.mgb) { try { html += mgbHtml(s.mgb); } catch (e) { void e; } }
+
     // ── Last deaths (FB-84) ───────────────────────────────────────────────
     // One line per recent death from this machine's own log, next to the rez board it explains.
     // Local only: /api/command-center is this machine's agent; nothing here is uploaded.
@@ -1314,6 +1401,7 @@
   // The hail clocks tick on their own: each card carries its end (data-end, this machine's clock) and
   // the text is written here, once a second, so a clock never makes the card's HTML differ.
   function paintHailClocks(){
+    try { paintMgbClocks(); } catch (e) { void e; }
     var els = contentEl.querySelectorAll('.hail-clock'), now = Date.now();
     for (var i = 0; i < els.length; i++) {
       var st = hailClockState(Number(els[i].getAttribute('data-end')), now);

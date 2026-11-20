@@ -9308,6 +9308,29 @@ var _CLASS_CHECKLIST = {
 // never showed a crown (2026-10-01). Both spellings count.
 function _isRaidLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '2' || /^raid\s*leader$/i.test(r); }
 function _isGroupLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '1' || /^group\s*leader$/i.test(r); }
+// MGB ready/down dot on the badge, from the agent's board (q.mgb = { holders: [{ name, ready_ms }], own }). The HTML carries only
+// the end time (0 = ready now); wpPaintMgbDots() writes colour + tooltip each second, so the Raid card stays byte-stable.
+// null = the board has nothing on this raider: no dot, the badge stays as it was.
+function _mgbEndFor(q, name) {
+  var b = q && q.mgb;
+  if (!b || !name) return null;
+  var nl = String(name).toLowerCase(), end = null, i;
+  var hs = b.holders || [];
+  for (i = 0; i < hs.length; i++) if (hs[i] && String(hs[i].name).toLowerCase() === nl) end = hs[i].ready_ms ? Math.round(hs[i].ready_ms) : 0;
+  if (b.own && b.own.ready_ms && String(b.own.character).toLowerCase() === nl) end = Math.max(end || 0, Math.round(b.own.ready_ms));
+  return end;
+}
+function wpPaintMgbDots() {
+  var els = document.querySelectorAll('.wp-mgb-dot'), now = Date.now();
+  for (var i = 0; i < els.length; i++) {
+    var left = Math.ceil((Number(els[i].getAttribute('data-end')) - now) / 1000);
+    var up = !(left > 0);
+    var tip = up ? 'MGB ready' : 'MGB in ' + Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+    els[i].style.cssText = 'display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle;background:' + (up ? 'var(--green)' : 'var(--dim)');
+    if (els[i].title !== tip) els[i].title = tip;
+  }
+}
+setInterval(wpPaintMgbDots, 1000);
 function renderRaidTab(q) {
   var root = document.getElementById('raid');
   if (!root) return;
@@ -9363,7 +9386,8 @@ function renderRaidTab(q) {
         h += '<div class="wp-raid-row" data-raider="' + esc(m.name) + '" style="position:relative;cursor:pointer;padding:3px 6px 4px;font-size:11px;border-left:3px solid ' + _raidTierColor(m.tier) + ';margin-bottom:2px;background:' + (selected ? 'rgba(88,166,255,0.12)' : 'rgba(8,5,16,0.35)') + ';border-radius:3px;overflow:hidden">'
           + '<div style="display:flex;align-items:baseline;gap:5px">'
           + '<span style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (_isRaidLeadRank(m.rank) ? '👑 ' : (_isGroupLeadRank(m.rank) ? '⭐ ' : '')) + esc(m.name)
-          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>' : '') + '</span>'
+          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>'
+              + (_mgbEndFor(q, m.name) != null ? '<span class="wp-mgb-dot" data-end="' + _mgbEndFor(q, m.name) + '"></span>' : '') : '') + '</span>'
           + (hp != null ? '<span class="num" style="margin-left:auto;font-size:10px;color:' + hpColor + '">' + hp + '%</span>' : '')
           + '</div>'
           + '<div style="display:flex;align-items:baseline;gap:5px;font-size:9px" class="dim">'
@@ -9521,6 +9545,7 @@ function renderRaidTab(q) {
   h += '</div>';
   h += '</div>';
   morphInto(root, h);
+  wpPaintMgbDots();
   var sel2 = document.getElementById('wpRaidCls');
   if (sel2) _bindOnce(sel2, 'change', function(){
     _raidTabCls = sel2.value || '';
