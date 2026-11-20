@@ -13992,6 +13992,7 @@ function _endpointForKind(kind, botUrl) {
     case 'quake':           return base + '/quake';
     case 'casting':         return base + '/casting';
     case 'ari_lead':        return base + '/ari-lead';
+    case 'mgb':             return base + '/mgb';
     case 'crash_report':    return base + '/crash_report';
     case 'kite_loop':       return base + '/kite-loop';
     case 'track_backfill':  return base + '/track-backfill';
@@ -19288,6 +19289,8 @@ function _serializeCommandCenterState() {
     // null outside Plane of Earth B or until a councilman is seen; a throw hides the card, never the Command Center
     council:       (() => { try { return _councilSnapshot(activeChar, Date.now()); } catch { return null; } })(),
     cures,
+    // MGB board (who has Mass Group Buff ready); null hides the card, and a throw inside never reaches the rest.
+    mgb:           _mgbSnapshot(),
     // Per-cleric Divine Intervention readiness — chips on the board.
     di:            diStatusSnapshot(),
     updated_at:    Date.now(),
@@ -30318,6 +30321,29 @@ var _CLASS_CHECKLIST = {
 // never showed a crown (2026-10-01). Both spellings count.
 function _isRaidLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '2' || /^raid\\s*leader$/i.test(r); }
 function _isGroupLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '1' || /^group\\s*leader$/i.test(r); }
+// MGB ready/down dot on the badge, from the agent's board (q.mgb = { holders: [{ name, ready_ms }], own }). The HTML carries only
+// the end time (0 = ready now); wpPaintMgbDots() writes colour + tooltip each second, so the Raid card stays byte-stable.
+// null = the board has nothing on this raider: no dot, the badge stays as it was.
+function _mgbEndFor(q, name) {
+  var b = q && q.mgb;
+  if (!b || !name) return null;
+  var nl = String(name).toLowerCase(), end = null, i;
+  var hs = b.holders || [];
+  for (i = 0; i < hs.length; i++) if (hs[i] && String(hs[i].name).toLowerCase() === nl) end = hs[i].ready_ms ? Math.round(hs[i].ready_ms) : 0;
+  if (b.own && b.own.ready_ms && String(b.own.character).toLowerCase() === nl) end = Math.max(end || 0, Math.round(b.own.ready_ms));
+  return end;
+}
+function wpPaintMgbDots() {
+  var els = document.querySelectorAll('.wp-mgb-dot'), now = Date.now();
+  for (var i = 0; i < els.length; i++) {
+    var left = Math.ceil((Number(els[i].getAttribute('data-end')) - now) / 1000);
+    var up = !(left > 0);
+    var tip = up ? 'MGB ready' : 'MGB in ' + Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+    els[i].style.cssText = 'display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle;background:' + (up ? 'var(--green)' : 'var(--dim)');
+    if (els[i].title !== tip) els[i].title = tip;
+  }
+}
+setInterval(wpPaintMgbDots, 1000);
 function renderRaidTab(q) {
   var root = document.getElementById('raid');
   if (!root) return;
@@ -30373,7 +30399,8 @@ function renderRaidTab(q) {
         h += '<div class="wp-raid-row" data-raider="' + esc(m.name) + '" style="position:relative;cursor:pointer;padding:3px 6px 4px;font-size:11px;border-left:3px solid ' + _raidTierColor(m.tier) + ';margin-bottom:2px;background:' + (selected ? 'rgba(88,166,255,0.12)' : 'rgba(8,5,16,0.35)') + ';border-radius:3px;overflow:hidden">'
           + '<div style="display:flex;align-items:baseline;gap:5px">'
           + '<span style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (_isRaidLeadRank(m.rank) ? '👑 ' : (_isGroupLeadRank(m.rank) ? '⭐ ' : '')) + esc(m.name)
-          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>' : '') + '</span>'
+          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>'
+              + (_mgbEndFor(q, m.name) != null ? '<span class="wp-mgb-dot" data-end="' + _mgbEndFor(q, m.name) + '"></span>' : '') : '') + '</span>'
           + (hp != null ? '<span class="num" style="margin-left:auto;font-size:10px;color:' + hpColor + '">' + hp + '%</span>' : '')
           + '</div>'
           + '<div style="display:flex;align-items:baseline;gap:5px;font-size:9px" class="dim">'
@@ -30531,6 +30558,7 @@ function renderRaidTab(q) {
   h += '</div>';
   h += '</div>';
   morphInto(root, h);
+  wpPaintMgbDots();
   var sel2 = document.getElementById('wpRaidCls');
   if (sel2) _bindOnce(sel2, 'change', function(){
     _raidTabCls = sel2.value || '';
@@ -36737,15 +36765,23 @@ const COMMAND_HTML = `<!doctype html>
   /* 🎟 Guests (officers only): one row per guest Mimic link, with +1h / +3h. Same right gutter as the rolls card. */
   .card.guests-card{padding-right:28px}
   .guest-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6edf3}
-  .guest-row .gwhen{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
+  .guest-row .gwhen,.mgb-clock{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
   .guest-row .gwhen.soon{color:#f0a52d}
   .guest-row .gwhen.out{color:#f87171}
-  .guest-row .gn{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
+  .guest-row .gn,.mgb-spell,.mgb-basis{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
   .guest-row .guestExt{cursor:pointer;flex-shrink:0;color:#e6edf3;font-size:9px;border:1px solid rgba(110,118,129,0.5);
     border-radius:3px;padding:0 4px;opacity:0.85;user-select:none}
   .guest-row .guestExt:hover{opacity:1;color:#f0c419;border-color:#f0c419}
-  .guest-row .gflash{flex-shrink:0;font-size:9px;color:#56d364}
+  .guest-row .gflash,.mgb-clock.ready{flex-shrink:0;font-size:9px;color:#56d364}
   .guest-row .gflash.bad{color:#f87171}
+  /* MGB board: holders by class, a ready/down clock per row (painted each second, never in the HTML). */
+  .mgb-last{font-size:11px;margin:1px 0 3px}
+  .mgb-last .mgb-basis{margin-right:3px;font-size:11px}
+  .mgb-clock.ready{font-size:11px}
+  .mgb-cls{font-size:11px;margin-top:3px}
+  .mgb-row,.mgb-own{font-size:11px}
+  .mgb-clock{flex-shrink:0;font-size:11px}
+  .mgb-row .mgb-spell{flex-shrink:0;font-size:11px;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roll-row .rollMore{cursor:pointer;color:#8b949e;font-size:9px;flex-shrink:0;opacity:0.8;user-select:none}
   .roll-row .rollMore:hover{opacity:1;color:#e6edf3}
   .roll-row .rollCopy{cursor:pointer;color:#8b949e;font-size:10px;flex-shrink:0;opacity:0.8;user-select:none;margin-right:4px}
@@ -36757,7 +36793,7 @@ const COMMAND_HTML = `<!doctype html>
     border-left:1px solid rgba(110,118,129,0.35);padding-left:6px}
   .roll-detail .d{display:flex;gap:6px;font-size:9px;color:#9aa4ad;line-height:1.5}
   .roll-detail .d .v{color:#e6edf3;font-variant-numeric:tabular-nums;margin-left:auto}
-  .roll-detail .d.win .v{color:#f0c419;font-weight:700}
+  .roll-detail .d.win .v,.mgb-cls{color:#f0c419;font-weight:700}
   .roll-detail .d.lose .v{color:#f85149;font-weight:700}
   .roll-detail .d .rng{opacity:.6;flex-shrink:0;font-variant-numeric:tabular-nums}
   /* A tie at the top of a set (the guild lead, 2026-10-14). Orange, bordered and spelled TIE so it reads
@@ -37495,6 +37531,82 @@ const COMMAND_HTML = `<!doctype html>
     }, function(){ done('failed', true); });
   }
 
+  // MGB card (the guild lead's pick). s.mgb = { last, holders, own } from the agent, or null (no card). Holders are grouped by
+  // class in this order, then name; every time lives in a data- attribute and paintMgbClocks() writes the text once a second,
+  // so the HTML is byte-identical poll to poll. data-end 0 = ready now (the bot has no cast on record for that name).
+  var MGB_CLASS_ORDER = ['Cleric', 'Druid', 'Shaman', 'Enchanter', 'Necromancer', 'Magician', 'Paladin', 'Ranger', 'Beastlord'];
+  var MGB_BASIS = { own_log: ['✓', "Read from the caster's own log"], cast_stream: ['≈', 'Matched from the raid cast stream'], candidates: ['?', 'Could be any of the raiders named here'] };
+  function mgbClockState(endMs, nowMs){
+    var left = Math.ceil((endMs - nowMs) / 1000);
+    if (!(endMs > 0) || !(left > 0)) return { text: 'ready', ready: true };
+    return { text: 'down ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0'), ready: false };
+  }
+  function mgbAgoText(atMs, nowMs){
+    var s = Math.max(0, Math.floor((nowMs - atMs) / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' ago';
+  }
+  function mgbHtml(m){
+    if (!m || typeof m !== 'object') return '';
+    var holders = Array.isArray(m.holders) ? m.holders : [];
+    var own = m.own && m.own.ready_ms ? m.own : null;
+    var last = m.last && m.last.at_ms ? m.last : null;
+    if (!holders.length && !own && !last) return '';
+    var col = _isCollapsed('mgb');
+    var h = '<div class="card mgb-card"><div class="head">' + secToggle('mgb', 'MGB', holders.length) + '</div>';
+    if (col) return h + '</div>';
+    if (last) {
+      var bm = MGB_BASIS[last.basis] || ['', ''];
+      var who = last.caster || 'unknown';
+      var tip = bm[1] + (last.candidates && last.candidates.length ? ': ' + last.candidates.join(', ') : '');
+      h += '<div class="mgb-last" title="' + esc(tip) + '"><span class="mgb-basis">' + bm[0] + '</span>Last MGB: ' + esc(last.spell || 'unknown spell')
+         + ' by ' + esc(who) + ' <span class="mgb-ago" data-at="' + Math.round(last.at_ms) + '"></span>'
+         + (last.targets > 0 ? ' (' + last.targets + ' raiders)' : '') + '</div>';
+    }
+    if (own) {
+      h += '<div class="list"><div class="row mgb-own"><span class="nm">Your MGB</span><span class="mgb-clock" data-end="' + Math.round(own.ready_ms) + '"></span></div></div>';
+    }
+    var groups = {}, order = [];
+    for (var i = 0; i < holders.length; i++) {
+      var hd = holders[i];
+      if (!hd || !hd.name) continue;
+      var ck = hd.cls || 'Other';
+      if (!groups[ck]) { groups[ck] = []; order.push(ck); }
+      groups[ck].push(hd);
+    }
+    order.sort(function(a, b){
+      var ia = MGB_CLASS_ORDER.indexOf(a), ib = MGB_CLASS_ORDER.indexOf(b);
+      if (ia < 0) ia = a === 'Other' ? 1001 : 1000;
+      if (ib < 0) ib = b === 'Other' ? 1001 : 1000;
+      return ia !== ib ? ia - ib : (a < b ? -1 : (a > b ? 1 : 0));
+    });
+    for (var gi = 0; gi < order.length; gi++) {
+      var rows = groups[order[gi]].slice().sort(function(a, b){ var x = a.name.toLowerCase(), y = b.name.toLowerCase(); return x < y ? -1 : (x > y ? 1 : 0); });
+      h += '<div class="mgb-cls">' + esc(order[gi]) + '</div><div class="list">';
+      for (var ri = 0; ri < rows.length; ri++) {
+        var r = rows[ri];
+        h += '<div class="row mgb-row"><span class="nm">' + esc(r.name) + '</span>'
+           + '<span class="mgb-clock" data-end="' + (r.ready_ms ? Math.round(r.ready_ms) : 0) + '"></span>'
+           + (r.last_spell ? '<span class="mgb-spell" title="' + esc(r.last_spell) + '">' + esc(r.last_spell) + '</span>' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  function paintMgbClocks(){
+    var now = Date.now(), els = contentEl.querySelectorAll('.mgb-clock'), i;
+    for (i = 0; i < els.length; i++) {
+      var st = mgbClockState(Number(els[i].getAttribute('data-end')), now);
+      var cls = 'mgb-clock' + (st.ready ? ' ready' : '');
+      if (els[i].textContent !== st.text) els[i].textContent = st.text;
+      if (els[i].className !== cls) els[i].className = cls;
+    }
+    els = contentEl.querySelectorAll('.mgb-ago');
+    for (i = 0; i < els.length; i++) {
+      var t = mgbAgoText(Number(els[i].getAttribute('data-at')), now);
+      if (els[i].textContent !== t) els[i].textContent = t;
+    }
+  }
+
   // The zone-flags card. The agent sends state.zone_flags (null outside a gated zone). Only counts and names from
   // known records; "At least" whenever some have no record. Same input, same HTML.
   function zoneFlagsHtml(z){
@@ -37920,6 +38032,9 @@ const COMMAND_HTML = `<!doctype html>
       html += '</div>';
     }
 
+    // MGB board: a throw in the card hides the card, never the Command Center.
+    if (s.mgb) { try { html += mgbHtml(s.mgb); } catch (e) { void e; } }
+
     // ── Last deaths (FB-84) ───────────────────────────────────────────────
     // One line per recent death from this machine's own log, next to the rez board it explains.
     // Local only: /api/command-center is this machine's agent; nothing here is uploaded.
@@ -37938,6 +38053,7 @@ const COMMAND_HTML = `<!doctype html>
   // The hail clocks tick on their own: each card carries its end (data-end, this machine's clock) and
   // the text is written here, once a second, so a clock never makes the card's HTML differ.
   function paintHailClocks(){
+    try { paintMgbClocks(); } catch (e) { void e; }
     var els = contentEl.querySelectorAll('.hail-clock'), now = Date.now();
     for (var i = 0; i < els.length; i++) {
       var st = hailClockState(Number(els[i].getAttribute('data-end')), now);
@@ -38683,6 +38799,8 @@ function startWebDashboard(port) {
         // Tell the overlay which class AUTO resolved to so the picker can
         // read "Auto (Druid)" instead of a blank.
         payload.auto_class = autoClass;
+        // Ready/down dots on the Raid tab's MGB badge (null when no board and no local timer).
+        payload.mgb = _mgbSnapshot();
         // Section filters (dashboard "Buff queue options") ride every payload
         // so a checkbox change reaches the overlay on its next 1.5s poll.
         payload.sections = {
@@ -59031,6 +59149,131 @@ function extendGuestLink(id, hours) {
   });
 }
 
+// ── MGB board (Command Center "MGB" card + the Raid tab's MGB ready dot) ─────────────────────────────────────────
+// The guild lead picked a board of who has Mass Group Buff ready. Three pieces, all fail-soft:
+//   1. Reader: this PC's own log prints "The next group buff you cast will hit all targets in range." when its player
+//      arms the AA (docs/data/class-abilities.json log_text). It is matched on the WHOLE message after the timestamp, so a
+//      line quoted in /rs or /gu chat ("<Name> tells the raid, '...'") can never arm anything. The first "You begin
+//      casting <spell>." within 60 s names the spell, and the activation is queued once (kind 'mgb' -> POST /api/agent/mgb),
+//      after that cast or after the 60 s, whichever comes first, so the bot gets the spell with it.
+//   2. Local timer: 72 min (4320 s) from the activation, kept here so the viewer's own timer works with no bot.
+//   3. Board: GET /api/agent/mgb-board, read lazily by the Command Center poll (15 s), last good kept for 3 min. 404/503/403
+//      hide the card for 5 min; a throw anywhere returns null, which hides the card and never the Command Center.
+const MGB_ACTIVATE_TEXT   = 'The next group buff you cast will hit all targets in range.';
+const MGB_RECAST_MS       = 4320 * 1000;
+const MGB_SPELL_WINDOW_MS = 60 * 1000;
+const MGB_OLD_LINE_MS     = 5 * 60 * 1000;     // an activation older than this is a replayed log, not a live press
+const MGB_BOARD_TTL_MS    = 15 * 1000;
+const MGB_BOARD_STALE_MS  = 3 * 60 * 1000;
+const MGB_BOARD_BACKOFF_MS = 5 * 60 * 1000;
+const _mgbOwn = new Map();                     // lowercase character -> { character, at, spell, sent }
+let _mgbBoard = { at: 0, board: null, okAt: 0, retryAt: 0, inflight: false, logged: false };
+function parseMgbActivation(line) {
+  if (!line || String(line).indexOf('group buff') === -1) return false;
+  const m = String(line).match(/^\[[^\]]+\]\s+(.*?)\s*$/);
+  return !!m && m[1] === MGB_ACTIVATE_TEXT;
+}
+function _mgbFlush(e, send) {
+  if (e.sent) return;
+  e.sent = true;
+  if (!send) return;
+  const body = { character: e.character, at: new Date(e.at).toISOString() };
+  if (e.spell) body.spell = e.spell;
+  try { enqueueUpload('mgb', body); } catch (err) { void err; }
+}
+// One log line of one character. atMs = the line's own time; nowMs = this machine's clock; send = false for a guest log.
+function noteMgbLine(line, character, atMs, nowMs, send) {
+  try {
+    if (!line || !character) return false;
+    const cl = String(character).toLowerCase();
+    if (parseMgbActivation(line)) {
+      if (nowMs - atMs > MGB_OLD_LINE_MS) return false;
+      const e = { character: String(character), at: atMs, spell: null, sent: false };
+      _mgbOwn.set(cl, e);
+      const t = setTimeout(() => _mgbFlush(e, send), MGB_SPELL_WINDOW_MS);
+      if (t && t.unref) t.unref();
+      return true;
+    }
+    const e = _mgbOwn.get(cl);
+    if (e && !e.spell && !e.sent && String(line).indexOf('You begin casting') !== -1) {
+      const m = String(line).match(/\]\s+You begin casting (.+?)\.\s*$/);
+      if (m && atMs - e.at >= 0 && atMs - e.at <= MGB_SPELL_WINDOW_MS) { e.spell = m[1].trim(); _mgbFlush(e, send); }
+    }
+  } catch (err) { void err; }
+  return false;
+}
+// The newest activation this machine saw, for the viewer's own timer.
+function mgbOwnSnapshot() {
+  let best = null;
+  for (const e of _mgbOwn.values()) if (!best || e.at > best.at) best = e;
+  return best ? { character: best.character, at_ms: best.at, spell: best.spell, ready_ms: best.at + MGB_RECAST_MS } : null;
+}
+// The bot's board with every time moved onto this machine's clock (its own `now` is the reference).
+function _mgbNormalizeBoard(j, localNowMs) {
+  if (!j || typeof j !== 'object' || (!Array.isArray(j.holders) && !Array.isArray(j.mgbs))) return null;
+  const botNow = Date.parse(j.now);
+  const skew = Number.isFinite(botNow) ? localNowMs - botNow : 0;
+  const toLocal = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? t + skew : null; };
+  const str = (v) => (typeof v === 'string' && v ? v : null);
+  const mgbs = (Array.isArray(j.mgbs) ? j.mgbs : []).map(m => m && ({
+    at_ms: toLocal(m.at), spell: str(m.spell), caster: str(m.caster), basis: str(m.basis),
+    targets: Number(m.targets) || 0, candidates: Array.isArray(m.candidates) ? m.candidates.filter(n => typeof n === 'string').slice(0, 8) : [],
+  })).filter(m => m && m.at_ms != null).sort((a, b) => b.at_ms - a.at_ms);
+  const holders = (Array.isArray(j.holders) ? j.holders : []).filter(h => h && typeof h.name === 'string' && h.name).map(h => ({
+    name: h.name, cls: str(h.class), ready_ms: h.ready_at ? toLocal(h.ready_at) : null, last_spell: str(h.last_spell), basis: str(h.basis),
+  }));
+  return { last: mgbs[0] || null, holders };
+}
+function fetchMgbBoard() {
+  const now = Date.now();
+  if (_mgbBoard.inflight || now < _mgbBoard.retryAt || (now - _mgbBoard.at) < MGB_BOARD_TTL_MS) return;
+  const opts = _uploadOpts;
+  if (!opts || !opts.botUrl || !opts.token) return;
+  _mgbBoard.inflight = true;
+  const done = (board, retryMs, why) => {
+    _mgbBoard.inflight = false;
+    _mgbBoard.at = Date.now();
+    if (board) { _mgbBoard.board = board; _mgbBoard.okAt = _mgbBoard.at; }
+    else if (retryMs) { _mgbBoard.board = null; }
+    _mgbBoard.retryAt = retryMs ? Date.now() + retryMs : 0;
+    if (!board && why && !_mgbBoard.logged) { _mgbBoard.logged = true; console.log('[mgb] no board (' + why + '); the MGB card stays hidden'); }
+  };
+  try {
+    const u = new URL(opts.botUrl.replace(/\/encounter(\?.*)?$/, '/mgb-board'));
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request({
+      method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search,
+      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` },
+      timeout: 8000,
+    }, (res) => {
+      let body = '';
+      res.on('data', c => { if (body.length < 256 * 1024) body += c; });
+      res.on('end', () => {
+        if (res.statusCode === 404 || res.statusCode === 503 || res.statusCode === 403) return done(null, MGB_BOARD_BACKOFF_MS, 'bot answered ' + res.statusCode);
+        if (res.statusCode !== 200) return done(null, 0, 'bot answered ' + res.statusCode);
+        try { done(_mgbNormalizeBoard(JSON.parse(body), Date.now()), 0, 'unreadable answer'); }
+        catch { done(null, 0, 'unreadable answer'); }
+      });
+    });
+    req.on('error',   () => done(null, 0, 'bot unreachable'));
+    req.on('timeout', () => { req.destroy(); done(null, 0, 'timed out'); });
+    req.end();
+  } catch { done(null, 0, 'bad bot url'); }
+}
+// What the Command Center and the Raid tab carry: { last, holders, own } or null (nothing known -> no card, no dot).
+// This machine's own timer wins for its own character, so the card is right the second the AA is pressed.
+function _mgbSnapshot() {
+  try {
+    fetchMgbBoard();
+    const b = (_mgbBoard.board && (Date.now() - _mgbBoard.okAt) < MGB_BOARD_STALE_MS) ? _mgbBoard.board : null;
+    const own = mgbOwnSnapshot();
+    if (!b && !own) return null;
+    const ol = own ? own.character.toLowerCase() : null;
+    const holders = b ? b.holders.map(h => (own && h.name.toLowerCase() === ol && own.ready_ms > (h.ready_ms || 0)) ? { ...h, ready_ms: own.ready_ms } : h) : [];
+    return { last: b ? b.last : null, holders, own };
+  } catch { return null; }
+}
+
 // ── PoP raid objectives proxy (popraid.html) ─────────────────────────────────
 // The PoP overlay polls the local agent's /api/pop-objectives; we proxy the
 // bot's /api/agent/raid-objectives (the raid-wide shared checkbox board) with
@@ -67634,6 +67877,8 @@ async function main() {
           notePacifyMiss(line, b.character);
           // "Your target looks unaffected." after a lull cast: same timer, taken back.
           noteLullUnaffected(line, b.character);
+          // The MGB AA armed on this log (local timer + one queued POST); never throws.
+          { const _mts = parseEqTimestamp(line); noteMgbLine(line, b.character, _mts ? _mts.getTime() : Date.now(), Date.now(), !_sourceGuest); }
           // A CURE that fizzles/gets interrupted never landed — void the cure
           // the relay above just registered, so the bot doesn't retire a
           // debuff the raider is still carrying.
