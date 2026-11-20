@@ -316,6 +316,7 @@ const _groupScope = require('./utils/groupScope');
 const _zoneTimersMod = require('./utils/zoneTimers');
 const _raidTargetsMod = require('./utils/raidTargets');
 const _raidHistoryMod = require('./utils/raidHistory');
+const _mgbBoardMod = require('./utils/mgbBoard');
 const _mainAssist = require('./utils/mainAssist');
 const _mainAssistStore = _mainAssist.createStore();
 const { discordAbsoluteTime, discordRelativeTime, isShortTimerBoss } = require('./utils/timer');
@@ -11003,6 +11004,8 @@ async function _handleAgentBuffCasts(req, res) {
   // agent-synthesized per-observer facts, not the shared zone stream we dedup.
   _recordBuffCoverage(guildId, identity.discord_id,
     [...resolved, ...ambiguous].filter(r => !r.is_charm_spell));
+  // In memory only: the MGB board's detector (utils/mgbBoard.js). Guarded: a detector fault must never fail the upload.
+  try { _mgbService().noteLandings(resolved); } catch (err) { console.log('[mgb-board] detector skipped:', err && err.message); }
   _trackUpload({ endpoint: 'buff_cast', character: payload?.character, agentVersion: payload?.agent_version, payloadBytes: total, agentState: payload?.agent_state || null, uploadedBy: identity.discord_id });
   res.writeHead(200);
   res.end(JSON.stringify({ ok: true, written }));
@@ -16440,6 +16443,58 @@ async function _mgbTrainedSet(supabase, guildId) {
     _mgbCache.at = Date.now();   // don't hammer on failure
   }
   return _mgbCache.names;
+}
+
+// The MGB board (utils/mgbBoard.js): who pressed Mass Group Buff and when each holder is ready again.
+// POST /api/agent/mgb is the presser's own activation line; GET /api/agent/mgb-board is what the Command Center draws.
+let _mgbInst = null;
+function _mgbService() {
+  if (!_mgbInst) {
+    const supabase = require('./utils/supabase');
+    const guildId = supabase.guildId();
+    _mgbInst = _mgbBoardMod.create(_mgbBoardMod.supabaseDeps({
+      supabase, guildId,
+      trainedSet: () => _mgbTrainedSet(supabase, guildId),
+      rosterRows: () => require('./utils/readSnapshots').raidRoster(supabase, guildId),
+    }));
+  }
+  return _mgbInst;
+}
+async function _handleAgentMgbPost(req, res) {
+  const identity = await mimicLink.requireAgentAuth(req, res);
+  if (!identity) return;
+  const chunks = []; let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > 4096) { res.writeHead(413); return res.end(); }
+    chunks.push(chunk);
+  }
+  let payload;
+  try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'invalid JSON' })); }
+  const out = _mgbService().noteActivation(payload || {});
+  res.writeHead(out.status, { 'Content-Type': 'application/json' });
+  return res.end(JSON.stringify(out.body));
+}
+async function _handleAgentMgbBoard(req, res) {
+  const identity = await mimicLink.requireAgentAuth(req, res);
+  if (!identity) return;
+  const supabase = require('./utils/supabase');
+  if (!supabase.isEnabled()) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ now: new Date().toISOString(), mgbs: [], holders: [] }));
+  }
+  let character = '';
+  try { character = (new URL(req.url, 'http://x').searchParams.get('character') || '').trim(); } catch { /* */ }
+  const guildId = supabase.guildId();
+  // The caller's raid, the way the buff queue scopes it: with two raids up, only the one the caller's upload names.
+  const split = await _liveRaidSplit(supabase, guildId);
+  const myRaid = split.multi ? split.raidFor({ discordId: identity.discord_id, character }) : null;
+  const body = await require('./utils/ttlCache').cached(
+    (globalThis._mgbBoardCache = globalThis._mgbBoardCache || new Map()), myRaid ? myRaid.key : '*', 5000,
+    () => _mgbService().board({ members: myRaid ? myRaid.members : null }));
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  return res.end(JSON.stringify(body));
 }
 
 // ── Spell-effects catalog cache (SPA decode) ────────────────────────────────
@@ -25708,6 +25763,23 @@ const httpServer = http.createServer(async (req, res) => {
     try { return await _handleAgentRaidBuffQueue(req, res); }
     catch (err) {
       console.error('[raid-buff-queue] handler error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'internal error' }));
+    }
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/api/agent/mgb-board')) {
+    try { return await _handleAgentMgbBoard(req, res); }
+    catch (err) {
+      console.error('[mgb-board] handler error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'internal error' }));
+    }
+  }
+  if (req.method === 'POST' && req.url === '/api/agent/mgb') {
+    try { return await _handleAgentMgbPost(req, res); }
+    catch (err) {
+      console.error('[mgb] handler error:', err);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'internal error' }));
     }
