@@ -2407,6 +2407,13 @@ via `tuneNum(key, DEFAULT)` (off-heal cutoff/window/min-hits, CH GO flash).
 Adding a knob = one `tuneNum`/`tn` call at the use site + a catalog row in
 `web/app/admin/overlays/page.tsx`.
 
+### Mass Group Buff board (`mgb-board`, bot 4.1.11)
+Bot: `utils/mgbBoard.js`, wired in `index.js` (`_mgbService`, `_handleAgentMgbPost`, `_handleAgentMgbBoard`; the
+`buff_casts` ingest feeds `noteLandings`). Finds an MGB as one group spell landing on ≥ 12 targets across ≥ 2 raid
+groups in 3 s, names the caster (own agent's activation line, else `raid_casts`, else candidates among trained holders
+from `_mgbTrainedSet`), and keeps a 4320 s cooldown per holder, in memory. `POST /api/agent/mgb`
+`{character, at, spell?}`; `GET /api/agent/mgb-board` → `{now, mgbs, holders}`. Mimic's Command Center draws it.
+
 ### Buff / debuff / cure queue (`raid-buff-queue`)
 Reads `character_live_state` (online raiders, zone), `buff_casts` history,
 class tables, and curse counters (`_CURSE_COUNTERS`) to produce per-buffer
