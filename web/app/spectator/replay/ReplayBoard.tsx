@@ -51,7 +51,7 @@ import {
   NO_PICKS, collectRoster, decayOffset, groupRoster, isFollowed, isPicked, offsetSettled, parsePicks, pickedSet,
   picksSearch, toggleFollow, togglePick, type Offset, type Picks, type RosterEntry,
 } from '@/lib/replayFollow';
-import { activeArcs, archPoint, meSet, nextMe, parseHealCasts, presentMine, type Arc, type HealCast } from '@/lib/replayHeals';
+import { GUIDE_ALPHA, activeArcs, archPoint, healLabel, labelledArcs, landPulse, meSet, nextMe, parseHealCasts, presentMine, type Arc, type HealCast } from '@/lib/replayHeals';
 import { maAt, mergeDecls, type MaDecl } from '@/lib/mainAssist';
 import { activeSpawns, bossesInWindow, normMobName, parseBosses, type ActiveSpawn, type SpawnBoss } from '@/lib/replayBosses';
 import {
@@ -533,22 +533,67 @@ function drawPane(p: Pane, o: PaneArgs): boolean {
     p.drawn.push({ name: r.name, cls: r.cls, hp: r.hp, px, py });
   }
 
-  // Heals being cast: a green arch from the healer to the target, growing as the cast fills and fading when it lands.
-  // A ring of Complete Healings is a ring of arches onto the tank.
+  // Heals: a faint green arch from the healer to the target, with a green dot riding it as the cast fills (position =
+  // cast progress) and the seconds left beside it; the target pulses when it lands. A chain onto one tank labels only
+  // the heal nearest to landing.
   if (o.arcs.length) {
+    const labelled = labelledArcs(o.arcs);
     ctx.lineCap = 'round';
-    ctx.strokeStyle = HEAL_GREEN;
-    ctx.lineWidth = 2;
-    for (const a of o.arcs) {
+    ctx.lineJoin = 'round';
+    o.arcs.forEach((a, i) => {
       const ax = sx(a.from.x), ay = sy(a.from.y), bx = sx(a.to.x), by = sy(a.to.y);
-      if ((ax < 0 && bx < 0) || (ax > w && bx > w) || (ay < 0 && by < 0) || (ay > h && by > h)) continue;
-      ctx.globalAlpha = 0.85 * a.alpha;
+      if ((ax < 0 && bx < 0) || (ax > w && bx > w) || (ay < 0 && by < 0) || (ay > h && by > h)) return;
+      ctx.strokeStyle = HEAL_GREEN;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = GUIDE_ALPHA * a.alpha;
       ctx.beginPath();
       ctx.moveTo(ax, ay);
-      const steps = 14;
-      for (let k = 1; k <= steps; k++) { const q = archPoint(ax, ay, bx, by, (k / steps) * a.p); ctx.lineTo(q.x, q.y); }
+      for (let k = 1; k <= 14; k++) { const q = archPoint(ax, ay, bx, by, k / 14); ctx.lineTo(q.x, q.y); }
       ctx.stroke();
-    }
+      const pulse = landPulse(a.since);
+      if (pulse !== null) {
+        // A dark ring under the green one, so the landing reads on the light parchment as well as the dark floors.
+        const r = DOT_R + 3 + pulse * 11;
+        ctx.globalAlpha = 0.9 * (1 - pulse);
+        ctx.strokeStyle = BG;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = HEAL_GREEN;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.stroke();
+        return;   // landed: the dot is spent
+      }
+      const d = archPoint(ax, ay, bx, by, a.p);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = HEAL_GREEN;
+      ctx.strokeStyle = BG;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      const text = labelled.has(i) ? healLabel(a.left) : null;
+      if (text) {
+        // The countdown on a dark pill: green text alone is hard to read on the parchment.
+        ctx.font = FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tw = ctx.measureText(text).width, ly = d.y - 14;
+        ctx.fillStyle = BG;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.roundRect(d.x - tw / 2 - 4, ly - 8, tw + 8, 16, 4);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = HEAL_GREEN;
+        ctx.fillText(text, d.x, ly);
+        ctx.textAlign = 'start';
+      }
+    });
     ctx.globalAlpha = 1;
   }
 

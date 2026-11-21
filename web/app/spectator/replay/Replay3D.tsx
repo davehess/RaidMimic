@@ -37,7 +37,7 @@ import {
   Line, LineBasicMaterial, MeshBasicMaterial, MeshLambertMaterial, OctahedronGeometry, PerspectiveCamera, Quaternion,
   RingGeometry, Scene, SphereGeometry, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
-import type { Arc } from '@/lib/replayHeals';
+import { GUIDE_ALPHA, healLabel, labelledArcs, landPulse, type Arc } from '@/lib/replayHeals';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { classAbbr, classColor } from '@/lib/spectator';
 import { heightHue, positionsToThree, serverToThree, unpackMesh, type UnpackedMesh } from '@/lib/zoneMesh';
@@ -111,13 +111,14 @@ const MIN_ORBIT = 25;
 const MAX_ORBIT = 8000;           // until a mesh says how big the zone is
 
 type Status = 'idle' | 'loading' | 'ready' | 'none' | 'error';
-type Kind = 'pick' | 'hover' | 'target' | 'spawn' | 'ma';
+type Kind = 'pick' | 'hover' | 'target' | 'spawn' | 'ma' | 'heal';
 type Ctx = {
   renderer: WebGLRenderer; scene: Scene; camera: PerspectiveCamera; controls: OrbitControls;
   inst: InstancedMesh; halo: InstancedMesh; tgt: InstancedMesh; bossDot: InstancedMesh; spawn: InstancedMesh;
   wall: Mesh | null; floor: Mesh | null; tags: HTMLDivElement[];
   raiders: Placed3D[]; targets: PlacedTarget3D[]; spawns: PlacedSpawn3D[]; hl: ReadonlySet<string>;
   me: ReadonlySet<string>; ma: string | null; arcs: Arc[]; ring: InstancedMesh; arcLines: Line[];
+  healDots: InstancedMesh; pulses: InstancedMesh;     // the dot riding each arch, and the ring where one lands
   route: RouteFeed | null; routes: RouteLayer3D;
   followName: string | null; kick: boolean; off: Vector3; lastDraw: number;
   feedZone: string | null; fitted: 'none' | 'mesh' | 'raid'; moved: boolean; hover: string | null;
@@ -151,7 +152,18 @@ const TAG_LOOK: Record<Kind, string> = {
   target: 'color:#fecaca;background:#2a1215;border:1px solid #ef4444',
   spawn: 'color:#fecaca;background:#161b22;border:1px dashed #ef4444;opacity:0.9',
   ma: 'color:#0d1117;background:#d29922;border:1px solid #d29922;font-weight:700',
+  heal: 'color:#3fb950;background:#0d1117;border:1px solid #3fb950;padding:0 4px',
 };
+
+/** A point on an arch in the server frame at fraction `u`, peaking above the chord (the lines use the same shape). */
+function archAt(a: Arc, u: number) {
+  const lift = Math.hypot(a.to.x - a.from.x, a.to.y - a.from.y, a.to.z - a.from.z) * ARC_LIFT;
+  return {
+    x: a.from.x + (a.to.x - a.from.x) * u,
+    y: a.from.y + (a.to.y - a.from.y) * u,
+    z: a.from.z + (a.to.z - a.from.z) * u + 4 * lift * u * (1 - u),
+  };
+}
 
 /** The walls of an unpacked mesh as a flat-shaded, height-tinted, see-through mesh. */
 export function buildMesh(u: UnpackedMesh): Mesh {
@@ -325,9 +337,24 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
       arcLines.push(l);
     }
 
+    // The heal itself: a small green sphere riding each arch, and a green ring (the member ring's shape) where one lands.
+    const healMat = new MeshBasicMaterial({ color: HEAL_GREEN, transparent: true, depthTest: false });
+    const healDots = new InstancedMesh(dotGeo, healMat, MAX_ARCS3);
+    healDots.count = 0;
+    healDots.frustumCulled = false;
+    healDots.renderOrder = 5;
+    scene.add(healDots);
+    const pulseMat = new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide, transparent: true, depthTest: false });
+    const pulses = new InstancedMesh(ringGeo, pulseMat, MAX_ARCS3);
+    pulses.count = 0;
+    pulses.frustumCulled = false;
+    pulses.renderOrder = 5;
+    pulses.setColorAt(0, tmpC.set(HEAL_GREEN));
+    scene.add(pulses);
+
     const c: Ctx = {
       renderer, scene, camera, controls, inst, halo, tgt, bossDot, spawn, wall: null, floor: null, tags: [],
-      ring, arcLines, me: new Set(), ma: null, arcs: [],
+      ring, arcLines, healDots, pulses, me: new Set(), ma: null, arcs: [],
       raiders: [], targets: [], spawns: [], hl: new Set(), route: null, routes: new RouteLayer3D(scene, camera, host), followName: null, kick: false, off: new Vector3(), lastDraw: 0,
       feedZone: null, fitted: 'none', moved: false, hover: null, box: null,
       bounds: null, wallGrid: null, floorGrid: null, snap: false, goal: null,
@@ -394,6 +421,14 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
         const m = c.raiders.find(r => lower(r.name) === c.ma);
         if (m) put('MA', 'ma', m.x, m.y, m.z + LIFT + 6);
       }
+      // The seconds left on the heal nearest to landing, per target, riding with its dot.
+      const lab = labelledArcs(c.arcs);
+      c.arcs.forEach((a, i) => {
+        const text = lab.has(i) && landPulse(a.since) === null ? healLabel(a.left) : null;
+        if (!text) return;
+        const d = archAt(a, a.p);
+        put(text, 'heal', d.x, d.y, d.z + LIFT + 2);
+      });
       for (const t of c.targets.slice(0, MAX_MARKS)) put(`${t.name}${t.n > 1 ? ` ×${t.n}` : ''}`, 'target', t.x, t.y, t.z + LIFT);
       for (const s of c.spawns.slice(0, MAX_MARKS)) put(`${s.name} (spawn point)`, 'spawn', s.x, s.y, s.z + LIFT);
       for (let i = used; i < c.tags.length; i++) c.tags[i].style.display = 'none';
@@ -510,8 +545,11 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
       ring.count = rings;
       ring.instanceMatrix.needsUpdate = true;
 
-      // Heal arches, from the healer to the target, peaking above the chord; drawn only as far as the cast has filled.
+      // Heal arches, from the healer to the target, peaking above the chord: a faint full-length guide, with a dot
+      // riding it (position = cast progress) and a ring on the target when it lands.
       const na = Math.min(c.arcs.length, MAX_ARCS3);
+      let dots = 0, pulsing = 0;
+      tmpQ.copy(camera.quaternion);
       for (let i = 0; i < MAX_ARCS3; i++) {
         const line = c.arcLines[i];
         if (i >= na) { line.visible = false; continue; }
@@ -521,13 +559,31 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
         const lift = Math.hypot(BX - AX, BY - AY, BZ - AZ) * ARC_LIFT;
         const pos = line.geometry.getAttribute('position') as BufferAttribute;
         for (let k = 0; k < ARC_PTS; k++) {
-          const uu = (k / (ARC_PTS - 1)) * a.p;   // the points spread over the part of the arch the cast has reached
+          const uu = k / (ARC_PTS - 1);
           pos.setXYZ(k, AX + (BX - AX) * uu, AY + (BY - AY) * uu + 4 * lift * uu * (1 - uu), AZ + (BZ - AZ) * uu);
         }
         pos.needsUpdate = true;
         line.visible = true;
-        (line.material as LineBasicMaterial).opacity = 0.9 * a.alpha;
+        (line.material as LineBasicMaterial).opacity = GUIDE_ALPHA * a.alpha;
+        const pulse = landPulse(a.since);
+        if (pulse !== null) {
+          tmpV.set(BX, BY, BZ);
+          const s = radiusAt(tmpV) * (2 + pulse * 3);
+          pulses.setMatrixAt(pulsing, tmpM.compose(tmpV, tmpQ, tmpS.set(s, s, s)));
+          pulses.setColorAt(pulsing++, tmpC.set(HEAL_GREEN).multiplyScalar(1 - pulse));   // fades into the dark scene
+        } else {
+          const u = a.p;
+          tmpV.set(AX + (BX - AX) * u, AY + (BY - AY) * u + 4 * lift * u * (1 - u), AZ + (BZ - AZ) * u);
+          const s = radiusAt(tmpV) * 0.8;
+          healDots.setMatrixAt(dots++, tmpM.compose(tmpV, tmpQ, tmpS.set(s, s, s)));
+        }
       }
+      tmpQ.identity();
+      healDots.count = dots;
+      healDots.instanceMatrix.needsUpdate = true;
+      pulses.count = pulsing;
+      pulses.instanceMatrix.needsUpdate = true;
+      if (pulses.instanceColor) pulses.instanceColor.needsUpdate = true;
 
       let nt = 0, nb = 0;
       for (const t of c.targets.slice(0, MAX_MARKS)) {
@@ -697,6 +753,10 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
       ring.dispose();
       ringGeo.dispose();
       ringMat.dispose();
+      healDots.dispose();
+      pulses.dispose();
+      healMat.dispose();
+      pulseMat.dispose();
       for (const l of arcLines) { scene.remove(l); l.geometry.dispose(); (l.material as LineBasicMaterial).dispose(); }
       dotGeo.dispose();
       diaGeo.dispose();
