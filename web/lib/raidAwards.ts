@@ -15,6 +15,7 @@ export type TargetIn = { character: string; target_name: string | null; at: stri
 
 /** One cluster of a target's name ends after this long with nobody reporting it targeted. */
 export const TARGET_GAP_MS = 120_000;
+/** Each award carries EVERY raider with a value, sorted; the card shows this many until "show all". */
 export const TOP_N = 3;
 
 /** The resurrection spells (SPA 81), as the catalog names them, when the catalog cannot be read. "Customer Service Resurrect" is a GM tool. */
@@ -55,8 +56,7 @@ class Tally {
     return [...this.m.values()]
       .filter(e => e.n > 0)
       .map(e => ({ name: anonName(anon, e.name), value: e.n }))
-      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))   // ties on the SHOWN name, never a real one behind a label
-      .slice(0, TOP_N);
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));   // ties on the SHOWN name, never a real one behind a label
   }
 }
 

@@ -16,7 +16,7 @@ const base = { players: [], taken: [], deaths: [], casts: [], targets: [], rezSp
 const get = (aw, k) => aw.find(a => a.key === k);
 
 describe('awards builder', () => {
-  it('damage sums per name over fights, top three, pets left out', () => {
+  it('damage sums per name over fights, EVERY raider with a value (the card shows three until "show all"), pets left out', () => {
     const players = [
       { encounter_id: 'a', character_name: 'Aldenmar', total_damage: 100, dps: 1 },
       { encounter_id: 'b', character_name: 'Aldenmar', total_damage: 50, dps: 1 },
@@ -26,7 +26,7 @@ describe('awards builder', () => {
       { encounter_id: 'a', character_name: 'Aldenmar`s pet', total_damage: 9999, dps: 1 },
     ];
     expect(get(buildAwards({ ...base, players }), 'damage').rows).toEqual([
-      { name: 'Aldenmar', value: 150 }, { name: 'Brackwyn', value: 120 }, { name: 'Corvale', value: 10 }]);
+      { name: 'Aldenmar', value: 150 }, { name: 'Brackwyn', value: 120 }, { name: 'Corvale', value: 10 }, { name: 'Rethlan', value: 5 }]);
   });
 
   it('damage taken is the MAX per (fight, character), then summed', () => {
