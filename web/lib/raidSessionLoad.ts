@@ -35,6 +35,7 @@ import {
   type ObservedIn, type PlayerIn, type SessionBundle,
 } from './raidSession';
 import { buildGroups, groupOfFight, inGroupAt, inSet, narrowRows, outsideRaids, resolveGroupKey, setMembers, type GroupIndex, type RaidGroup } from './sessionGroups';
+import { rosterKeys } from './raidAwards';
 import { detectRaidChange, whoSeries, type RaidChange } from './raidSplit';
 import { rosterCuts } from './liveRaidWindow';
 import type { NightSummary, NightMinute } from './raidReplay';
@@ -53,6 +54,13 @@ export type SessionReview = {
   groups?: RaidGroup[]; group?: string | null;
   /** Server-side only (who was in each raid minute by minute): the page uses it to scope the deaths; it is never sent to the browser. */
   groupIndex?: GroupIndex;
+  /** Server-side only (members' page, with `groups`): what the awards card (raidAwardsLoad.ts) builds from. Real names; never sent to the browser. */
+  awardsIn?: AwardsSource;
+};
+/** The rows the review already read, kept for the awards card so it needs no second read of them. */
+export type AwardsSource = {
+  players: PlayerIn[]; encounterIds: string[]; roster: Set<string>; anon: AnonMap;
+  scope: { index: GroupIndex; group: string } | null;
 };
 // `group` is a set key (lib/sessionGroups.ts groupKey: one id, or several joined by a comma); the review is the union of
 // those raids. `isolate` (the public share page, when its link is limited to chosen raids) fails CLOSED and drops what is
@@ -309,6 +317,13 @@ export async function loadSessionReview(sb: SupabaseClient, win: ShareWindow, op
   const value: SessionReview = { bundle, night: windowNight(minutes, win), change: detectRaidChange(who) };
   if (opts.breaks) value.breaks = rosterCuts(who);
   if (index) { value.groups = index.groups; value.group = group; value.groupIndex = index; }
+  if (wantGroups && !closed) {
+    const kept = new Set(encounters.map(e => e.id));
+    value.awardsIn = {
+      players: players.filter(p => kept.has(p.encounter_id)), encounterIds: [...kept], roster: rosterKeys(r.minutes), anon,
+      scope: index && group ? { index, group } : null,
+    };
+  }
 
   if (cache.size >= 20) cache.delete(cache.keys().next().value as string);
   cache.set(key, { at: Date.now(), sig, value });

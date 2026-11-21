@@ -4645,6 +4645,15 @@ crash card labels it "🐺 Wolf Pack Zeal" (`wpZealBuildTag`). Runbook: `docs/up
   prop on `PathsLayout`, words in `SIGNIN_FIRST` (`web/lib/raidmimicPlayer.ts`), optional `label`/`className` on `SignInButton`.
   The default render is untouched. The raidmimic hosts drop the query, so it is read on the web host:
   https://b.wolfpack.quest/raidmimic?v=b. Sign-in itself is the open path in Identity & auth above. Test: `test/raidmimic-landing.test.js`.
+- **Awards card on the raid review (`/raid/session`, beta, 2026-11-21).** Top three per category from the window, narrowed to
+  the selected raid set like the rest of the page: most damage (`encounter_players`, the review's own rows), damage taken
+  (`encounter_combat_rollup` `taken->>damageTaken`, MAX per fight and character, then summed), deaths (the night marks'
+  deduped deaths, counted per name through `deathCountsOf`), spells cast, Rez casts (spell names with SPA 81 from
+  `eqemu_spells`, read once, GM tool excluded; casts, not landings), Divine Intervention (`raid_casts`), First on target
+  (`target_observations`: per target name a new cluster after 120 s, earliest character wins, players and corpses
+  excluded). Opted-out raiders show as their label. Members' page only; the share page is unchanged. Files:
+  `web/lib/raidAwards.ts` (pure), `web/lib/raidAwardsLoad.ts` (3 windowed reads in parallel), `web/app/raid/session/AwardsCard.tsx`.
+  Test: `test/raid-awards.test.js`. https://b.wolfpack.quest/raid/session
 - **A raid session leaves out fights none of its raids took part in (web 2.1.76, 2026-10-30; DECISIONS §477).** `outsideRaids` in
   `web/lib/sessionGroups.ts`: in the whole-window view a fight is left out when the window has at least one raid, the recorder
   wrote that minute (or one either side), and none of the fight's damage dealers were in any raid then. No parse rows, or an

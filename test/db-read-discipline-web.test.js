@@ -577,6 +577,7 @@ const UNIQUE_KEYS = {
   guild_triggers: [['id']],
   who_observations: [['id'], ['character', 'observed_minute', 'uploaded_by']],
   encounters: [['id']],
+  raid_casts: [['id']], target_observations: [['id']], encounter_combat_rollup: [['id']],   // the awards card (web/lib/raidAwardsLoad.ts)
   encounter_players: [['encounter_id', 'character_name']],
   rh_signups: [['event_id', 'signup_id']],
   faction_cons: [['id'], ['character', 'mob']],

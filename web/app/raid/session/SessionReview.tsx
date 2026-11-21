@@ -19,6 +19,8 @@ import DataSources from './DataSources';
 import SplitPanel, { type SplitRequest } from './SplitPanel';
 import NightPanel, { type NightPanelData } from './NightPanel';
 import RaidGroupsBar, { type GroupsView } from './RaidGroupsBar';
+import AwardsCard from './AwardsCard';
+import type { Award } from '@/lib/raidAwards';
 import { hasNamed, isNamed, killTabCount, listKills, type KillLevel } from '@/lib/killList';
 import { groupQuery } from '@/lib/sessionGroups';
 import { useFollowRefresh } from './useFollowRefresh';
@@ -93,7 +95,7 @@ function Who({ name }: { name: string }) {
 /** Members' page only. */
 export type SplitOptions = { change: RaidChange | null; live: boolean; canShare: boolean };
 
-export default function SessionReview({ bundle, night, mode, extras, split, nightPanel, follow, groups }: {
+export default function SessionReview({ bundle, night, mode, extras, split, nightPanel, follow, groups, awards }: {
   bundle: SessionBundle;
   night: NightSummary | null;
   mode: ReviewMode;
@@ -107,6 +109,8 @@ export default function SessionReview({ bundle, night, mode, extras, split, nigh
   nightPanel?: NightPanelData;
   /** Members' page only: the raids this window holds, and the one the review is narrowed to (lib/sessionGroups.ts). */
   groups?: GroupsView;
+  /** Members' page only: the awards card (lib/raidAwards.ts), top three per category. */
+  awards?: Award[];
 }) {
   const [tab, setTab] = useState<TabKey>('attendance');
   const [seek, setSeek] = useState<{ t: number; n: number } | null>(null);
@@ -186,6 +190,8 @@ export default function SessionReview({ bundle, night, mode, extras, split, nigh
           ? <ReplayBoard bounded={bounded} />
           : <p className="rounded-md border border-border bg-panel p-4 text-sm text-dim">No replay was recorded in this window. The lists below are whatever else was logged in it.</p>}
       </div>
+
+      {mode.kind === 'member' && awards && <AwardsCard awards={awards} />}
 
       {nightOn && nightPanel && <NightPanel data={nightPanel} go={go} playheadRef={playheadRef} />}
 
