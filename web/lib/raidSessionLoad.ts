@@ -56,6 +56,8 @@ export type SessionReview = {
   groupIndex?: GroupIndex;
   /** Server-side only (members' page, with `groups`): what the awards card (raidAwardsLoad.ts) builds from. Real names; never sent to the browser. */
   awardsIn?: AwardsSource;
+  /** Server-side only (only with opts.stats, an officer's view): the window's minute rows and the opt-out labels for lib/raidOfficerStats.ts. Never sent to the browser. */
+  statsIn?: { minutes: { minute_at: string; zones?: string[] | null; data: string }[]; anon: AnonMap };
 };
 /** The rows the review already read, kept for the awards card so it needs no second read of them. */
 export type AwardsSource = {
@@ -66,7 +68,7 @@ export type AwardsSource = {
 // those raids. `isolate` (the public share page, when its link is limited to chosen raids) fails CLOSED and drops what is
 // not attributed to a raid: an id the window does not hold gives an empty review rather than the whole window, and the
 // window's ticks, rolls and bids (our own guild's lists, which no upstream table ties to a raid) are left out.
-export type ReviewOpts = { breaks?: boolean; groups?: boolean; group?: string | null; groupWin?: ShareWindow | null; isolate?: boolean };
+export type ReviewOpts = { breaks?: boolean; groups?: boolean; group?: string | null; groupWin?: ShareWindow | null; isolate?: boolean; stats?: boolean };
 
 const MINUTE_PAGE = 30;       // rows of ~25 KB each: ~750 KB a response
 // The top-five list is read for this many fights at most (curated bosses first, then the biggest). It was 60, which
@@ -206,7 +208,7 @@ export async function loadGroupFightIds(sb: SupabaseClient, win: ShareWindow, ke
 }
 
 export async function loadSessionReview(sb: SupabaseClient, win: ShareWindow, opts: ReviewOpts = {}): Promise<SessionReview> {
-  const key = `${GUILD_TAG}|${win.fromMs}|${win.toMs}${opts.breaks ? '|b' : ''}${opts.groups || opts.group || opts.isolate ? '|g' : ''}${opts.isolate ? '|i' : ''}${opts.group ? `:${opts.group}` : ''}${opts.groupWin ? `@${opts.groupWin.fromMs}.${opts.groupWin.toMs}` : ''}`;
+  const key = `${GUILD_TAG}|${win.fromMs}|${win.toMs}${opts.breaks ? '|b' : ''}${opts.groups || opts.group || opts.isolate ? '|g' : ''}${opts.isolate ? '|i' : ''}${opts.stats && !opts.isolate ? '|s' : ''}${opts.group ? `:${opts.group}` : ''}${opts.groupWin ? `@${opts.groupWin.fromMs}.${opts.groupWin.toMs}` : ''}`;
   const anon = await loadAnon(sb, GUILD_TAG, win);
   const sig = anonSig(anon);
   const hit = cache.get(key);
@@ -317,6 +319,7 @@ export async function loadSessionReview(sb: SupabaseClient, win: ShareWindow, op
   const value: SessionReview = { bundle, night: windowNight(minutes, win), change: detectRaidChange(who) };
   if (opts.breaks) value.breaks = rosterCuts(who);
   if (index) { value.groups = index.groups; value.group = group; value.groupIndex = index; }
+  if (opts.stats && !opts.isolate) value.statsIn = { minutes, anon };
   if (wantGroups && !closed) {
     const kept = new Set(encounters.map(e => e.id));
     value.awardsIn = {

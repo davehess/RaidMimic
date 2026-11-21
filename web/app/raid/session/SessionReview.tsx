@@ -21,6 +21,8 @@ import NightPanel, { type NightPanelData } from './NightPanel';
 import RaidGroupsBar, { type GroupsView } from './RaidGroupsBar';
 import AwardsCard from './AwardsCard';
 import type { Award } from '@/lib/raidAwards';
+import OfficerStatsCard from './OfficerStatsCard';
+import type { OfficerStats } from '@/lib/raidOfficerStats';
 import { hasNamed, isNamed, killTabCount, listKills, type KillLevel } from '@/lib/killList';
 import { groupQuery } from '@/lib/sessionGroups';
 import { useFollowRefresh } from './useFollowRefresh';
@@ -95,7 +97,7 @@ function Who({ name }: { name: string }) {
 /** Members' page only. */
 export type SplitOptions = { change: RaidChange | null; live: boolean; canShare: boolean };
 
-export default function SessionReview({ bundle, night, mode, extras, split, nightPanel, follow, groups, awards, mine }: {
+export default function SessionReview({ bundle, night, mode, extras, split, nightPanel, follow, groups, awards, officerStats, mine }: {
   bundle: SessionBundle;
   /** Members' page only: the signed-in member's own character names, for the replay's Me button and rings. */
   mine?: string[];
@@ -113,6 +115,8 @@ export default function SessionReview({ bundle, night, mode, extras, split, nigh
   groups?: GroupsView;
   /** Members' page only: the awards card (lib/raidAwards.ts), top three per category. */
   awards?: Award[];
+  /** Members' page, officers only: the raid stats table (lib/raidOfficerStats.ts). The page passes it only to an officer. */
+  officerStats?: OfficerStats | null;
 }) {
   const [tab, setTab] = useState<TabKey>('attendance');
   const [seek, setSeek] = useState<{ t: number; n: number } | null>(null);
@@ -194,6 +198,7 @@ export default function SessionReview({ bundle, night, mode, extras, split, nigh
       </div>
 
       {mode.kind === 'member' && awards && <AwardsCard awards={awards} />}
+      {mode.kind === 'member' && officerStats && <OfficerStatsCard stats={officerStats} />}
 
       {nightOn && nightPanel && <NightPanel data={nightPanel} go={go} playheadRef={playheadRef} />}
 

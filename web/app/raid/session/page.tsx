@@ -29,7 +29,8 @@ import { GUILD_TAG } from '@/lib/guild';
 import { makeWindow, windowIso } from '@/lib/raidShare';
 import { loadSessionReview } from '@/lib/raidSessionLoad';
 import { ownedCharacters } from '@/lib/ownedCharacters';
-import { liveAvailable, sessionLabel, summarizeNights, type NightMinute } from '@/lib/raidReplay';
+import { decodeRows, liveAvailable, sessionLabel, summarizeNights, type NightMinute } from '@/lib/raidReplay';
+import { buildOfficerStats, officerStatsFor } from '@/lib/raidOfficerStats';
 import { loadAwards } from '@/lib/raidAwardsLoad';
 import { loadRaidCuts } from '@/lib/raidCuts';
 import { deathCountsOf, loadNightMarks, loadSlices } from '@/lib/nightSlicesLoad';
@@ -99,9 +100,9 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
   }
 
   const admin = supabaseAdmin();
-  const [review, officer, slices, mine] = await Promise.all([
-    loadSessionReview(admin, win, { breaks: true, groups: true, group: wanted, groupWin: parent }),
-    isOfficer(user.id),
+  const officer = await isOfficer(user.id);
+  const [review, slices, mine] = await Promise.all([
+    loadSessionReview(admin, win, { breaks: true, groups: true, group: wanted, groupWin: parent, stats: officer }),
     loadSlices(admin),
     ownedCharacters(user.id).then(cs => cs.map(c => c.name)).catch(() => [] as string[]),   // the replay's Me button
   ]);
@@ -109,6 +110,10 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
   const marks = await loadNightMarks(admin, win, review.bundle.kills, raid).catch(() => ({ fights: [], deaths: [], mass: [] }));
   // The awards need the deaths per name, so they follow the marks (their own three reads run in parallel inside).
   const awards = review.awardsIn ? await loadAwards(admin, win, review.awardsIn, deathCountsOf(marks)).catch(() => []) : [];
+  // Officers only: built (and sent to the browser) for an officer and for no one else.
+  const officerStats = officerStatsFor(officer, () => buildOfficerStats({
+    frames: decodeRows(review.statsIn?.minutes ?? []), deathTimes: marks.deaths, deathCounts: deathCountsOf(marks), anon: review.statsIn?.anon ?? new Map(),
+  }));
   const groups = review.groups ?? [];
   const { from: fromIso, to: toIso } = windowIso(win);
   // The raids a "Share…" made from this view would be limited to: the narrowed set, named. The window the ids were counted
@@ -139,6 +144,7 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
         }}
         groups={{ list: groups, active: review.group ?? null, parent: parent ?? win }}
         awards={awards}
+        officerStats={officerStats}
       />
     </div>
   );
