@@ -5,7 +5,9 @@
 //                                        Includes TODAY's night while it is being recorded: it is a plain read of
 //                                        raid_track_minutes, no upper bound, so `last` is the newest row written.
 //   ?nights=1&recent=1                -> the same for the last 50 hours only (the board's once-a-minute poll)
-//   ?night=<key>&from=<iso>&to=<iso>  -> { night, from, to, rows: [{ minute_at, zones, data }] }
+//   ?night=<key>&from=<iso>&to=<iso>  -> { night, from, to, rows: [{ minute_at, zones, data }],
+//                                          casts: [[ms, caster, target, secs]], ma: [[ms, name]] }
+//                                        casts = heal casts and ma = main-assist declarations for the window (lib/replayHealsLoad.ts)
 //
 // Members-only, the same gate as /api/spectator/positions: a signed-in Supabase session, 401 otherwise.
 // raid_track_minutes is service-role only (RLS on, no policy), so the read uses the admin client after that
@@ -23,7 +25,8 @@ import { isGuildMember } from '@/lib/member';
 import { supabaseAdmin } from '@/lib/supabase';
 import { selectAll } from '@/lib/selectAll';
 import { GUILD_TAG } from '@/lib/guild';
-import { REPLAY_WINDOW_MS, summarizeNights, type NightMinute } from '@/lib/raidReplay';
+import { REPLAY_WINDOW_MS, decodeRows, summarizeNights, type MinuteRow, type NightMinute } from '@/lib/raidReplay';
+import { loadReplayExtras } from '@/lib/replayHealsLoad';
 import { loadRaidCuts } from '@/lib/raidCuts';
 
 export const dynamic = 'force-dynamic';
@@ -82,8 +85,12 @@ export async function GET(req: Request) {
 
     // A window that ended more than five minutes ago will not change; one that is still being recorded may.
     const over = end < Date.now() - 5 * 60_000;
+    // Heal casts and main-assist declarations for the same window (lib/replayHealsLoad.ts); never fails the window.
+    // &lean=1 (the board's whole-night path fill) wants the frames only.
+    const known = new Set(decodeRows((data ?? []) as MinuteRow[]).flatMap(f => f.raiders.map(r => r.name.toLowerCase())));
+    const extras = q.get('lean') === '1' ? {} : await loadReplayExtras(admin, GUILD, fromMs, end, known);
     return NextResponse.json(
-      { night, from: new Date(fromMs).toISOString(), to: new Date(end).toISOString(), rows: data ?? [] },
+      { night, from: new Date(fromMs).toISOString(), to: new Date(end).toISOString(), rows: data ?? [], ...extras },
       { headers: { 'Cache-Control': over ? 'private, max-age=86400' : 'private, max-age=15' } },
     );
   } catch {

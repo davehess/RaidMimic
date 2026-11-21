@@ -34,9 +34,10 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import {
   AmbientLight, BufferAttribute, BufferGeometry, Color, DirectionalLight, DoubleSide, InstancedMesh, Matrix4, Mesh,
-  MeshBasicMaterial, MeshLambertMaterial, OctahedronGeometry, PerspectiveCamera, Quaternion, Scene, SphereGeometry,
-  SRGBColorSpace, Vector3, WebGLRenderer,
+  Line, LineBasicMaterial, MeshBasicMaterial, MeshLambertMaterial, OctahedronGeometry, PerspectiveCamera, Quaternion,
+  RingGeometry, Scene, SphereGeometry, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
+import type { Arc } from '@/lib/replayHeals';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { classAbbr, classColor } from '@/lib/spectator';
 import { heightHue, positionsToThree, serverToThree, unpackMesh, type UnpackedMesh } from '@/lib/zoneMesh';
@@ -60,6 +61,9 @@ export type Feed3D = {
   spawns: PlacedSpawn3D[];
   snap: boolean;                        // the playhead jumped (a scrub or a new session): frame the raid at once
   route?: RouteFeed | null;             // the raid's path; null or absent (the Path toggle off): nothing drawn
+  me?: ReadonlySet<string>;             // lower-case names of the member's own characters: an always-on ring
+  ma?: string | null;                   // lower-case name of the declared main assist: an "MA" tag
+  arcs?: Arc[];                         // heal casts under way in this zone: a green arch, healer to target
 };
 export type Bridge3D = {
   feed: (zone: string | null, raiders: Placed3D[], extra: Feed3D) => void;
@@ -96,18 +100,24 @@ const REACH = { mouse: 12, touch: 22 };
 const PALETTE = 64;
 const FOLLOW_SPAN = 700;          // how much ground a fresh fit on a followed raider shows
 const TARGET_RED = 0xef4444;
+const HEAL_GREEN = 0x3fb950;      // a heal being cast (the 2D board's green)
+const ME_RING = 0xd29922;         // the member's own character
+const MAX_ARCS3 = 32;             // arches drawn at once
+const ARC_PTS = 18;               // points along one arch
+const ARC_LIFT = 0.3;             // how high an arch peaks, as a share of its length
 const BOSS_SCALE = 3.2;           // a killed boss (or its spawn point) is a big red sphere, × a raider dot
 const EDGE_NDC = 0.94;            // a raider past this (of the -1..1 screen) counts as outside the picture
 const MIN_ORBIT = 25;
 const MAX_ORBIT = 8000;           // until a mesh says how big the zone is
 
 type Status = 'idle' | 'loading' | 'ready' | 'none' | 'error';
-type Kind = 'pick' | 'hover' | 'target' | 'spawn';
+type Kind = 'pick' | 'hover' | 'target' | 'spawn' | 'ma';
 type Ctx = {
   renderer: WebGLRenderer; scene: Scene; camera: PerspectiveCamera; controls: OrbitControls;
   inst: InstancedMesh; halo: InstancedMesh; tgt: InstancedMesh; bossDot: InstancedMesh; spawn: InstancedMesh;
   wall: Mesh | null; floor: Mesh | null; tags: HTMLDivElement[];
   raiders: Placed3D[]; targets: PlacedTarget3D[]; spawns: PlacedSpawn3D[]; hl: ReadonlySet<string>;
+  me: ReadonlySet<string>; ma: string | null; arcs: Arc[]; ring: InstancedMesh; arcLines: Line[];
   route: RouteFeed | null; routes: RouteLayer3D;
   followName: string | null; kick: boolean; off: Vector3; lastDraw: number;
   feedZone: string | null; fitted: 'none' | 'mesh' | 'raid'; moved: boolean; hover: string | null;
@@ -140,6 +150,7 @@ const TAG_LOOK: Record<Kind, string> = {
   hover: 'color:#c9d1d9;background:#161b22;border:1px solid #30363d',
   target: 'color:#fecaca;background:#2a1215;border:1px solid #ef4444',
   spawn: 'color:#fecaca;background:#161b22;border:1px dashed #ef4444;opacity:0.9',
+  ma: 'color:#0d1117;background:#d29922;border:1px solid #d29922;font-weight:700',
 };
 
 /** The walls of an unpacked mesh as a flat-shaded, height-tinted, see-through mesh. */
@@ -292,8 +303,31 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
     spawn.renderOrder = 3;
     scene.add(spawn);
 
+    // The member's own characters: a gold ring that always faces the camera, on top of everything.
+    const ringGeo = new RingGeometry(0.82, 1, 28);
+    const ringMat = new MeshBasicMaterial({ color: ME_RING, side: DoubleSide, transparent: true, depthTest: false });
+    const ring = new InstancedMesh(ringGeo, ringMat, MAX_RAIDERS);
+    ring.count = 0;
+    ring.frustumCulled = false;
+    ring.renderOrder = 4;
+    scene.add(ring);
+
+    // Heal arches: a pool of lines, one per cast under way. Each draws only as far as the cast has filled.
+    const arcLines: Line[] = [];
+    for (let i = 0; i < MAX_ARCS3; i++) {
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(new Float32Array(ARC_PTS * 3), 3));
+      const l = new Line(g, new LineBasicMaterial({ color: HEAL_GREEN, transparent: true, depthTest: false }));
+      l.visible = false;
+      l.frustumCulled = false;
+      l.renderOrder = 4;
+      scene.add(l);
+      arcLines.push(l);
+    }
+
     const c: Ctx = {
       renderer, scene, camera, controls, inst, halo, tgt, bossDot, spawn, wall: null, floor: null, tags: [],
+      ring, arcLines, me: new Set(), ma: null, arcs: [],
       raiders: [], targets: [], spawns: [], hl: new Set(), route: null, routes: new RouteLayer3D(scene, camera, host), followName: null, kick: false, off: new Vector3(), lastDraw: 0,
       feedZone: null, fitted: 'none', moved: false, hover: null, box: null,
       bounds: null, wallGrid: null, floorGrid: null, snap: false, goal: null,
@@ -355,6 +389,10 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
         const pick = picked(p.name);
         if (!pick && p.name !== c.hover) continue;
         put(`${p.name} · ${classAbbr(p.cls)}${p.hp != null ? ` · ${p.hp}%` : ''}`, pick ? 'pick' : 'hover', p.x, p.y, p.z + LIFT);
+      }
+      if (c.ma) {
+        const m = c.raiders.find(r => lower(r.name) === c.ma);
+        if (m) put('MA', 'ma', m.x, m.y, m.z + LIFT + 6);
       }
       for (const t of c.targets.slice(0, MAX_MARKS)) put(`${t.name}${t.n > 1 ? ` ×${t.n}` : ''}`, 'target', t.x, t.y, t.z + LIFT);
       for (const s of c.spawns.slice(0, MAX_MARKS)) put(`${s.name} (spawn point)`, 'spawn', s.x, s.y, s.z + LIFT);
@@ -454,6 +492,42 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
       if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
       halo.count = halos;
       halo.instanceMatrix.needsUpdate = true;
+
+      // The member's own characters: a gold ring facing the camera, always on.
+      let rings = 0;
+      if (c.me.size) {
+        tmpQ.copy(camera.quaternion);
+        for (let i = 0; i < n; i++) {
+          const p = c.raiders[i];
+          if (!c.me.has(lower(p.name))) continue;
+          const [X, Y, Z] = serverToThree(p.x, p.y, p.z + LIFT);
+          tmpV.set(X, Y, Z);
+          const s = radiusAt(tmpV) * 2.6;
+          ring.setMatrixAt(rings++, tmpM.compose(tmpV, tmpQ, tmpS.set(s, s, s)));
+        }
+        tmpQ.identity();
+      }
+      ring.count = rings;
+      ring.instanceMatrix.needsUpdate = true;
+
+      // Heal arches, from the healer to the target, peaking above the chord; drawn only as far as the cast has filled.
+      const na = Math.min(c.arcs.length, MAX_ARCS3);
+      for (let i = 0; i < MAX_ARCS3; i++) {
+        const line = c.arcLines[i];
+        if (i >= na) { line.visible = false; continue; }
+        const a = c.arcs[i];
+        const [AX, AY, AZ] = serverToThree(a.from.x, a.from.y, a.from.z + LIFT);
+        const [BX, BY, BZ] = serverToThree(a.to.x, a.to.y, a.to.z + LIFT);
+        const lift = Math.hypot(BX - AX, BY - AY, BZ - AZ) * ARC_LIFT;
+        const pos = line.geometry.getAttribute('position') as BufferAttribute;
+        for (let k = 0; k < ARC_PTS; k++) {
+          const uu = (k / (ARC_PTS - 1)) * a.p;   // the points spread over the part of the arch the cast has reached
+          pos.setXYZ(k, AX + (BX - AX) * uu, AY + (BY - AY) * uu + 4 * lift * uu * (1 - uu), AZ + (BZ - AZ) * uu);
+        }
+        pos.needsUpdate = true;
+        line.visible = true;
+        (line.material as LineBasicMaterial).opacity = 0.9 * a.alpha;
+      }
 
       let nt = 0, nb = 0;
       for (const t of c.targets.slice(0, MAX_MARKS)) {
@@ -574,6 +648,9 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
         c.targets = extra.targets;
         c.spawns = extra.spawns;
         c.hl = extra.hl;
+        c.me = extra.me ?? new Set();
+        c.ma = extra.ma ?? null;
+        c.arcs = extra.arcs ?? [];
         c.route = extra.route ?? null;
         if (extra.snap) { c.snap = true; c.goal = null; }
         if (extra.follow !== c.followName) { c.followName = extra.follow; c.kick = !!extra.follow; }
@@ -617,6 +694,10 @@ export default function Replay3D({ zone, floors, meshUrl, bridgeRef, onReady, on
       tgt.dispose();
       bossDot.dispose();
       spawn.dispose();
+      ring.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      for (const l of arcLines) { scene.remove(l); l.geometry.dispose(); (l.material as LineBasicMaterial).dispose(); }
       dotGeo.dispose();
       diaGeo.dispose();
       dotMat.dispose();

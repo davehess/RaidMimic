@@ -5278,6 +5278,18 @@ reader: `encounters`, guild-scoped, paged). Maths: `web/lib/goldSplits.ts` (segm
 Timeline + click-to-align: `web/app/pop/events/[slug]/splits/SplitsTimeline.tsx`. Links: parse per split, replay window per
 attempt; the overlay replay link waits for the replay overlay (§555 follow-up). Tests `test/gold-splits.test.js`.
 
+### Replay: Me button, MA marker, heal arcs (web 2.2.21, 2026-11-21, beta)
+- **Surfaces:** `web/app/spectator/replay/ReplayBoard.tsx` (2D, also embedded in the raid review `web/app/raid/session/SessionReview.tsx`)
+  and `Replay3D.tsx`. The per-frame draw already runs from the one rAF loop; arcs, rings and the MA badge ride it (no new loop).
+- **Me:** `page.tsx` / `raid/session/page.tsx` read `ownedCharacters(user.id)` and pass `mine`; `presentMine` / `nextMe` in
+  `web/lib/replayHeals.ts` pick the next character in the replay, applied through `toggleFollow` (the existing follow). A gold ring
+  marks `mine` always (2D ring, 3D camera-facing ring). Not passed on the public share.
+- **MA:** `web/lib/mainAssist.ts` is a port of `utils/mainAssist.js` `parseDeclaration` (parity test). `web/lib/replayHealsLoad.ts`
+  reads raid-channel `chat_messages` from 6 h before the window and parses with the roster of that window's frames.
+- **Heal arcs:** `raid_casts` where `heal_amount > 0` (set by `utils/raidHistory.js` from the catalog's heal estimate), windowed
+  `cast_at >= from` and `< to`. `activeArcs` places caster and target from the frame; `archPoint` is the 2D curve, a lifted line in 3D.
+- **Wire:** the members' window routes add `casts: [[ms, caster, target, secs]]` and `ma: [[ms, name]]`; `lean=1` omits them.
+
 ### Raid timeline strip and Raid routes (web 1.9.20–1.9.21, 2026-10-21, §400)
 - **Raid timeline strip.** `web/components/RaidTimeline.tsx` at the top of `/spectator` (live: polls the members-only
   `/api/spectator/timeline` every 10 s, curated kills by `ended_at`, corrected by the server's `now`) and `/spectator/replay`

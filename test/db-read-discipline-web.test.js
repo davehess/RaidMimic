@@ -542,6 +542,8 @@ const UNIQUE_KEYS = {
   character_spellbook: [['id'], ['character_name', 'spell_id']],
   character_lockouts: [['character', 'boss_key']],
   fun_events: [['id']],
+  raid_casts: [['id']],      // identity primary key; the replay's heal-cast window read (web/lib/replayHealsLoad.ts)
+  chat_messages: [['id']],   // BIGSERIAL primary key; the replay's main-assist read (web/lib/replayHealsLoad.ts)
   contributions: [['id']],   // primary key (pg_index, 2026-10-23); the night panel pages the deaths sub-array of a night's contributions (web/lib/nightSlicesLoad.ts)
   pop_flags: [['id']],
   hub_guilds: [['guild_id']],   // text primary key; /admin/platform

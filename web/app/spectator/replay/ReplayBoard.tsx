@@ -51,6 +51,8 @@ import {
   NO_PICKS, collectRoster, decayOffset, groupRoster, isFollowed, isPicked, offsetSettled, parsePicks, pickedSet,
   picksSearch, toggleFollow, togglePick, type Offset, type Picks, type RosterEntry,
 } from '@/lib/replayFollow';
+import { activeArcs, archPoint, meSet, nextMe, parseHealCasts, presentMine, type Arc, type HealCast } from '@/lib/replayHeals';
+import { maAt, mergeDecls, type MaDecl } from '@/lib/mainAssist';
 import { activeSpawns, bossesInWindow, normMobName, parseBosses, type ActiveSpawn, type SpawnBoss } from '@/lib/replayBosses';
 import {
   PathStore, buildSegments, headAt, killMarks, rankKills, segmentsDone,
@@ -85,6 +87,9 @@ const RECORDED_LOOKBACK_MS = 30_000;   // a boss targeted this recently hides it
 const PATH_PAPER = '#1f6feb';          // the raid's path on the parchment (the accent): reads on paper and on the dark page
 const PATH_DARK = '#58a6ff';           // ... and on the dark backgrounds (blue)
 const KILL_GOLD = '#d29922';
+const HEAL_GREEN = '#3fb950';          // a heal being cast: the arc from healer to target (the board's green, status = good)
+const ME_RING = '#d29922';             // the member's own character: an always-on ring, apart from the white pick ring
+const MA_TAG = 'MA';                   // the declared main assist
 const KILL_LABEL_MS = 3 * 60 * 1000;   // a kill is named beside its number for this long after it happens
 const FILL_PAUSE_MS = 250;             // between two windows of the whole-night path fill
 
@@ -132,7 +137,10 @@ type PaneArgs = {
   bosses: ReadonlySet<string>;   // normMobName of the night's killed bosses: a target in it draws as a big red dot
   frames: ReplayFrame[]; idx: number; hasFrame: boolean; tails: boolean; entry: MapEntry | undefined;
   hl: ReadonlySet<string>; picks: Picks; fol: Placed | null;
-  snap: boolean;                 // the playhead jumped (a scrub, a new session): frame the raid at once, no glide
+  me: ReadonlySet<string>;       // lower-case names of the member's own characters
+  ma: string | null;             // lower-case name of the declared main assist at this moment
+  arcs: Arc[];                   // heal casts under way in this zone
+  snap: boolean;                // the playhead jumped (a scrub, a new session): frame the raid at once, no glide
   bg: Bg;                        // none: raiders only; lines: the wall lines on the dark page; parchment: lines in ink on paper
   store: ParchmentStore;
   route: RouteFeed | null;       // the raid's path, null with the Path toggle off
@@ -502,7 +510,46 @@ function drawPane(p: Pane, o: PaneArgs): boolean {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    // The member's own character: an always-on ring, whatever else is highlighted.
+    if (o.me.has(r.name.toLowerCase())) {
+      ctx.strokeStyle = ME_RING;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(px, py, DOT_R + 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // The declared main assist: an "MA" badge above the dot.
+    if (o.ma && r.name.toLowerCase() === o.ma) {
+      ctx.font = FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const bw = ctx.measureText(MA_TAG).width + 8;
+      ctx.fillStyle = KILL_GOLD;
+      ctx.fillRect(px - bw / 2, py - DOT_R - 22, bw, 15);
+      ctx.fillStyle = BG;
+      ctx.fillText(MA_TAG, px, py - DOT_R - 14);
+      ctx.textAlign = 'start';
+    }
     p.drawn.push({ name: r.name, cls: r.cls, hp: r.hp, px, py });
+  }
+
+  // Heals being cast: a green arch from the healer to the target, growing as the cast fills and fading when it lands.
+  // A ring of Complete Healings is a ring of arches onto the tank.
+  if (o.arcs.length) {
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = HEAL_GREEN;
+    ctx.lineWidth = 2;
+    for (const a of o.arcs) {
+      const ax = sx(a.from.x), ay = sy(a.from.y), bx = sx(a.to.x), by = sy(a.to.y);
+      if ((ax < 0 && bx < 0) || (ax > w && bx > w) || (ay < 0 && by < 0) || (ay > h && by > h)) continue;
+      ctx.globalAlpha = 0.85 * a.alpha;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      const steps = 14;
+      for (let k = 1; k <= steps; k++) { const q = archPoint(ax, ay, bx, by, (k / steps) * a.p); ctx.lineTo(q.x, q.y); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Recorded targets: red diamonds, bigger the more raiders had it targeted. A killed boss is a big red dot with a
@@ -592,14 +639,16 @@ export type BoundedReplay = {
 };
 
 /** The route one 15-minute window comes from: the caller's (bounded) or the members' replay route. */
-function windowUrl(urls: BoundedReplay['urls'] | null, nightKey: string, from: number, to: number): string {
+function windowUrl(urls: BoundedReplay['urls'] | null, nightKey: string, from: number, to: number, lean = false): string {
   const f = new Date(from).toISOString(), t = new Date(to).toISOString();
-  return urls
+  const u = urls
     ? urls.window(nightKey, f, t)
     : '/api/spectator/replay?night=' + encodeURIComponent(nightKey) + '&from=' + encodeURIComponent(f) + '&to=' + encodeURIComponent(t);
+  return lean ? u + '&lean=1' : u;   // lean: frames only (the path fill needs no casts or assist lines)
 }
 
-export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedReplay; timeline?: boolean } = {}) {
+/** `mine`: the signed-in member's own character names (main first). Absent on a public share: no Me button, no rings. */
+export default function ReplayBoard({ bounded, timeline, mine }: { bounded?: BoundedReplay; timeline?: boolean; mine?: string[] } = {}) {
   // The bosses the route sent: a whole NIGHT's on the Spectator and the members' review, the share's window's on a share.
   // Nothing below reads this directly: `bosses` is the part that died inside the window on screen.
   const [allBosses, setAllBosses] = useState<SpawnBoss[]>([]);
@@ -704,7 +753,14 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
   const splitRef = useRef<SplitState>(SPLIT_INIT);
   const framesRef = useRef<ReplayFrame[]>([]);
   const winFrames = useRef(new Map<number, ReplayFrame[]>());
-  const wins = useRef(new Map<number, Win>());
+  const winCasts = useRef(new Map<number, HealCast[]>());   // heal casts per loaded window, kept and dropped with its frames
+  const castsRef = useRef<HealCast[]>([]);                  // ... all of them, sorted by start
+  const maRef = useRef<MaDecl[]>([]);                        // main-assist declarations seen so far this night
+  const mineRef = useRef<string[]>([]);
+  mineRef.current = mine ?? [];
+  const meRef = useRef<ReadonlySet<string>>(new Set());
+  meRef.current = meSet(mine ?? []);
+  const wins =useRef(new Map<number, Win>());
   const gen = useRef(0);
   const liveRef = useRef(false);
   const nightsRef = useRef<NightSummary[] | null>(null);   // the list as last merged, for the poll to compare against
@@ -795,6 +851,8 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
     for (const k of [...winFrames.current.keys()]) if (k < cw - 1 || k > cw + 2) winFrames.current.delete(k);
     for (const k of [...wins.current.keys()]) if (k < cw - 1 || k > cw + 2) wins.current.delete(k);
     framesRef.current = [...winFrames.current.keys()].sort((a, b) => a - b).flatMap(k => winFrames.current.get(k) as ReplayFrame[]);
+    for (const k of [...winCasts.current.keys()]) if (k < cw - 1 || k > cw + 2) winCasts.current.delete(k);
+    castsRef.current = [...winCasts.current.keys()].sort((a, b) => a - b).flatMap(k => winCasts.current.get(k) as HealCast[]).sort((a, b) => a.t - b.t);
     nextCache.current = { frame: null, byName: new Map() };
     schedule();
   }, [schedule]);
@@ -833,6 +891,8 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
         const rows: { minute_at: string }[] = Array.isArray(j.rows) ? j.rows : [];
         const decoded = decodeRows(rows as Parameters<typeof decodeRows>[0]);
         winFrames.current.set(w, decoded);
+        winCasts.current.set(w, parseHealCasts(j.casts));   // absent on a public share: no arcs there
+        mergeDecls(maRef.current, j.ma);
         pathStore.current.addWindow(w, decoded); setPathVer(v => v + 1);   // the path keeps the window's centre for the night
         // The newest minute that came back, which a tail request can find past the end the list knew.
         const newest = rows.reduce((m, r) => Math.max(m, Date.parse(r.minute_at) || 0), 0);
@@ -895,6 +955,9 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
     setTailLast(null);
     gen.current++;
     winFrames.current.clear();
+    winCasts.current.clear();
+    castsRef.current = [];
+    maRef.current = [];
     wins.current.clear();
     framesRef.current = [];
     pathStore.current.clear();
@@ -1021,8 +1084,17 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
       return { r, x: r.x, y: r.y, z: r.z };
     }) : [];
 
+    // Heal arcs (casts under way, both ends placed in one zone), the declared main assist, and the member's own raiders.
+    const byLower = new Map<string, Placed>();
+    for (const q of placedAll) byLower.set(q.r.name.toLowerCase(), q);
+    const arcsAll = a && castsRef.current.length
+      ? activeArcs(castsRef.current, t, nm => { const q = byLower.get(nm.toLowerCase()); return q ? { x: q.x, y: q.y, z: q.z, zone: q.r.zone } : null; })
+      : [];
+    const maName = a ? maAt(maRef.current, t)?.toLowerCase() ?? null : null;
+    const me = meRef.current;
+
     // The followed raider, wherever they are.
-    const fol = pk.follow ? placedAll.find(q => isFollowed(pk, q.r.name)) ?? null : null;
+    const fol =pk.follow ? placedAll.find(q => isFollowed(pk, q.r.name)) ?? null : null;
     out.followAbsent = !!pk.follow && !fol && !!a;
 
     // Which zones: the pin, else the followed raider's, else the busiest (with a little stickiness), else the last one shown.
@@ -1081,6 +1153,7 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
         pane.holdsFollow = !!folHere;
         bridges[i].current?.feed(zone, here.map(q => ({ name: q.r.name, cls: q.r.cls, hp: q.r.hp, x: q.x, y: q.y, z: q.z })), {
           hl, follow: folHere ? pk.follow : null,
+          me, ma: maName, arcs: arcsAll.filter(x => x.zone === zone),
           targets: targets.map(x => ({ name: x.name, n: x.n, x: x.x, y: x.y, z: x.z, boss: bossNamesRef.current.has(normMobName(x.name)) })),
           spawns, snap, route,
         });
@@ -1088,7 +1161,7 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
       }
       if (drawPane(pane, {
         t, zone, here, targets, spawns, bosses: bossNamesRef.current, frames, idx, hasFrame: !!a, tails: tailsRef.current,
-        entry: mapsRef.current[zone], hl, picks: pk, fol: folHere, snap, bg: bgRef.current, store: parchment, route,
+        entry: mapsRef.current[zone], hl, picks: pk, fol: folHere, me, ma: maName, arcs: arcsAll.filter(x => x.zone === zone), snap, bg: bgRef.current, store: parchment, route,
       })) out.animating = true;
     }
     out.elsewhere = a ? a.raiders.length - heldTotal : 0;
@@ -1260,7 +1333,7 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
         for (let tries = 0; tries < 2 && !dead && !pathStore.current.has(w); tries++) {
           const from = start + w * REPLAY_WINDOW_MS;
           try {
-            const res = await fetch(windowUrl(urlsRef.current, n.night_key, from, Math.min(from + REPLAY_WINDOW_MS, end)));
+            const res = await fetch(windowUrl(urlsRef.current, n.night_key, from, Math.min(from + REPLAY_WINDOW_MS, end), true));
             if (dead || g !== gen.current) return;
             if (res.status === 401) { setSignedOut(true); return; }
             if (!res.ok) throw new Error('bad');
@@ -1286,6 +1359,13 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
   }, [picks.follow, panes, schedule]);
 
   const pick = useCallback((name: string) => setPicks(p => togglePick(p, name)), []);
+  // Me: highlight and follow the member's own character that is in the replay; with several, each press moves to the
+  // next one (the same follow the Follow buttons make), and with one, pressing again lets go.
+  const presentMe = useMemo(() => presentMine(mine ?? [], rosterRef.current), [mine, rosterVer]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const meClick = useCallback(() => setPicks(p => {
+    const next = nextMe(presentMe, p.follow);
+    return next ? toggleFollow(p, next) : p;
+  }), [presentMe]);
   // Dragging the map takes it back from a follow (the raider stays highlighted).
   const panAway = useCallback(() => setPicks(p => (p.follow ? { ...p, follow: null } : p)), []);
 
@@ -1579,6 +1659,16 @@ export default function ReplayBoard({ bounded, timeline }: { bounded?: BoundedRe
         <button type="button" aria-expanded={pickerOpen} className={`${chip} ${pickerOpen ? chipOn : chipIdle}`} onClick={() => setPickerOpen(o => !o)}>
           Raiders{picks.hl.length ? ` (${picks.hl.length})` : ''}
         </button>
+        {mine && mine.length > 0 && (
+          <button type="button" disabled={!presentMe.length} onClick={meClick}
+            aria-pressed={!!picks.follow && presentMe.some(n => isFollowed(picks, n))}
+            title={presentMe.length
+              ? (presentMe.length > 1 ? `Follow your characters, one at a time (${presentMe.length} here)` : `Follow ${presentMe[0]}`)
+              : 'None of your characters is recorded in this raid so far'}
+            className={`${chip} ${picks.follow && presentMe.some(n => isFollowed(picks, n)) ? chipOn : chipIdle} disabled:cursor-not-allowed disabled:opacity-50`}>
+            Me{presentMe.length > 1 ? ` (${presentMe.length})` : ''}
+          </button>
+        )}
         <div className="flex items-center gap-1.5" role="group" aria-label="Split screen">
           <span className="text-xs text-dim">Split</span>
           {(['auto', 'off'] as const).map(m => (
