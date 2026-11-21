@@ -15,7 +15,9 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { GUILD_TAG } from '@/lib/guild';
 import { makeWindow, replaySlice, windowIso } from '@/lib/raidShare';
 import { loadAnon } from '@/lib/raidShareLookup';
-import { scrubMinuteData } from '@/lib/raidSession';
+import { anonName, scrubMinuteData } from '@/lib/raidSession';
+import { decodeRows } from '@/lib/raidReplay';
+import { loadReplayExtras } from '@/lib/replayHealsLoad';
 import { loadGroupIndex } from '@/lib/raidSessionLoad';
 import { groupKey, narrowRows, parseGroupIds } from '@/lib/sessionGroups';
 
@@ -57,9 +59,16 @@ export async function GET(req: Request) {
     const rows = got.map(r => ({
       minute_at: r.minute_at, zones: r.zones, data: scrubMinuteData(r.data, anon),
     }));
+    // Heal casts and the main assist for the slice, read on the recorded names, then renamed like the dots (an
+    // opted-out character is "Cleric 2" in the casts too). Same window as the frames: lib/replayHealsLoad.ts.
+    const known = new Set(decodeRows(got).flatMap(f => f.raiders.map(r => r.name.toLowerCase())));
+    const lean = q.get('lean') === '1';   // the board's path fill wants the frames only
+    const ex = lean ? { casts: [], ma: [] } : await loadReplayExtras(db, GUILD_TAG, slice.fromMs, slice.toMs, known);
+    const casts = ex.casts.map(c => [c[0], anonName(anon, c[1]), anonName(anon, c[2]), c[3]]);
+    const ma = ex.ma.map(m => [m[0], anonName(anon, m[1])]);
     // A slice that ended more than five minutes ago will not change; one still being recorded may.
     const over = slice.toMs < Date.now() - 5 * 60_000;
-    return NextResponse.json({ rows }, { headers: { 'Cache-Control': over ? 'private, max-age=60' : 'private, max-age=15' } });
+    return NextResponse.json({ rows, casts, ma }, { headers: { 'Cache-Control': over ? 'private, max-age=60' : 'private, max-age=15' } });
   } catch {
     return fail(500, 'replay unavailable');
   }

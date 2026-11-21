@@ -28,6 +28,7 @@ import { selectAll } from '@/lib/selectAll';
 import { GUILD_TAG } from '@/lib/guild';
 import { makeWindow, windowIso } from '@/lib/raidShare';
 import { loadSessionReview } from '@/lib/raidSessionLoad';
+import { ownedCharacters } from '@/lib/ownedCharacters';
 import { liveAvailable, sessionLabel, summarizeNights, type NightMinute } from '@/lib/raidReplay';
 import { loadAwards } from '@/lib/raidAwardsLoad';
 import { loadRaidCuts } from '@/lib/raidCuts';
@@ -98,10 +99,11 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
   }
 
   const admin = supabaseAdmin();
-  const [review, officer, slices] = await Promise.all([
+  const [review, officer, slices, mine] = await Promise.all([
     loadSessionReview(admin, win, { breaks: true, groups: true, group: wanted, groupWin: parent }),
     isOfficer(user.id),
     loadSlices(admin),
+    ownedCharacters(user.id).then(cs => cs.map(c => c.name)).catch(() => [] as string[]),   // the replay's Me button
   ]);
   const raid = review.group && review.groupIndex ? { id: review.group, index: review.groupIndex } : null;
   const marks = await loadNightMarks(admin, win, review.bundle.kills, raid).catch(() => ({ fights: [], deaths: [], mass: [] }));
@@ -126,6 +128,7 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
         bundle={review.bundle}
         night={review.night}
         mode={{ kind: 'member' }}
+        mine={mine}
         extras={officer ? <ShareControls fromIso={fromIso} toIso={toIso} defaultTitle={`Raid session, ${etDay.format(win.fromMs)}`} splitAtMs={review.change?.atMs ?? null} groups={shareGroups} /> : undefined}
         split={{ change: review.change, live: liveAvailable(win.toMs, Date.now()), canShare: officer }}
         nightPanel={{

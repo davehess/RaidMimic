@@ -95,8 +95,10 @@ function Who({ name }: { name: string }) {
 /** Members' page only. */
 export type SplitOptions = { change: RaidChange | null; live: boolean; canShare: boolean };
 
-export default function SessionReview({ bundle, night, mode, extras, split, nightPanel, follow, groups, awards }: {
+export default function SessionReview({ bundle, night, mode, extras, split, nightPanel, follow, groups, awards, mine }: {
   bundle: SessionBundle;
+  /** Members' page only: the signed-in member's own character names, for the replay's Me button and rings. */
+  mine?: string[];
   night: NightSummary | null;
   mode: ReviewMode;
   /** A shared page whose link still follows the raid: the page redraws itself about once a minute (lib/shareFollow.ts). */
@@ -187,7 +189,7 @@ export default function SessionReview({ bundle, night, mode, extras, split, nigh
 
       <div ref={boardRef} className="mt-4 scroll-mt-16">
         {bounded
-          ? <ReplayBoard bounded={bounded} />
+          ? <ReplayBoard bounded={bounded} mine={mode.kind === 'member' ? mine : undefined} />
           : <p className="rounded-md border border-border bg-panel p-4 text-sm text-dim">No replay was recorded in this window. The lists below are whatever else was logged in it.</p>}
       </div>
 

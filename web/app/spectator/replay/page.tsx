@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { supabaseServer } from '@/lib/supabase-server';
 import NewPageTag from '@/components/NewPageTag';
+import { ownedCharacters } from '@/lib/ownedCharacters';
 import ReplayBoard from './ReplayBoard';
 
 export const metadata: Metadata = {
@@ -20,6 +21,9 @@ export default async function SpectatorReplayPage() {
   const { data: { user } } = await supabaseServer().auth.getUser();
   if (!user) redirect('/auth/signin?next=/spectator/replay');
 
+  // The member's own characters (account household + OpenDKP family), for the board's Me button and rings.
+  const mine = await ownedCharacters(user.id).then(cs => cs.map(c => c.name)).catch(() => [] as string[]);
+
   return (
     <div className="mx-auto max-w-6xl py-2">
       <NewPageTag note="New page: a raid night, replayed on the map." />
@@ -29,7 +33,7 @@ export default async function SpectatorReplayPage() {
         recorded that day are in the Session list. The map follows the zone with the most raiders;
         pick a zone to stay in it. <a href="/spectator" className="underline hover:text-text">Back to the live map</a>.
       </p>
-      <ReplayBoard timeline />
+      <ReplayBoard timeline mine={mine} />
       <p className="mt-6 text-xs text-dim">
         Positions are the ones Zeal reported through the raiders running Mimic, kept every few seconds while a raid is on.
         Map lines: Brewall&apos;s EverQuest maps (via Zeal). Generated walls: EQEmu maps (GPLv2+, © EQEmulator.NET, AX-Classic and ProjectEQ).{' '}
