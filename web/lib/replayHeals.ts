@@ -51,11 +51,39 @@ export type Arc = {
   from: { x: number; y: number; z: number };
   to: { x: number; y: number; z: number };
   zone: string | null;
-  /** Cast progress 0..1: the arc grows from the healer to the target as the cast fills, and is whole from 1 on. */
+  /** Cast progress 0..1: the heal dot rides the arch from the healer (0) to the target (1) as the cast fills. */
   p: number;
   /** 1 while casting, then fading to 0. */
   alpha: number;
+  /** Seconds until the heal lands; 0 once it has. */
+  left: number;
+  /** Ms since it landed; negative while still casting. */
+  since: number;
 };
+
+export const HEAL_LAND_MS = 600;       // the pulse on the target when a heal lands
+export const HEAL_LABEL_MIN_S = 0.1;   // the countdown is hidden in the last tenth of a second
+export const GUIDE_ALPHA = 0.3;        // the arch itself is a faint full-length guide; the dot is what moves
+
+/** The countdown beside the dot: seconds left, one decimal ("1.4"); null in the last tenth and after landing. */
+export const healLabel = (left: number): string | null => (left >= HEAL_LABEL_MIN_S ? left.toFixed(1) : null);
+
+/** The landing pulse's progress 0..1 over HEAL_LAND_MS, or null when nothing has just landed. */
+export const landPulse = (since: number): number | null => (since >= 0 && since < HEAL_LAND_MS ? since / HEAL_LAND_MS : null);
+
+/**
+ * Which arcs carry a countdown: only the one nearest to landing per target, so a chain of Complete Healings onto one
+ * tank shows one number ("next heal in 0.8"), not a pile. The dots all still travel. Returns indices into `arcs`.
+ */
+export function labelledArcs(arcs: readonly Pick<Arc, 'target' | 'left'>[]): Set<number> {
+  const best = new Map<string, number>();
+  arcs.forEach((a, i) => {
+    if (healLabel(a.left) === null) return;
+    const k = a.target.toLowerCase(), j = best.get(k);
+    if (j === undefined || a.left < arcs[j].left) best.set(k, i);
+  });
+  return new Set(best.values());
+}
 type Where = { x: number; y: number; z: number; zone: string | null };
 
 /**
@@ -80,6 +108,8 @@ export function activeArcs(casts: readonly HealCast[], t: number, find: (name: s
       from: { x: a.x, y: a.y, z: a.z }, to: { x: b.x, y: b.y, z: b.z },
       p: Math.min(1, (t - c.t) / (c.secs * 1000)),
       alpha: t < done ? 1 : Math.max(0, 1 - (t - done) / HEAL_FADE_MS),
+      left: Math.max(0, (done - t) / 1000),
+      since: t - done,
     });
   }
   return out;

@@ -147,6 +147,68 @@ describe('archPoint', () => {
   });
 });
 
+describe('heal travel: the dot, its countdown, the landing pulse', () => {
+  const T = 1_700_000_000_000;
+  const place = { Aldenmar: { x: 0, y: 0, z: 0, zone: 'z' }, Brackwyn: { x: 100, y: 0, z: 0, zone: 'z' }, Corvale: { x: 50, y: 50, z: 0, zone: 'z' }, Rethlan: { x: 60, y: 40, z: 0, zone: 'z' } };
+  const find = (n) => place[n] ?? null;
+  const at = (casts, ms) => heals.activeArcs(heals.parseHealCasts(casts), T + ms, find);
+  it('the dot starts at the healer and lands on the target: position is cast progress', () => {
+    const [a] = at([[T, 'Aldenmar', 'Brackwyn', 10]], 0);
+    expect(heals.archPoint(0, 0, 100, 0, a.p)).toEqual({ x: 0, y: 0 });
+    const [m] = at([[T, 'Aldenmar', 'Brackwyn', 10]], 5000);
+    expect(heals.archPoint(0, 0, 100, 0, m.p)).toEqual(heals.archPoint(0, 0, 100, 0, 0.5));
+    const [e] = at([[T, 'Aldenmar', 'Brackwyn', 10]], 10_000);
+    expect(heals.archPoint(0, 0, 100, 0, e.p)).toEqual({ x: 100, y: 0 });
+  });
+  it('left counts down to 0 at landing, since is negative until then', () => {
+    const c = [[T, 'Aldenmar', 'Brackwyn', 10]];
+    expect(at(c, 8600)[0].left).toBeCloseTo(1.4, 5);
+    expect(at(c, 8600)[0].since).toBe(-1400);
+    expect(at(c, 10_200)[0].left).toBe(0);
+    expect(at(c, 10_200)[0].since).toBe(200);
+  });
+  it('the label is one decimal, and hidden in the last 0.1 s and after landing', () => {
+    expect(heals.healLabel(1.4)).toBe('1.4');
+    expect(heals.healLabel(10)).toBe('10.0');
+    expect(heals.healLabel(0.1)).toBe('0.1');
+    expect(heals.healLabel(0.099)).toBeNull();
+    expect(heals.healLabel(0)).toBeNull();
+  });
+  it('the landing pulse runs 0.6 s from the landing, and not before or after', () => {
+    expect(heals.landPulse(-1)).toBeNull();
+    expect(heals.landPulse(0)).toBe(0);
+    expect(heals.landPulse(300)).toBeCloseTo(0.5, 5);
+    expect(heals.landPulse(heals.HEAL_LAND_MS)).toBeNull();
+    expect(heals.HEAL_LAND_MS).toBe(600);
+  });
+  it('the pulse ends inside the arc\'s own fade, so it is never cut off', () => {
+    expect(heals.HEAL_LAND_MS).toBeLessThanOrEqual(heals.HEAL_FADE_MS);
+  });
+  it('a chain onto one tank labels only the heal nearest to landing; another target keeps its own', () => {
+    const chain = [[T, 'Aldenmar', 'Brackwyn', 10], [T + 2000, 'Corvale', 'Brackwyn', 10], [T + 4000, 'Rethlan', 'Brackwyn', 10], [T + 1000, 'Rethlan', 'Corvale', 10]];
+    const arcs = at(chain, 6000);
+    const lab = heals.labelledArcs(arcs);
+    expect(lab.size).toBe(2);
+    const onTank = [...lab].map(i => arcs[i]).find(a => a.target === 'Brackwyn');
+    expect(onTank.caster).toBe('Aldenmar');
+    expect(onTank.left).toBeCloseTo(4, 5);
+  });
+  it('a heal in its last tenth is not labelled, and the next one takes the label', () => {
+    const arcs = at([[T, 'Aldenmar', 'Brackwyn', 10], [T + 2000, 'Corvale', 'Brackwyn', 10]], 9950);
+    const lab = heals.labelledArcs(arcs);
+    expect([...lab].map(i => arcs[i].caster)).toEqual(['Corvale']);
+  });
+  it('the rendering uses the shared rules, not its own', () => {
+    const board = stripJs(readSource('web/app/spectator/replay/ReplayBoard.tsx'));
+    const three = stripJs(readSource('web/app/spectator/replay/Replay3D.tsx'));
+    for (const s of [board, three]) {
+      expect(s).toMatch(/labelledArcs\(/);
+      expect(s).toMatch(/landPulse\(/);
+      expect(s).toMatch(/GUIDE_ALPHA/);
+    }
+  });
+});
+
 // ── Me ───────────────────────────────────────────────────────────────────────
 describe('Me', () => {
   const roster = new Map([['aldenmar', 1], ['corvale', 1], ['brackwyn', 1]]);
