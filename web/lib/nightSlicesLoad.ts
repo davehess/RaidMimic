@@ -86,6 +86,11 @@ type DeathContrib = { id: string; encounter_id: string; deaths: unknown };
 
 export type NightMarks = { fights: FightMark[]; deaths: number[]; mass: MassDeath[] };
 
+// The deaths per player name, beside the marks and NOT in them: the marks go to the browser and carry no name. Only the
+// members' page's awards card asks (server-side, and it anonymizes), through `deathCountsOf`.
+const deathNames = new WeakMap<NightMarks, { name: string; n: number }[]>();
+export const deathCountsOf = (m: NightMarks): { name: string; n: number }[] => deathNames.get(m) ?? [];
+
 /**
  * The window's named fights (curated bosses), kills AND wipes AND other guilds', and its deaths. `kills` is the
  * session loader's own list (the fights with no mark), so only the marked ones are read again here.
@@ -186,11 +191,18 @@ async function readMarks(sb: SupabaseClient, win: ShareWindow, kills: readonly K
   }
   const when = (ts: string | number) => (typeof ts === 'number' ? ts : Date.parse(ts));
   const perFight = [...byEnc.values()].flatMap(d => dedupEncounterDeaths(d)).filter(d => playerDeathName(d.name));
-  const deaths = dedupNightDeaths(perFight)
+  const kept = dedupNightDeaths(perFight)
     .filter(d => !raid || inGroupAt(raid.index, raid.id, nameKey(d.name), when(d.ts)))   // a name is read to place the death, never returned
-    .map(d => when(d.ts))
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
+    .filter(d => Number.isFinite(when(d.ts)));
+  const deaths = kept.map(d => when(d.ts)).sort((a, b) => a - b);
+  const byName = new Map<string, { name: string; n: number }>();
+  for (const d of kept) {
+    const k = nameKey(d.name);
+    const cur = byName.get(k);
+    if (cur) cur.n++; else byName.set(k, { name: d.name, n: 1 });
+  }
 
-  return { fights: markFights(fights), deaths, mass: massDeaths(deaths) };
+  const marks: NightMarks = { fights: markFights(fights), deaths, mass: massDeaths(deaths) };
+  deathNames.set(marks, [...byName.values()]);
+  return marks;
 }

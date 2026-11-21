@@ -29,8 +29,9 @@ import { GUILD_TAG } from '@/lib/guild';
 import { makeWindow, windowIso } from '@/lib/raidShare';
 import { loadSessionReview } from '@/lib/raidSessionLoad';
 import { liveAvailable, sessionLabel, summarizeNights, type NightMinute } from '@/lib/raidReplay';
+import { loadAwards } from '@/lib/raidAwardsLoad';
 import { loadRaidCuts } from '@/lib/raidCuts';
-import { loadNightMarks, loadSlices } from '@/lib/nightSlicesLoad';
+import { deathCountsOf, loadNightMarks, loadSlices } from '@/lib/nightSlicesLoad';
 import { slicesIn } from '@/lib/nightSlices';
 import { groupIdsOf, groupKey, groupLabels, parseGroupIds } from '@/lib/sessionGroups';
 import NewPageTag from '@/components/NewPageTag';
@@ -104,6 +105,8 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
   ]);
   const raid = review.group && review.groupIndex ? { id: review.group, index: review.groupIndex } : null;
   const marks = await loadNightMarks(admin, win, review.bundle.kills, raid).catch(() => ({ fights: [], deaths: [], mass: [] }));
+  // The awards need the deaths per name, so they follow the marks (their own three reads run in parallel inside).
+  const awards = review.awardsIn ? await loadAwards(admin, win, review.awardsIn, deathCountsOf(marks)).catch(() => []) : [];
   const groups = review.groups ?? [];
   const { from: fromIso, to: toIso } = windowIso(win);
   // The raids a "Share…" made from this view would be limited to: the narrowed set, named. The window the ids were counted
@@ -132,6 +135,7 @@ export default async function RaidSessionPage({ searchParams }: { searchParams: 
           groups, groupsParent: parent ?? win,
         }}
         groups={{ list: groups, active: review.group ?? null, parent: parent ?? win }}
+        awards={awards}
       />
     </div>
   );
