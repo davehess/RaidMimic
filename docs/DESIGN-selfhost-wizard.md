@@ -143,6 +143,9 @@ different failure for a raid night) and current egress against the 250 GB. The
 Management API exposes neither. Do not quote an egress figure until someone does.
 
 ## 3. Decisions already made that the wizard must carry
+- **2026-11-22 — a free guild's raid night is shared live and swept by morning** (DECISIONS §650): on the hosted Free plan
+  the merged parse and shared target info exist for the night only (swept 6 AM guild time); keeping raids is the paid plan.
+  A self-hosted guild sets its own windows: the sweep is a hosting-bill choice, not a feature limit.
 - **2026-11-16 — the Discord consent screen names the auth address, so brand it** (DECISIONS §601): Discord shows the
   Supabase project's callback host on its sign-in screen. Ours is a free vanity subdomain (`raidmimic.supabase.co`, set with
   the Supabase CLI on a paid plan); the paid alternative is a custom domain (`auth.<domain>`, $10/month on Supabase, outside
