@@ -119,7 +119,7 @@ describe('the money', () => {
     expect(g.price).toBe('$3 / month');
     expect(g.prices.map(p => [p.was, p.now])).toEqual([[5, 3], [10, 6]]);
     expect(g.prices[0].label).toBe(`last ${S.GUILD_HISTORY_DAYS} days of raids`);
-    expect(g.points).toContain('Merged parses for every fight');
+    expect(g.points).toContain('Minute-by-minute parse detail for every fight, kept');
     expect(g.note).toBe('Early-bird prices. Monthly only.');   // no free month since 2026-11-17 (§612)
     expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10 list) with every raid and its full replay stored and hosted');
     expect(t.find(x => x.id === 'free').price).toBe('$0');
@@ -144,9 +144,13 @@ describe('the money', () => {
     const free = t.find(x => x.id === 'free');
     expect(free.points).toContain('Your PoP flags and boss kills, synced');
     expect(free.coming).toMatch(/outside Wolf Pack are coming/);
-    // Tonight's live sharing is free and not kept (DECISIONS §650); keeping it is Pro.
-    expect(free.points.join(' ')).toMatch(/Tonight's merged parse and shared target info, gone by morning/);
-    expect(S.STORY_WORDS.pricingLead).toMatch(/Free shares tonight's raid\. Pro keeps it/);
+    // Keeping is what Pro sells (DECISIONS §650): every guild feature is free for tonight, each night's totals are kept
+    // free, and only the minute-by-minute detail and the replays are kept on Pro.
+    expect(free.points.join(' ')).toMatch(/Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center/);
+    expect(free.points).toContain("Each night's parse totals, kept");
+    expect(S.STORY_WORDS.pricingLead).toBe("Free gives you all of tonight's raid. Pro keeps it.");
+    const g = t.find(x => x.id === 'guild');
+    expect(g.points.filter(p => p !== 'Everything in Free').every(p => /kept|past/.test(p))).toBe(true);
   });
 });
 

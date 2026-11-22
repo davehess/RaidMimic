@@ -109,14 +109,15 @@ export interface Tier { id: 'free' | 'guild'; name: string; price: string; note:
 export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
   // lead, 2026-11-02, pick A, DECISIONS §526: "it's gotta be cheap for users to be able to get their popflags and mob kills
-  // synced"). 2026-11-22 (the guild lead, DECISIONS §650): Free also shares TONIGHT's raid live (the merged parse and
-  // target info), held until the next morning and not kept; keeping it is what Pro pays for.
+  // synced"). 2026-11-22 (the guild lead, DECISIONS §650): what Pro pays for is KEEPING. Every guild feature runs free for
+  // the current raid night (reviews, merged parses, replay and spectator, Command Center, the bot); each night's parse
+  // totals are kept free; the minute-by-minute detail and the replays are kept only on Pro.
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
-    points: ['The overlays', 'Triggers', 'Your own parses', "Tonight's merged parse and shared target info, gone by morning", 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
+    points: ['The overlays, triggers and your own parses', "Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center", "Each night's parse totals, kept", 'Guild Discord bot', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
     coming: 'Syncing and live sharing for players outside Wolf Pack are coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
     prices: GUILD_PRICES,
-    points: ['Shared raid reviews', 'Merged parses for every fight', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
+    points: ['Everything in Free', 'Minute-by-minute parse detail for every fight, kept', 'Replays and spectator for past raids', 'Raid reviews of every past night'],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];
 
@@ -168,7 +169,7 @@ export const STORY_WORDS = {
   ],
   featuresTitle: 'What you get',
   pricingTitle: 'Start free',
-  pricingLead: 'Free shares tonight\'s raid. Pro keeps it and reads it back to you.',
+  pricingLead: 'Free gives you all of tonight\'s raid. Pro keeps it.',
   after: '/guilds',
 } as const;
 
