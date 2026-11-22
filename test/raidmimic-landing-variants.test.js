@@ -143,7 +143,10 @@ describe('the money', () => {
     // Free flag and kill syncing (pick A, 2026-11-02) is listed in Free, and chipped coming until it works outside Wolf Pack.
     const free = t.find(x => x.id === 'free');
     expect(free.points).toContain('Your PoP flags and boss kills, synced');
-    expect(free.coming).toMatch(/outside Wolf Pack is coming/);
+    expect(free.coming).toMatch(/outside Wolf Pack are coming/);
+    // Tonight's live sharing is free and not kept (DECISIONS §650); keeping it is Pro.
+    expect(free.points.join(' ')).toMatch(/Tonight's merged parse and shared target info, gone by morning/);
+    expect(S.STORY_WORDS.pricingLead).toMatch(/Free shares tonight's raid\. Pro keeps it/);
   });
 });
 

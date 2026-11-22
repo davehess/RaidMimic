@@ -109,10 +109,11 @@ export interface Tier { id: 'free' | 'guild'; name: string; price: string; note:
 export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
   // lead, 2026-11-02, pick A, DECISIONS §526: "it's gotta be cheap for users to be able to get their popflags and mob kills
-  // synced"). Free syncing sends flags and kills only, never the per-second fight feed.
+  // synced"). 2026-11-22 (the guild lead, DECISIONS §650): Free also shares TONIGHT's raid live (the merged parse and
+  // target info), held until the next morning and not kept; keeping it is what Pro pays for.
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
-    points: ['The overlays', 'Triggers', 'Your own parses', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
-    coming: 'Syncing for players outside Wolf Pack is coming.' },
+    points: ['The overlays', 'Triggers', 'Your own parses', "Tonight's merged parse and shared target info, gone by morning", 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
+    coming: 'Syncing and live sharing for players outside Wolf Pack are coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
     prices: GUILD_PRICES,
     points: ['Shared raid reviews', 'Merged parses for every fight', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
@@ -167,7 +168,7 @@ export const STORY_WORDS = {
   ],
   featuresTitle: 'What you get',
   pricingTitle: 'Start free',
-  pricingLead: 'Pro reads your guild\'s raids back to you.',
+  pricingLead: 'Free shares tonight\'s raid. Pro keeps it and reads it back to you.',
   after: '/guilds',
 } as const;
 
