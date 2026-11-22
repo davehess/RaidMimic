@@ -150,7 +150,7 @@ describe('what the pages must say', () => {
     expect(mod.RIGHTS_NOTICE).toMatch(/registered trademark of Daybreak Game Company LLC/);
     expect(code(PAGES.terms)).toMatch(/import \{[^}]*RIGHTS_NOTICE[^}]*\} from '@\/lib\/raidmimicLanding'/);
   });
-  it('refunds: payments are not live at the top, monthly only, no free month, cancel any time, no refunds (§651), how to ask', () => {
+  it('refunds: payments are not live at the top, monthly only, no free month, cancel any time, no full refunds (§651), how to ask', () => {
     const src = code(PAGES.refunds);
     expect(src.indexOf('Payments are not live yet.')).toBeGreaterThan(-1);
     expect(src.indexOf('Payments are not live yet.')).toBeLessThan(src.indexOf('How billing works'));
@@ -158,10 +158,10 @@ describe('what the pages must say', () => {
     expect(src).not.toMatch(/first month/i);
     expect(src).toMatch(/Cancel any time, in one click/);
     expect(src).toMatch(/keep Pro until the end of the month you have paid for/);
-    expect(src).toMatch(/There are no refunds\./);
-    expect(src).not.toMatch(/within 7 days|get that charge back|money back/i);
+    expect(src).toMatch(/There are no full refunds\./);
+    expect(src).not.toMatch(/within 7 days|get that charge back|money back|the law where you live/i);
     expect(src).toMatch(/CONTACT_EMAIL/);
-    expect(L.LEGAL_META.refunds.description).toMatch(/no refunds/);
+    expect(L.LEGAL_META.refunds.description).toMatch(/no full refunds/);
     expect(L.LEGAL_META.refunds.description).not.toMatch(/7 days/);
   });
   it('NO governing-law, venue or jurisdiction clause on any page (that is a lawyer’s call), and no placeholder text', () => {
@@ -443,8 +443,8 @@ describe('the landing page additions', () => {
     expect(v).toMatch(/<span data-story-ai [^>]*>\{W\.aiLabel\}<\/span>/);
     expect(v.indexOf('data-story-ai')).toBeGreaterThan(v.indexOf('data-story-controls'));
   });
-  it('under the Pro Guild price: "Renews monthly until you cancel · cancel any time · no refunds", linked to the refunds page', () => {
-    expect(`${STORY_WORDS.renews} ${STORY_WORDS.refunds}`).toBe('Renews monthly until you cancel · cancel any time · no refunds');
+  it('under the Pro Guild price: "Renews monthly until you cancel · cancel any time · no full refunds", linked to the refunds page', () => {
+    expect(`${STORY_WORDS.renews} ${STORY_WORDS.refunds}`).toBe('Renews monthly until you cancel · cancel any time · no full refunds');
     const s = code('web/app/raidmimic/_landing/StoryParts.tsx');
     expect(s).toMatch(/\{t\.id === 'guild' && \(\s*<p data-renewal [^>]*>\{W\.renews\} <a href=\{legal\.refunds\}>\{W\.refunds\}<\/a><\/p>/);
     expect(s.indexOf('data-renewal')).toBeGreaterThan(s.indexOf('{t.note}'));

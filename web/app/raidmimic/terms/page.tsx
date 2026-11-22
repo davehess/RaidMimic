@@ -68,7 +68,7 @@ export default function RaidmimicTermsPage() {
             an early-bird price moving to the list price.</li>
           <li>
             Going back to Free keeps each night’s parse totals; older raid detail goes once it is past what Free keeps. Write to us
-            if you want a guild’s records removed. There are no refunds: see the{' '}
+            if you want a guild’s records removed. There are no full refunds: see the{' '}
             <a href={p.refunds} className={LEGAL_LINK}>Refunds page</a>.
           </li>
         </Bullets>
