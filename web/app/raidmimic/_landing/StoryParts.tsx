@@ -5,7 +5,7 @@ import SignInButton from '@/components/SignInButton';
 import AgreeLine from '@/components/AgreeLine';
 import { legalPaths } from '@/lib/legal';
 import { DOWNLOAD_URL } from '@/lib/raidmimicPlayer';
-import { FEATURES, RAID_MGMT, RAID_MGMT_HEAD, STORY_WORDS as W, TIERS, type Tier } from '@/lib/raidmimicStory';
+import { FEATURES, GUILD_PRICES, KEEP_NOTE, KEEP_ROWS, RAID_MGMT, RAID_MGMT_HEAD, STORY_WORDS as W, TIERS, type Tier } from '@/lib/raidmimicStory';
 import { PRIMARY_BTN } from './Parts';
 import { ComingChip, FeaturePicture } from './StoryBits';
 
@@ -113,6 +113,36 @@ export function Pricing({ setup, onHost = false }: { setup: string; onHost?: boo
           </li>
         ))}
       </ul>
+      <KeepTable />
     </section>
+  );
+}
+
+/** What each plan keeps, side by side: the difference between the plans is how much of a raid stays, and for how long. */
+function KeepTable() {
+  const cols = ['Free', ...GUILD_PRICES.map(p => `$${p.now}`)];
+  return (
+    <div data-keep className="mt-5 rounded-md border border-border bg-panel p-4">
+      <h3 className="text-base text-text">What each plan keeps</h3>
+      <table className="mt-2 w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-dim">
+            <th className="py-1 pr-2 font-normal" scope="col"><span className="sr-only">What</span></th>
+            {cols.map(c => <th key={c} scope="col" className="px-1 py-1 text-right font-normal">{c}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {KEEP_ROWS.map(r => (
+            <tr key={r.what} className="border-t border-border align-top">
+              <th scope="row" className="py-2 pr-2 text-left font-normal">{r.what}</th>
+              {[r.free, r.guild, r.history].map((v, i) => (
+                <td key={i} className="whitespace-nowrap px-1 py-2 text-right tabular-nums">{v}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mb-0 mt-2 text-xs text-dim">{KEEP_NOTE}</p>
+    </div>
   );
 }

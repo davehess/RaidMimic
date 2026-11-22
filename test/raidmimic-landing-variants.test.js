@@ -145,10 +145,17 @@ describe('the money', () => {
     const free = t.find(x => x.id === 'free');
     expect(free.points).toContain('Your PoP flags and boss kills, synced');
     expect(free.coming).toMatch(/outside Wolf Pack are coming/);
-    // Keeping is what Pro sells (DECISIONS §650): every guild feature is free for tonight, each night's totals are kept
-    // free, and only the minute-by-minute detail and the replays are kept on Pro.
+    // Keeping is what Pro sells (DECISIONS §650): every guild feature is free for tonight, totals are kept 60 days, the
+    // last 7 days are kept in full as a trial, and only the larger Pro size keeps 60 days second by second.
     expect(free.points.join(' ')).toMatch(/Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center/);
-    expect(free.points).toContain("Each night's parse totals, kept");
+    expect(free.points).toContain('Parse totals for 60 days');
+    expect(free.points).toContain('The last 7 days in full, second by second, as a trial');
+    expect(S.FULL_TRIAL_DAYS).toBe(7);
+    // The "what each plan keeps" table shows the difference: only the larger size keeps the detail past the trial.
+    const detail = S.KEEP_ROWS.find(r => /second-by-second/i.test(r.what));
+    expect([detail.free, detail.guild, detail.history]).toEqual(['7 days', '7 days', '60 days']);
+    expect(S.KEEP_NOTE).toMatch(/trial .* while we can/);
+    expect(stripJs(fs.readFileSync(path.join(ROOT, 'web/app/raidmimic/_landing/StoryParts.tsx'), 'utf8'))).toMatch(/<KeepTable \/>/);
     expect(S.STORY_WORDS.pricingLead).toBe("Free gives you all of tonight's raid. Pro keeps it.");
     // No size promises to keep raids forever (§650): every pricing line names the window, none says "every raid".
     const g = t.find(x => x.id === 'guild');
