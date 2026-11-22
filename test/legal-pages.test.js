@@ -45,8 +45,8 @@ describe('web/lib/legal.ts', () => {
   it('the contact address, the terms version and date, and the minimum age', () => {
     expect(L.CONTACT_EMAIL).toBe('hello@raidmimic.com');
     expect(L.CONTACT_HREF).toBe('mailto:hello@raidmimic.com');
-    expect(L.TERMS_VERSION).toBe('2026-11-17');
-    expect(L.LEGAL_UPDATED).toBe('November 17, 2026');
+    expect(L.TERMS_VERSION).toBe('2026-11-22');
+    expect(L.LEGAL_UPDATED).toBe('November 22, 2026');
     expect(L.MIN_AGE).toBe(13);
     // stay=1 (2026-11-02, redirect by default): /guilds sends a one-guild player to their guild's site, and "Your data" is the
     // page's own section, so the link must not be bounced.
@@ -150,7 +150,7 @@ describe('what the pages must say', () => {
     expect(mod.RIGHTS_NOTICE).toMatch(/registered trademark of Daybreak Game Company LLC/);
     expect(code(PAGES.terms)).toMatch(/import \{[^}]*RIGHTS_NOTICE[^}]*\} from '@\/lib\/raidmimicLanding'/);
   });
-  it('refunds: payments are not live at the top, monthly only, no free month, cancel any time, 7 days if unused, how to ask', () => {
+  it('refunds: payments are not live at the top, monthly only, no free month, cancel any time, no refunds (§651), how to ask', () => {
     const src = code(PAGES.refunds);
     expect(src.indexOf('Payments are not live yet.')).toBeGreaterThan(-1);
     expect(src.indexOf('Payments are not live yet.')).toBeLessThan(src.indexOf('How billing works'));
@@ -158,9 +158,11 @@ describe('what the pages must say', () => {
     expect(src).not.toMatch(/first month/i);
     expect(src).toMatch(/Cancel any time, in one click/);
     expect(src).toMatch(/keep Pro until the end of the month you have paid for/);
-    expect(src).toMatch(/Ask within 7 days of a charge/);
-    expect(src).toMatch(/did not use Pro that month/);
+    expect(src).toMatch(/There are no refunds\./);
+    expect(src).not.toMatch(/within 7 days|get that charge back|money back/i);
     expect(src).toMatch(/CONTACT_EMAIL/);
+    expect(L.LEGAL_META.refunds.description).toMatch(/no refunds/);
+    expect(L.LEGAL_META.refunds.description).not.toMatch(/7 days/);
   });
   it('NO governing-law, venue or jurisdiction clause on any page (that is a lawyer’s call), and no placeholder text', () => {
     const t = legalText();
@@ -441,8 +443,8 @@ describe('the landing page additions', () => {
     expect(v).toMatch(/<span data-story-ai [^>]*>\{W\.aiLabel\}<\/span>/);
     expect(v.indexOf('data-story-ai')).toBeGreaterThan(v.indexOf('data-story-controls'));
   });
-  it('under the Pro Guild price: "Renews monthly until you cancel · cancel any time · refunds", refunds linked to the refunds page', () => {
-    expect(`${STORY_WORDS.renews} ${STORY_WORDS.refunds}`).toBe('Renews monthly until you cancel · cancel any time · refunds');
+  it('under the Pro Guild price: "Renews monthly until you cancel · cancel any time · no refunds", linked to the refunds page', () => {
+    expect(`${STORY_WORDS.renews} ${STORY_WORDS.refunds}`).toBe('Renews monthly until you cancel · cancel any time · no refunds');
     const s = code('web/app/raidmimic/_landing/StoryParts.tsx');
     expect(s).toMatch(/\{t\.id === 'guild' && \(\s*<p data-renewal [^>]*>\{W\.renews\} <a href=\{legal\.refunds\}>\{W\.refunds\}<\/a><\/p>/);
     expect(s.indexOf('data-renewal')).toBeGreaterThan(s.indexOf('{t.note}'));
