@@ -145,7 +145,8 @@ Management API exposes neither. Do not quote an egress figure until someone does
 ## 3. Decisions already made that the wizard must carry
 - **2026-11-22 — keeping is what is paid** (DECISIONS §650): on the hosted Free plan every guild feature works for the
   night being played, each night's parse totals are kept, and the minute-by-minute detail and replay positions are swept
-  at 6 AM guild time; the paid plan keeps them (90 days or every raid). A self-hosted guild sets its own windows: the sweep
+  at 6 AM guild time; the paid plan keeps 60 days of raids, and only its larger size keeps the second-by-second detail
+  and replays (no size keeps raids forever). A self-hosted guild sets its own windows: the sweep
   is a hosting-bill choice, not a feature limit.
 - **2026-11-16 — the Discord consent screen names the auth address, so brand it** (DECISIONS §601): Discord shows the
   Supabase project's callback host on its sign-in screen. Ours is a free vanity subdomain (`raidmimic.supabase.co`, set with
