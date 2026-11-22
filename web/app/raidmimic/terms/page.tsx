@@ -67,7 +67,8 @@ export default function RaidmimicTermsPage() {
           <li>A price change takes effect at a renewal after we have told you, never in the middle of a paid month. That includes
             an early-bird price moving to the list price.</li>
           <li>
-            Going back to Free does not delete a guild’s records. Write to us if you want them removed. Refunds are on the{' '}
+            Going back to Free keeps each night’s parse totals; older raid detail goes once it is past what Free keeps. Write to us
+            if you want a guild’s records removed. There are no refunds: see the{' '}
             <a href={p.refunds} className={LEGAL_LINK}>Refunds page</a>.
           </li>
         </Bullets>

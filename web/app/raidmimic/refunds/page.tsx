@@ -4,8 +4,11 @@
 //
 // ⚠ PAYMENTS ARE NOT LIVE. There is no billing code anywhere in the repository. The page says so at the top, in words, and
 // every line below is written as what WILL be true when billing opens. Remove the banner only when billing really is live.
-// The price is web/lib/raidmimicStory.ts (GUILD_PRICE_SENTENCE, TIERS); the 7-day window is the guild lead's call. No free month
-// (removed 2026-11-17, DECISIONS §612), so the 7-day refund is the safety net for a first charge.
+// The price is web/lib/raidmimicStory.ts (GUILD_PRICE_SENTENCE, TIERS). No free month (removed 2026-11-17, DECISIONS §612).
+// No refunds (the guild lead, 2026-11-22, DECISIONS §651: "I don't want to offer refunds it's a subscription service"):
+// cancelling stops the next charge and Pro runs to the end of the paid month. The page keeps its /refunds address because
+// the footer, the sitemap and the terms link it; the line about a refund the law gives stays because some places give a
+// right to one that a policy cannot take away.
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { isRaidmimicHost, raidmimicSeo } from '@/lib/raidmimicHost';
@@ -29,7 +32,7 @@ export default function RaidmimicRefundsPage() {
   const p = legalPaths(onHost);
   return (
     <LegalShell onHost={onHost} title="Billing and refunds"
-      lead="How Pro is billed, how to stop it, and how to get your money back.">
+      lead="How Pro is billed and how to stop it. Pro is a subscription, and there are no refunds.">
       <div role="note" aria-label="Payments are not live yet" data-payments-note
         className="mt-6 rounded-md border border-gold/70 bg-panel p-4 text-sm leading-6 text-white">
         <B>Payments are not live yet.</B> Nothing is charged today. This page is what will be true on the day billing opens.
@@ -46,22 +49,21 @@ export default function RaidmimicRefundsPage() {
         <Bullets>
           <li><B>Cancel any time, in one click.</B> No call, no form, no email needed.</li>
           <li>You <B>keep Pro until the end of the month you have paid for</B>, then you are back on the free tier.</li>
-          <li>Cancelling stops the next charge. It does not refund the month you are in, except as below.</li>
+          <li>Cancelling stops the next charge. The month you are in is not refunded.</li>
         </Bullets>
       </Section>
 
       <Section title="Refunds">
         <p>
-          <B>Ask within 7 days of a charge</B>, and if your guild did not use Pro that month, you get that charge back. It goes
-          to the card it came from.
+          <B>There are no refunds.</B> Pro is a monthly subscription: cancel before the next renewal and you are not charged
+          again. This does not take away a refund the law where you live gives you.
         </p>
-        <p>Outside that, write to us anyway and tell us what happened. We read every request.</p>
       </Section>
 
-      <Section title="How to ask">
+      <Section title="Billing questions">
         <p>
-          Email <a href={CONTACT_HREF} className={LEGAL_LINK}>{CONTACT_EMAIL}</a> with your guild’s name and the date of the
-          charge. That is all we need.
+          Charged twice, or charged after you cancelled? Email <a href={CONTACT_HREF} className={LEGAL_LINK}>{CONTACT_EMAIL}</a>{' '}
+          with your guild’s name and the date of the charge, and we will put it right.
         </p>
         <p>
           More in the <a href={p.terms} className={LEGAL_LINK}>Terms</a> and the <a href={p.privacy} className={LEGAL_LINK}>Privacy policy</a>.
