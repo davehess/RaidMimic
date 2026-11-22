@@ -87,23 +87,25 @@ export const featureById = (id: FeatureId): Feature => {
 // last GUILD_HISTORY_DAYS of raids and $10 with every raid kept, shown crossed out above the early-bird prices $3 and $6.
 // Merged parses (the point-in-time, after-the-fight kind) are in both. "if it blows up the budget i would like to raise that":
 // the terms' price-change rule (at a renewal, after notice) covers moving early birds to the list price.
+// 2026-11-22 (the guild lead, DECISIONS §650): no size keeps raids forever. Both keep the last GUILD_HISTORY_DAYS (60); what
+// the larger size adds is VERBOSITY, the second-by-second detail and the replays, because that is the data that costs.
 export const GUILD_PRICE = 5;
 export const GUILD_HISTORY_PRICE = 10;
 export const EARLY_GUILD_PRICE = 3;
 export const EARLY_GUILD_HISTORY_PRICE = 6;
-export const GUILD_HISTORY_DAYS = 90;
+export const GUILD_HISTORY_DAYS = 60;
 export function priceLabel(price: number | null, per = 'month'): string {
   return price == null ? 'price at launch' : `$${price} / ${per}`;
 }
 /** The two Pro · Guild sizes, list price first, for every page that states a price. */
 export const GUILD_PRICES = [
   { id: 'guild', was: GUILD_PRICE, now: EARLY_GUILD_PRICE, label: `last ${GUILD_HISTORY_DAYS} days of raids` },
-  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: 'every raid and its full replay, stored and hosted' },
+  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: `last ${GUILD_HISTORY_DAYS} days, second by second, with replays` },
 ] as const;
-/** One line of text for prose: "$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10) with every raid kept". */
+/** One line of text for prose: "$3 a month (early bird; $5 list) with the last 60 days of raids, or $6 ($10 list) with the same 60 days second by second, replays included". */
 export const GUILD_PRICE_SENTENCE =
   `$${EARLY_GUILD_PRICE} a month (early bird; $${GUILD_PRICE} list) with the last ${GUILD_HISTORY_DAYS} days of raids, ` +
-  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with every raid and its full replay stored and hosted`;
+  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with the same ${GUILD_HISTORY_DAYS} days second by second, replays included`;
 
 export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string; prices?: typeof GUILD_PRICES }
 export const TIERS = (): Tier[] => [
@@ -117,7 +119,7 @@ export const TIERS = (): Tier[] => [
     coming: 'Syncing and live sharing for players outside Wolf Pack are coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
     prices: GUILD_PRICES,
-    points: ['Everything in Free', 'Minute-by-minute parse detail for every fight, kept', 'Replays and spectator for past raids', 'Raid reviews of every past night'],
+    points: ['Everything in Free', `Raid reviews and merged parses for the last ${GUILD_HISTORY_DAYS} days`, `The larger size: every fight second by second, and its replay, for the same ${GUILD_HISTORY_DAYS} days`],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];
 
