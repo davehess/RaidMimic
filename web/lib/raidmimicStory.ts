@@ -94,6 +94,8 @@ export const GUILD_HISTORY_PRICE = 10;
 export const EARLY_GUILD_PRICE = 3;
 export const EARLY_GUILD_HISTORY_PRICE = 6;
 export const GUILD_HISTORY_DAYS = 60;
+/** Free (and the smaller Pro size) keep the last week in full, second by second, as a trial of the larger size (§650). */
+export const FULL_TRIAL_DAYS = 7;
 export function priceLabel(price: number | null, per = 'month'): string {
   return price == null ? 'price at launch' : `$${price} / ${per}`;
 }
@@ -112,16 +114,27 @@ export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
   // lead, 2026-11-02, pick A, DECISIONS §526: "it's gotta be cheap for users to be able to get their popflags and mob kills
   // synced"). 2026-11-22 (the guild lead, DECISIONS §650): what Pro pays for is KEEPING. Every guild feature runs free for
-  // the current raid night (reviews, merged parses, replay and spectator, Command Center, the bot); each night's parse
-  // totals are kept free; the minute-by-minute detail and the replays are kept only on Pro.
+  // the current raid night (reviews, merged parses, replay and spectator, Command Center, the bot); parse totals are kept
+  // GUILD_HISTORY_DAYS; the last FULL_TRIAL_DAYS are kept in full as a trial of the larger size, "while we can".
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
-    points: ['The overlays, triggers and your own parses', "Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center", "Each night's parse totals, kept", 'Guild Discord bot', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
+    points: ['The overlays, triggers and your own parses', "Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center", `The last ${FULL_TRIAL_DAYS} days in full, second by second, as a trial`, `Parse totals for ${GUILD_HISTORY_DAYS} days`, 'Guild Discord bot', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
     coming: 'Syncing and live sharing for players outside Wolf Pack are coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
     prices: GUILD_PRICES,
-    points: ['Everything in Free', `Raid reviews and merged parses for the last ${GUILD_HISTORY_DAYS} days`, `The larger size: every fight second by second, and its replay, for the same ${GUILD_HISTORY_DAYS} days`],
+    points: ['Everything in Free', `Raid reviews, chat and /who history for ${GUILD_HISTORY_DAYS} days`, `The larger size: every fight second by second, and its replay, for ${GUILD_HISTORY_DAYS} days`],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];
+
+/** "What each plan keeps", the table under the price cards that shows the difference (the guild lead, 2026-11-22, §650:
+ *  "show the difference"). Columns are Free and the two Pro sizes, in GUILD_PRICES order; the page writes the prices. */
+export interface KeepRow { what: string; free: string; guild: string; history: string }
+export const KEEP_ROWS: readonly KeepRow[] = [
+  { what: "Tonight's raid, all of it", free: 'yes', guild: 'yes', history: 'yes' },
+  { what: 'Second-by-second detail and replays', free: `${FULL_TRIAL_DAYS} days`, guild: `${FULL_TRIAL_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
+  { what: 'Parse totals, fight by fight', free: `${GUILD_HISTORY_DAYS} days`, guild: `${GUILD_HISTORY_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
+  { what: 'Raid reviews, chat and /who history', free: 'tonight', guild: `${GUILD_HISTORY_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
+];
+export const KEEP_NOTE = `The ${FULL_TRIAL_DAYS}-day full log on Free and the smaller Pro size is a trial of the larger size, offered while we can.`;
 
 /** The page's gold button (the same classes as Parts.tsx PRIMARY_BTN), for the client stages that cannot import Parts. */
 export const GOLD_BTN =
@@ -149,10 +162,10 @@ export const STORY_WORDS = {
   signUp: 'Sign up with Discord',
   signIn: 'Sign in',
   startFree: 'Start free · Pro for your guild',
-  // Under the Pro Guild price, linking the refunds page (the guild lead's pre-launch checklist, 2026-11-01; no full refunds
+  // Under the Pro Guild price, linking the refunds page (the guild lead's pre-launch checklist, 2026-11-01; no refunds
   // since 2026-11-22, DECISIONS §651).
   renews: 'Renews monthly until you cancel · cancel any time ·',
-  refunds: 'no full refunds',
+  refunds: 'no refunds',
   // The story video was made with AI animation tools; the page says so in a quiet caption (checklist: label AI-generated content).
   aiLabel: 'Animated with AI tools',
   skip: 'Skip',
@@ -177,4 +190,4 @@ export const STORY_WORDS = {
 } as const;
 
 /** Every sentence the story stage adds, for the sweeps in test/raidmimic-landing-variants.test.js. */
-export const STORY_TEXT = [STORY_WORDS, FEATURES, TIERS(), MARKS, RAID_MGMT, RAID_MGMT_HEAD];
+export const STORY_TEXT = [STORY_WORDS, FEATURES, TIERS(), KEEP_ROWS, KEEP_NOTE, MARKS, RAID_MGMT, RAID_MGMT_HEAD];

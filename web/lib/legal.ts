@@ -13,7 +13,7 @@ import { GUILDS_STAY_PATH } from './guildSites';
 export const CONTACT_EMAIL = 'hello@raidmimic.com';
 export const CONTACT_HREF = `mailto:${CONTACT_EMAIL}`;
 
-export const TERMS_VERSION = '2026-11-22';   // 2026-11-22: no full refunds (§651), 60-day windows and nothing kept forever (§650)
+export const TERMS_VERSION = '2026-11-22';   // 2026-11-22: no refunds (§651), 60-day windows and nothing kept forever (§650)
 export const LEGAL_UPDATED = 'November 22, 2026';
 
 /** The security page's own date (it is not part of the terms version, so it moves without asking anyone to agree again). */
@@ -47,7 +47,7 @@ export const LEGAL_META = {
   },
   refunds: {
     title: 'Raid Mimic refunds',
-    description: 'How Pro billing and cancelling work for Raid Mimic: a monthly subscription, cancel any time, no full refunds.',
+    description: 'How Pro billing and cancelling work for Raid Mimic: a monthly subscription, cancel any time, no refunds.',
   },
 } as const;
 
