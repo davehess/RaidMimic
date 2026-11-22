@@ -119,9 +119,10 @@ describe('the money', () => {
     expect(g.price).toBe('$3 / month');
     expect(g.prices.map(p => [p.was, p.now])).toEqual([[5, 3], [10, 6]]);
     expect(g.prices[0].label).toBe(`last ${S.GUILD_HISTORY_DAYS} days of raids`);
-    expect(g.points).toContain('Minute-by-minute parse detail for every fight, kept');
+    expect(S.GUILD_HISTORY_DAYS).toBe(60);
+    expect(g.prices[1].label).toBe('last 60 days, second by second, with replays');
     expect(g.note).toBe('Early-bird prices. Monthly only.');   // no free month since 2026-11-17 (§612)
-    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10 list) with every raid and its full replay stored and hosted');
+    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 60 days of raids, or $6 ($10 list) with the same 60 days second by second, replays included');
     expect(t.find(x => x.id === 'free').price).toBe('$0');
   });
   it('there is no individual tier or price (DECISIONS §552), and no live pricing copy sells storage or "costs us money"', () => {
@@ -149,8 +150,11 @@ describe('the money', () => {
     expect(free.points.join(' ')).toMatch(/Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center/);
     expect(free.points).toContain("Each night's parse totals, kept");
     expect(S.STORY_WORDS.pricingLead).toBe("Free gives you all of tonight's raid. Pro keeps it.");
+    // No size promises to keep raids forever (§650): every pricing line names the window, none says "every raid".
     const g = t.find(x => x.id === 'guild');
-    expect(g.points.filter(p => p !== 'Everything in Free').every(p => /kept|past/.test(p))).toBe(true);
+    expect(g.points.filter(p => p !== 'Everything in Free').every(p => /60 days/.test(p))).toBe(true);
+    const words = JSON.stringify([S.TIERS(), S.GUILD_PRICE_SENTENCE, F.START_FREE, F.FREE_ROWS, F.PAID_ROWS]);
+    expect(words).not.toMatch(/every raid kept|every raid and its|forever|indefinite/i);
   });
 });
 
