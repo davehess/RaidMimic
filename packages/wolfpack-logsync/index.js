@@ -8993,7 +8993,7 @@ function _bestSlowForTarget(targetLower, nowMs, wantId) {
              remaining_secs: remaining, total_secs: total, landedAtMs: best.landedAtMs || 0 };
   }
   return { name: best.name, display_name: null, ambiguous: false, family: null,
-           magnitude: best.magnitude, caster: best.caster || null,
+           magnitude: best.magnitude, caster: best.caster || null, result: best.slowResult || null,
            cls: _slowClass(best.name), uncertain,
            remaining_secs: remaining, total_secs: total, landedAtMs: best.landedAtMs || 0 };
 }
@@ -9084,6 +9084,28 @@ function _noteReverseSlowLanding(targetLower, targetName, nowMs) {
 // is the self-cast caster or null. Refreshes an existing same-slow window and
 // keeps every distinct slow so best-active can fall back on expiry. Then fires
 // the LAND callout (main-target gated inside _maybeAnnounceSlowLand).
+// Slow effectiveness (Quarm patch 2026-11-23, EQMacEmu 4754fef zone/mob.cpp SlowMitigation, string ids 9029-9032):
+// after YOUR slow lands, the server tells the caster how well it took. The line names no target or spell, so it
+// belongs to the newest own slow landing, and only inside SLOW_RESULT_WINDOW_MS of it. Recorded as `slowResult`
+// on that _slowsByTarget entry and returned as `result` by _bestSlowForTarget.
+const SLOW_RESULT_WINDOW_MS = 2000;
+const SLOW_RESULT_RX = /\]\s+Your spell (was mostly successful|was partially successful|was slightly successful|may have had the opposite effect of what you desired)\.\s*$/i;
+const SLOW_RESULT_WORD = { 'was mostly successful': 'mostly', 'was partially successful': 'partially', 'was slightly successful': 'slightly', 'may have had the opposite effect of what you desired': 'opposite' };
+const _lastSelfSlow = new Map();   // casterLower → { targetLower, key, atMs }
+function noteSlowResultLine(line, character) {
+  if (!line || !character || line.indexOf('Your spell ') === -1) return null;
+  const m = SLOW_RESULT_RX.exec(line);
+  if (!m) return null;
+  const last = _lastSelfSlow.get(String(character).toLowerCase());
+  if (!last) return null;
+  const ts = parseEqTimestamp(line);
+  const atMs = ts ? ts.getTime() : Date.now();
+  if (atMs < last.atMs - 1000 || atMs - last.atMs > SLOW_RESULT_WINDOW_MS) return null;
+  const e = (_slowsByTarget.get(last.targetLower) || new Map()).get(last.key);
+  if (!e) return null;
+  e.slowResult = SLOW_RESULT_WORD[m[1].toLowerCase()];
+  return e.slowResult;
+}
 function _noteSlowForTarget(evt, caster) {
   if (!evt || !evt.spell_name || !evt.target) return;
   if (!_isSlowSpell(evt.spell_name)) return;
@@ -9128,6 +9150,7 @@ function _noteSlowForTarget(evt, caster) {
     const oldest = _slowsByTarget.keys().next().value;
     if (oldest && oldest !== targetLower) _slowsByTarget.delete(oldest);
   }
+  if (caster && typeof _lastSelfSlow !== 'undefined') _lastSelfSlow.set(String(caster).toLowerCase(), { targetLower, key, atMs });   // a "Your spell was …successful" line may follow
   _maybeAnnounceSlowLand(targetLower, evt.target, atMs);
 }
 // LAND callout — main-target only, and only when the best active slow STRENGTHENS
@@ -67877,6 +67900,8 @@ async function main() {
           notePacifyMiss(line, b.character);
           // "Your target looks unaffected." after a lull cast: same timer, taken back.
           noteLullUnaffected(line, b.character);
+          // "Your spell was mostly/partially/slightly successful" after your own slow: how well it took.
+          noteSlowResultLine(line, b.character);
           // The MGB AA armed on this log (local timer + one queued POST); never throws.
           { const _mts = parseEqTimestamp(line); noteMgbLine(line, b.character, _mts ? _mts.getTime() : Date.now(), Date.now(), !_sourceGuest); }
           // A CURE that fizzles/gets interrupted never landed — void the cure
