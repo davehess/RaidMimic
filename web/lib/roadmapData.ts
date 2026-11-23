@@ -37,6 +37,23 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'raidmimic-pricing-keeping-2026-11-23',
+    title: 'Raid Mimic: free for tonight, Pro keeps it',
+    version: 'Web 2.2.31',
+    date: '2026-11-23',
+    headline: 'Free now covers all of tonight\'s raid. Pro is what keeps it, for 60 days, and it hosts your guild\'s own website.',
+    features: [
+      { name: 'Tonight is free', blurb: 'Merged parses, the raid review, replay and spectator, the Command Center and the Discord bot all work for the raid you are in, free.' },
+      { name: 'A week in full, as a trial', blurb: 'Free keeps the last 7 days second by second, and parse totals for 60 days, so you can see what Pro keeps.' },
+      { name: 'Two Pro sizes, both 60 days', blurb: '$3 a month (early bird) keeps reviews, chat and /who history for 60 days; $6 keeps every fight second by second, with its replay. No size keeps raids forever.' },
+      { name: 'Your own guild website', blurb: 'A website for your guild, hosted and kept running for you, is part of Pro.' },
+      { name: 'What each plan keeps', blurb: 'A small table under the prices shows the difference at a glance.' },
+    ],
+    fixes: [
+      'Pro is a monthly subscription: cancel any time and you are not charged again. There are no refunds. Payments are not live yet.',
+    ],
+  },
+  {
     key: 'elementals-maps-2026-11-19',
     title: 'Elemental Planes: a map for every ring',
     version: 'Web 2.2.19 · Bot 4.1.8',

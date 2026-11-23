@@ -119,9 +119,10 @@ describe('the money', () => {
     expect(g.price).toBe('$3 / month');
     expect(g.prices.map(p => [p.was, p.now])).toEqual([[5, 3], [10, 6]]);
     expect(g.prices[0].label).toBe(`last ${S.GUILD_HISTORY_DAYS} days of raids`);
-    expect(g.points).toContain('Merged parses for every fight');
+    expect(S.GUILD_HISTORY_DAYS).toBe(60);
+    expect(g.prices[1].label).toBe('last 60 days, second by second, with replays');
     expect(g.note).toBe('Early-bird prices. Monthly only.');   // no free month since 2026-11-17 (§612)
-    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10 list) with every raid kept');
+    expect(S.GUILD_PRICE_SENTENCE).toBe('$3 a month (early bird; $5 list) with the last 60 days of raids, or $6 ($10 list) with the same 60 days second by second, replays included');
     expect(t.find(x => x.id === 'free').price).toBe('$0');
   });
   it('there is no individual tier or price (DECISIONS §552), and no live pricing copy sells storage or "costs us money"', () => {
@@ -143,7 +144,29 @@ describe('the money', () => {
     // Free flag and kill syncing (pick A, 2026-11-02) is listed in Free, and chipped coming until it works outside Wolf Pack.
     const free = t.find(x => x.id === 'free');
     expect(free.points).toContain('Your PoP flags and boss kills, synced');
-    expect(free.coming).toMatch(/outside Wolf Pack is coming/);
+    expect(free.coming).toMatch(/outside Wolf Pack are coming/);
+    // Keeping is what Pro sells (DECISIONS §650): every guild feature is free for tonight, totals are kept 60 days, the
+    // last 7 days are kept in full as a trial, and only the larger Pro size keeps 60 days second by second.
+    expect(free.points.join(' ')).toMatch(/Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center/);
+    expect(free.points).toContain('Parse totals for 60 days');
+    expect(free.points).toContain('The last 7 days in full, second by second, as a trial');
+    expect(S.FULL_TRIAL_DAYS).toBe(7);
+    // The "what each plan keeps" table shows the difference: only the larger size keeps the detail past the trial.
+    const detail = S.KEEP_ROWS.find(r => /second-by-second/i.test(r.what));
+    expect([detail.free, detail.guild, detail.history]).toEqual(['7 days', '7 days', '60 days']);
+    expect(S.KEEP_NOTE).toMatch(/trial .* while we can/);
+    expect(stripJs(fs.readFileSync(path.join(ROOT, 'web/app/raidmimic/_landing/StoryParts.tsx'), 'utf8'))).toMatch(/<KeepTable \/>/);
+    expect(S.STORY_WORDS.pricingLead).toBe("Free gives you all of tonight's raid. Pro keeps it.");
+    // No size promises to keep raids forever (§650): every pricing line names the window, none says "every raid".
+    const g = t.find(x => x.id === 'guild');
+    expect(g.points.filter(p => p !== 'Everything in Free' && p !== S.GUILD_SITE_POINT).every(p => /60 days/.test(p))).toBe(true);
+    // A guild's own hosted website is Pro, not Free (§654): on the card, in the keep table and in the onboarding table.
+    expect(g.points).toContain(S.GUILD_SITE_POINT);
+    expect(S.KEEP_ROWS.find(r => /own website/.test(r.what))).toMatchObject({ free: 'no', guild: 'yes', history: 'yes' });
+    expect(F.PAID_ROWS.some(r => /own website/.test(r.what))).toBe(true);
+    expect(F.FREE_ROWS.some(r => /own website/.test(r.what))).toBe(false);
+    const words = JSON.stringify([S.TIERS(), S.GUILD_PRICE_SENTENCE, F.START_FREE, F.FREE_ROWS, F.PAID_ROWS]);
+    expect(words).not.toMatch(/every raid kept|every raid and its|forever|indefinite/i);
   });
 });
 

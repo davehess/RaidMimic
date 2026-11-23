@@ -87,37 +87,57 @@ export const featureById = (id: FeatureId): Feature => {
 // last GUILD_HISTORY_DAYS of raids and $10 with every raid kept, shown crossed out above the early-bird prices $3 and $6.
 // Merged parses (the point-in-time, after-the-fight kind) are in both. "if it blows up the budget i would like to raise that":
 // the terms' price-change rule (at a renewal, after notice) covers moving early birds to the list price.
+// 2026-11-22 (the guild lead, DECISIONS §650): no size keeps raids forever. Both keep the last GUILD_HISTORY_DAYS (60); what
+// the larger size adds is VERBOSITY, the second-by-second detail and the replays, because that is the data that costs.
 export const GUILD_PRICE = 5;
 export const GUILD_HISTORY_PRICE = 10;
 export const EARLY_GUILD_PRICE = 3;
 export const EARLY_GUILD_HISTORY_PRICE = 6;
-export const GUILD_HISTORY_DAYS = 90;
+export const GUILD_HISTORY_DAYS = 60;
+/** Free (and the smaller Pro size) keep the last week in full, second by second, as a trial of the larger size (§650). */
+export const FULL_TRIAL_DAYS = 7;
 export function priceLabel(price: number | null, per = 'month'): string {
   return price == null ? 'price at launch' : `$${price} / ${per}`;
 }
 /** The two Pro · Guild sizes, list price first, for every page that states a price. */
 export const GUILD_PRICES = [
   { id: 'guild', was: GUILD_PRICE, now: EARLY_GUILD_PRICE, label: `last ${GUILD_HISTORY_DAYS} days of raids` },
-  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: 'every raid kept' },
+  { id: 'guild-history', was: GUILD_HISTORY_PRICE, now: EARLY_GUILD_HISTORY_PRICE, label: `last ${GUILD_HISTORY_DAYS} days, second by second, with replays` },
 ] as const;
-/** One line of text for prose: "$3 a month (early bird; $5 list) with the last 90 days of raids, or $6 ($10) with every raid kept". */
+/** One line of text for prose: "$3 a month (early bird; $5 list) with the last 60 days of raids, or $6 ($10 list) with the same 60 days second by second, replays included". */
 export const GUILD_PRICE_SENTENCE =
   `$${EARLY_GUILD_PRICE} a month (early bird; $${GUILD_PRICE} list) with the last ${GUILD_HISTORY_DAYS} days of raids, ` +
-  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with every raid kept`;
+  `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with the same ${GUILD_HISTORY_DAYS} days second by second, replays included`;
 
+export const GUILD_SITE_POINT = "Your guild's own website, hosted and kept running for you";
 export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string; prices?: typeof GUILD_PRICES }
 export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
   // lead, 2026-11-02, pick A, DECISIONS §526: "it's gotta be cheap for users to be able to get their popflags and mob kills
-  // synced"). Free syncing sends flags and kills only, never the per-second fight feed.
+  // synced"). 2026-11-22 (the guild lead, DECISIONS §650): what Pro pays for is KEEPING. Every guild feature runs free for
+  // the current raid night (reviews, merged parses, replay and spectator, Command Center, the bot); parse totals are kept
+  // GUILD_HISTORY_DAYS; the last FULL_TRIAL_DAYS are kept in full as a trial of the larger size, "while we can".
   { id: 'free', name: 'Free', price: '$0', note: 'No account needed for the overlays.', tone: 'green',
-    points: ['The overlays', 'Triggers', 'Your own parses', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
-    coming: 'Syncing for players outside Wolf Pack is coming.' },
+    points: ['The overlays, triggers and your own parses', "Tonight's raid, all of it: merged parses, raid review, replay and spectator, Command Center", `The last ${FULL_TRIAL_DAYS} days in full, second by second, as a trial`, `Parse totals for ${GUILD_HISTORY_DAYS} days`, 'Guild Discord bot', 'Your PoP flags and boss kills, synced', "Your guild's flags and kills, fed into its own site or bot"],
+    coming: 'Syncing and live sharing for players outside Wolf Pack are coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
     prices: GUILD_PRICES,
-    points: ['Shared raid reviews', 'Merged parses for every fight', 'Replay & spectator', 'Command center', 'Guild Discord bot'],
+    // A guild's own hosted website (the way Wolf Pack's is run) is a Pro capability (the guild lead, 2026-11-23, §654).
+    points: ['Everything in Free', GUILD_SITE_POINT, `Raid reviews, chat and /who history for ${GUILD_HISTORY_DAYS} days`, `The larger size: every fight second by second, and its replay, for ${GUILD_HISTORY_DAYS} days`],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];
+
+/** "What each plan keeps", the table under the price cards that shows the difference (the guild lead, 2026-11-22, §650:
+ *  "show the difference"). Columns are Free and the two Pro sizes, in GUILD_PRICES order; the page writes the prices. */
+export interface KeepRow { what: string; free: string; guild: string; history: string }
+export const KEEP_ROWS: readonly KeepRow[] = [
+  { what: "Tonight's raid, all of it", free: 'yes', guild: 'yes', history: 'yes' },
+  { what: "Your guild's own website, hosted", free: 'no', guild: 'yes', history: 'yes' },
+  { what: 'Second-by-second detail and replays', free: `${FULL_TRIAL_DAYS} days`, guild: `${FULL_TRIAL_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
+  { what: 'Parse totals, fight by fight', free: `${GUILD_HISTORY_DAYS} days`, guild: `${GUILD_HISTORY_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
+  { what: 'Raid reviews, chat and /who history', free: 'tonight', guild: `${GUILD_HISTORY_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
+];
+export const KEEP_NOTE = `The ${FULL_TRIAL_DAYS}-day full log on Free and the smaller Pro size is a trial of the larger size, offered while we can.`;
 
 /** The page's gold button (the same classes as Parts.tsx PRIMARY_BTN), for the client stages that cannot import Parts. */
 export const GOLD_BTN =
@@ -145,9 +165,10 @@ export const STORY_WORDS = {
   signUp: 'Sign up with Discord',
   signIn: 'Sign in',
   startFree: 'Start free · Pro for your guild',
-  // Under the Pro Guild price, with "refunds" linking the refunds page (the guild lead's pre-launch checklist, 2026-11-01).
+  // Under the Pro Guild price, linking the refunds page (the guild lead's pre-launch checklist, 2026-11-01; no refunds
+  // since 2026-11-22, DECISIONS §651).
   renews: 'Renews monthly until you cancel · cancel any time ·',
-  refunds: 'refunds',
+  refunds: 'no refunds',
   // The story video was made with AI animation tools; the page says so in a quiet caption (checklist: label AI-generated content).
   aiLabel: 'Animated with AI tools',
   skip: 'Skip',
@@ -167,9 +188,9 @@ export const STORY_WORDS = {
   ],
   featuresTitle: 'What you get',
   pricingTitle: 'Start free',
-  pricingLead: 'Pro reads your guild\'s raids back to you.',
+  pricingLead: 'Free gives you all of tonight\'s raid. Pro keeps it.',
   after: '/guilds',
 } as const;
 
 /** Every sentence the story stage adds, for the sweeps in test/raidmimic-landing-variants.test.js. */
-export const STORY_TEXT = [STORY_WORDS, FEATURES, TIERS(), MARKS, RAID_MGMT, RAID_MGMT_HEAD];
+export const STORY_TEXT = [STORY_WORDS, FEATURES, TIERS(), KEEP_ROWS, KEEP_NOTE, MARKS, RAID_MGMT, RAID_MGMT_HEAD];
