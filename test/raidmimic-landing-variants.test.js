@@ -159,7 +159,12 @@ describe('the money', () => {
     expect(S.STORY_WORDS.pricingLead).toBe("Free gives you all of tonight's raid. Pro keeps it.");
     // No size promises to keep raids forever (§650): every pricing line names the window, none says "every raid".
     const g = t.find(x => x.id === 'guild');
-    expect(g.points.filter(p => p !== 'Everything in Free').every(p => /60 days/.test(p))).toBe(true);
+    expect(g.points.filter(p => p !== 'Everything in Free' && p !== S.GUILD_SITE_POINT).every(p => /60 days/.test(p))).toBe(true);
+    // A guild's own hosted website is Pro, not Free (§654): on the card, in the keep table and in the onboarding table.
+    expect(g.points).toContain(S.GUILD_SITE_POINT);
+    expect(S.KEEP_ROWS.find(r => /own website/.test(r.what))).toMatchObject({ free: 'no', guild: 'yes', history: 'yes' });
+    expect(F.PAID_ROWS.some(r => /own website/.test(r.what))).toBe(true);
+    expect(F.FREE_ROWS.some(r => /own website/.test(r.what))).toBe(false);
     const words = JSON.stringify([S.TIERS(), S.GUILD_PRICE_SENTENCE, F.START_FREE, F.FREE_ROWS, F.PAID_ROWS]);
     expect(words).not.toMatch(/every raid kept|every raid and its|forever|indefinite/i);
   });

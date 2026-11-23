@@ -109,6 +109,7 @@ export const GUILD_PRICE_SENTENCE =
   `$${EARLY_GUILD_PRICE} a month (early bird; $${GUILD_PRICE} list) with the last ${GUILD_HISTORY_DAYS} days of raids, ` +
   `or $${EARLY_GUILD_HISTORY_PRICE} ($${GUILD_HISTORY_PRICE} list) with the same ${GUILD_HISTORY_DAYS} days second by second, replays included`;
 
+export const GUILD_SITE_POINT = "Your guild's own website, hosted and kept running for you";
 export interface Tier { id: 'free' | 'guild'; name: string; price: string; note: string; tone: 'green' | 'blue'; points: string[]; coming?: string; prices?: typeof GUILD_PRICES }
 export const TIERS = (): Tier[] => [
   // Flag and kill syncing is free for everyone, and so is a guild's feed of its own members' flags and kills (the guild
@@ -121,7 +122,8 @@ export const TIERS = (): Tier[] => [
     coming: 'Syncing and live sharing for players outside Wolf Pack are coming.' },
   { id: 'guild', name: 'Pro · Guild', price: priceLabel(EARLY_GUILD_PRICE), note: 'Early-bird prices. Monthly only.', tone: 'blue',
     prices: GUILD_PRICES,
-    points: ['Everything in Free', `Raid reviews, chat and /who history for ${GUILD_HISTORY_DAYS} days`, `The larger size: every fight second by second, and its replay, for ${GUILD_HISTORY_DAYS} days`],
+    // A guild's own hosted website (the way Wolf Pack's is run) is a Pro capability (the guild lead, 2026-11-23, §654).
+    points: ['Everything in Free', GUILD_SITE_POINT, `Raid reviews, chat and /who history for ${GUILD_HISTORY_DAYS} days`, `The larger size: every fight second by second, and its replay, for ${GUILD_HISTORY_DAYS} days`],
     coming: 'Live for one guild today. Hosting other guilds is coming.' },
 ];
 
@@ -130,6 +132,7 @@ export const TIERS = (): Tier[] => [
 export interface KeepRow { what: string; free: string; guild: string; history: string }
 export const KEEP_ROWS: readonly KeepRow[] = [
   { what: "Tonight's raid, all of it", free: 'yes', guild: 'yes', history: 'yes' },
+  { what: "Your guild's own website, hosted", free: 'no', guild: 'yes', history: 'yes' },
   { what: 'Second-by-second detail and replays', free: `${FULL_TRIAL_DAYS} days`, guild: `${FULL_TRIAL_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
   { what: 'Parse totals, fight by fight', free: `${GUILD_HISTORY_DAYS} days`, guild: `${GUILD_HISTORY_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },
   { what: 'Raid reviews, chat and /who history', free: 'tonight', guild: `${GUILD_HISTORY_DAYS} days`, history: `${GUILD_HISTORY_DAYS} days` },

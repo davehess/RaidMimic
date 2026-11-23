@@ -31,6 +31,7 @@ export const FREE_ROWS: readonly CostRow[] = [
   { what: `Parse totals for ${GUILD_HISTORY_DAYS} days`, gives: 'Who did what, fight by fight.' },
 ];
 export const PAID_ROWS: readonly CostRow[] = [
+  { what: 'Your guild’s own website, hosted', gives: 'Raid pages, parses and character pages under your guild’s name, kept running for you.' },
   { what: `Raid reviews, chat and /who history for ${GUILD_HISTORY_DAYS} days`, gives: 'Look back at any night: the review, what was said and who was there.' },
   { what: 'Second by second, with replays (the larger size)', gives: `Every fight to the second and its replay, for ${GUILD_HISTORY_DAYS} days instead of ${FULL_TRIAL_DAYS}.` },
 ];
