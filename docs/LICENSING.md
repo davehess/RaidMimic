@@ -39,19 +39,19 @@ copyright. Open an issue titled "Commercial license" and we will work out terms.
 
 ## Paying for it
 
-**Nothing about this project is for profit.** It is tooling for an emulated
-server that the community runs as a labour of love, and that is the posture here
-too. The only money that changes hands is **cost recovery** — infrastructure
-bills, and time spent on development.
+**The software is free; hosting is what is paid.** Every feature is in the
+repository, under this license, for everyone. A guild can run all of it itself
+at no charge.
 
-- **Donations** are the mechanism: they cover the hosting bill and nothing more.
-  Giving nothing costs you nothing and changes nothing about what you can do.
-- **If the maintainer runs a deployment for your guild**, the cost of that
-  deployment is shared with you. No license permits or forbids that — charging
-  for a service you operate is outside every open-source license. The shape of
-  such an arrangement is in `docs/TERMS-hosted.md`.
-- There is no paid tier, no feature behind a paywall, and no plan for one. Every
-  feature is in the repository, under this license, for everyone.
+- **Raid Mimic's hosted service (Pro · Guild)** is paid: the maintainer runs a
+  guild's website, bot and data, and keeps its raids (the plans and what each
+  keeps are on raidmimic.com's pricing). That is a charge for a service the
+  maintainer operates, not for the code. No open-source license permits or
+  forbids it, and it changes nothing about what you may do with the code here.
+  Billing terms: raidmimic.com/terms and raidmimic.com/refunds.
+- **Running it yourself** stays free, with every feature, on your own hosting.
+- **Donations** are still welcome and still optional. Giving nothing changes
+  nothing about what you can do.
 
 ## If you are contributing
 
