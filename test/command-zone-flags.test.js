@@ -1,7 +1,7 @@
 // test/command-zone-flags.test.js — the Command Center's zone-flag note (the guild lead, 2026-11-19: "who is in raid but
 // not flagged for current zone"). Runs the agent's real zoneFlagCard and the overlay's real zoneFlagsHtml.
 // The rule it guards: only people CONFIRMED without the flag are named; nobody with no record is ever called unflagged,
-// and the 85% door verdict only claims what holds whichever way the unknowns turn out. Names are invented.
+// and the raid-in door verdict (50%, EQMacEmu 49e964b, the patch of 2026-11-23) only claims what holds whichever way the unknowns turn out. Names are invented.
 // Run: npx vitest run test/command-zone-flags.test.js
 
 import { describe, it, expect } from 'vitest';
@@ -10,7 +10,7 @@ import { readSource, ROOT, sliceBlock, evalBlock, stripJs } from './_source-slic
 
 const agent = readSource(path.join(ROOT, 'packages', 'wolfpack-logsync', 'index.js'));
 const { zoneFlagCard } = evalBlock(
-  sliceBlock(agent, 'function planarFlagRule(size, flagged) {', 'maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,\n  };\n}')
+  sliceBlock(agent, 'const RAID_WILLING_PCT = 50;', 'maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,\n  };\n}')
   + '\n' + sliceBlock(agent, 'const _ZONE_GATE_KEY = {', '  return out;\n}\n// The bot'),
   ['zoneFlagCard']);
 
@@ -36,7 +36,8 @@ describe('zoneFlagCard', () => {
     const r = names(10);
     const c = zoneFlagCard(210, 'Plane of Storms', r, answer(r, 6, 2));
     expect(c.missing).toEqual([r[6], r[7]].sort());
-    expect(c).toMatchObject({ flagged: 6, unknown: 2, size: 10, door: null });   // Storms has no 85% door
+    expect(c).toMatchObject({ flagged: 6, unknown: 2, size: 10 });
+    expect(c.door).not.toBeNull();   // Storms is on the raid-in list since the patch
   });
 
   it('treats a raider the answer does not name as no record, never as unflagged', () => {
@@ -49,33 +50,35 @@ describe('zoneFlagCard', () => {
     expect(zoneFlagCard(210, 'Plane of Storms', ['Aldenmar'], { aldenmar: 'missing' }).missing).toEqual(['Aldenmar']);
   });
 
-  it('uses the 85% door only for ids 215-219', () => {
+  it('uses the door in every gated zone on the server list (200-212, 214-223)', () => {
     const r = names(20);
-    for (const id of [215, 216, 217, 218, 219]) expect(zoneFlagCard(id, 'Z', r, answer(r, 17, 3)).door).not.toBeNull();
-    for (const id of [200, 207, 208, 209, 210, 211, 212, 214, 220, 221]) expect(zoneFlagCard(id, 'Z', r, answer(r, 17, 3)).door).toBeNull();
+    for (const id of [200, 207, 208, 209, 210, 211, 212, 214, 215, 216, 217, 218, 219, 220, 221, 222]) expect(zoneFlagCard(id, 'Z', r, answer(r, 10, 10)).door, String(id)).not.toBeNull();
+    // 213 is not on the list and has no gate; 202 is on the list but has no gate, so no card at all
+    expect(zoneFlagCard(213, 'Z', r, answer(r, 10, 10))).toBeNull();
+    expect(zoneFlagCard(202, 'Z', r, answer(r, 10, 10))).toBeNull();
   });
 
-  it('passes at exactly 85% and fails one short, with every record known', () => {
+  it('passes at exactly 50% and fails one short, with every record known', () => {
     const r = names(20);
-    expect(zoneFlagCard(217, 'Z', r, answer(r, 17, 3)).door).toEqual({ pct: 85, verdict: 'pass', need: 0 });
-    expect(zoneFlagCard(217, 'Z', r, answer(r, 16, 4)).door).toEqual({ pct: 80, verdict: 'fail', need: 1 });
+    expect(zoneFlagCard(217, 'Z', r, answer(r, 10, 10)).door).toEqual({ pct: 50, verdict: 'pass', need: 0 });
+    expect(zoneFlagCard(217, 'Z', r, answer(r, 9, 11)).door).toEqual({ pct: 45, verdict: 'fail', need: 1 });
   });
 
   it('says depends, not pass or fail, when the unknowns decide it', () => {
     const r = names(20);
-    // 15 flagged, 1 missing, 4 no record: 15 is short of 17, but 19 would pass.
-    expect(zoneFlagCard(217, 'Z', r, answer(r, 15, 1)).door).toEqual({ pct: 75, verdict: 'depends', need: 2 });
+    // 8 flagged, 2 missing, 10 no record: 8 is short of 10, but 18 would pass.
+    expect(zoneFlagCard(217, 'Z', r, answer(r, 8, 2)).door).toEqual({ pct: 40, verdict: 'depends', need: 2 });
   });
 
   it('only says fail when it holds even if every unknown were flagged', () => {
     const r = names(20);
-    // 10 flagged, 8 missing, 2 no record: best case 12 of 20.
-    expect(zoneFlagCard(217, 'Z', r, answer(r, 10, 8)).door).toEqual({ pct: 50, verdict: 'fail', need: 5 });
+    // 4 flagged, 14 missing, 2 no record: best case 6 of 20.
+    expect(zoneFlagCard(217, 'Z', r, answer(r, 4, 14)).door).toEqual({ pct: 20, verdict: 'fail', need: 4 });
   });
 
-  it('floors the percentage (84.9 never reads 85)', () => {
+  it('floors the percentage (49.1 never reads 50)', () => {
     const r = names(53);
-    expect(zoneFlagCard(217, 'Z', r, answer(r, 45, 8)).door.pct).toBe(84);
+    expect(zoneFlagCard(217, 'Z', r, answer(r, 26, 27)).door.pct).toBe(49);
   });
 });
 
@@ -95,13 +98,13 @@ describe('zoneFlagsHtml', () => {
   });
 
   it('says Flagged, not At least, when every record is known', () => {
-    const html = zoneFlagsHtml(card(217, 17, 3));
-    expect(html).toContain('Flagged <b>17 of 20</b> (85%): raid can enter');
+    const html = zoneFlagsHtml(card(217, 10, 10));
+    expect(html).toContain('Flagged <b>10 of 20</b> (50%): raid can enter');
     expect(html).not.toContain('No flag record');
   });
 
   it('says how many more when the raid cannot enter', () => {
-    expect(zoneFlagsHtml(card(217, 16, 4))).toContain('cannot enter until 1 more is flagged');
+    expect(zoneFlagsHtml(card(217, 9, 11))).toContain('cannot enter until 1 more is flagged');
   });
 
   it('never claims people with no record are unflagged', () => {
@@ -110,8 +113,8 @@ describe('zoneFlagsHtml', () => {
     expect(html).toContain('No flag record: 10');
   });
 
-  it('carries no 85% line for a zone without the door', () => {
-    expect(zoneFlagsHtml(card(210, 18, 2))).not.toContain('raid can enter');
+  it('carries no entry line for a zone with no card (Plane of War, 213)', () => {
+    expect(zoneFlagsHtml(card(213, 18, 2))).toBe('');
   });
 
   it('is byte-stable: the same card draws the same HTML', () => {

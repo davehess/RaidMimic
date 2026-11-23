@@ -37311,7 +37311,7 @@ const COMMAND_HTML = `<!doctype html>
          + stillCount + ' still to hail</div>' : '');
   }
   // Flagged vs not flagged (the guild lead, 2026-11-16) for the elemental planes and Time: the server lets a
-  // raid in with unflagged members while flagged x 100 >= raid size x 85, counting the whole raid. The agent
+  // raid in with unflagged members while flagged x 100 >= raid size x 50 (RAID_WILLING_PCT in the agent), counting the whole raid. The agent
   // does the sums (planarFlagRule) and sends w.rule; nothing is drawn when it is absent.
   function hailRuleHtml(r){
     if (!r || !(r.size > 0)) return '';
@@ -37620,7 +37620,7 @@ const COMMAND_HTML = `<!doctype html>
       var tail = d.verdict === 'pass' ? 'raid can enter'
         : d.verdict === 'fail' ? 'cannot enter until ' + (unk ? 'at least ' : '') + d.need + ' more ' + (d.need === 1 ? 'is' : 'are') + ' flagged'
         : 'enters if ' + d.need + ' of the ' + unk + ' with no record ' + (d.need === 1 ? 'is' : 'are') + ' flagged';
-      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Planes of Air, Water, Fire, Earth and Time let a raid in while 85% of it holds the flag, counting everyone in the raid.">' + lead + ': ' + tail + '</div>';
+      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Most Planes of Power zones let a raid in while half of it holds the flag, counting everyone in the raid, when the server has that setting on. Getting in this way gives no flag.">' + lead + ': ' + tail + '</div>';
     }
     if (miss.length) {
       h += '<div class="fl-line">Not flagged for ' + esc(z.zone) + ': <b>' + miss.length + '</b></div><div class="fl-chips">';
@@ -63938,16 +63938,20 @@ function _hailReplaceWindow(w) {
 // clock (nowMs is on it) and an absolute end on THIS machine's clock for the overlay's ticking clock.
 // raidNames (a lowercase Set) narrows every list to this Mimic's own raid while two raids run; a
 // window with nobody of yours in it is the other raid's and is left out.
-// Flagged vs not flagged, as counts and whole percentages (floored, so 84.9% never reads 85%). It also answers the
-// 85% entry rule for the elemental planes and Time (EQMacEmu c2cd2651 zone/zoning.cpp:41-73, zone/raids.cpp:617-638;
-// DECISIONS 596: flagged x 100 >= raid size x 85), which the hail card does not show (a kill's flag is not a zone's
-// entry flag). Pure; integer maths only.
+// Flagged vs not flagged, as counts and whole percentages (floored, so 49.9% never reads 50%). It also answers the
+// raid-in entry rule for the Planes of Power zones (EQMacEmu 49e964b zone/zoning.cpp IsPopRaidWillingZone and
+// PopRaidFlagRequirement; zone/raids.cpp MeetsFlagRequirement: flagged x 100 >= raid size x percent), which the hail
+// card does not show (a kill's flag is not a zone's entry flag). Pure; integer maths only.
+// The percentage is a RUNTIME server setting (data bucket pop_raid_flagged_percent; the door only works while
+// pop_alt_access_enabled is "1"), so the server can change it with no patch. 50 is the 2026-11-23 patch notes' value
+// (it was 85). Keep web/lib/popRaidEntry.ts RAID_WILLING_PCT the same.
+const RAID_WILLING_PCT = 50;
 function planarFlagRule(size, flagged) {
   const n = Math.max(0, Math.floor(Number(size) || 0));
   const f = Math.min(n, Math.max(0, Math.floor(Number(flagged) || 0)));
-  const maxUnflagged = n - Math.floor((85 * n + 99) / 100);   // size - ceil(0.85 * size)
+  const maxUnflagged = n - Math.floor((RAID_WILLING_PCT * n + 99) / 100);   // size - ceil(pct x size)
   const notFlagged = n - f;
-  const passes = n > 0 && f * 100 >= n * 85;
+  const passes = n > 0 && f * 100 >= n * RAID_WILLING_PCT;
   return {
     size: n, flagged: f, not_flagged: notFlagged,
     pct_flagged: n ? Math.round((f * 100) / n) : 0, pct_not: n ? Math.round((notFlagged * 100) / n) : 0,
@@ -63957,10 +63961,14 @@ function planarFlagRule(size, flagged) {
 }
 // ── Zone-flag note: who in the raid lacks the flag for the zone you are standing in (the guild lead, 2026-11-19) ──────
 // The zone id Zeal reports -> the PoP gate (web/lib/popFlags.ts POP_ZONES key) that guards it. Zones with no gate are
-// absent, so the card is never drawn there. Only ids 215-219 use the 85% raid-in door (popRaidEntry.ts).
+// absent, so the card is never drawn there. The raid-in door covers ids 200-212 and 214-223 (_ZONE_DOOR_IDS, popRaidEntry.ts).
 const _ZONE_GATE_KEY = { 200: 'cod', 207: 'torment', 208: 'valor', 209: 'bot', 210: 'storms', 211: 'hoh', 212: 'solro', 214: 'tactics',
   215: 'air', 216: 'water', 217: 'fire', 218: 'earth', 219: 'time', 220: 'hohb', 221: 'ponb', 222: 'poeb' };
-const _ZONE_DOOR_IDS = new Set([215, 216, 217, 218, 219]);
+// The zones a raid can be let into while enough of it is flagged: EQMacEmu 49e964b zone/zoning.cpp
+// IsPopRaidWillingZone, ids 200-212 and 214-223 (213 is not in it). Entering this way sets no zone flag, so a
+// borrowed entry never turns a raider into a flagged one: the counts below come only from recorded flags.
+const _ZONE_DOOR_IDS = new Set([200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212,
+  214, 215, 216, 217, 218, 219, 220, 221, 222, 223]);
 // members: raid names as Zeal shows them. byName: lowercase name -> 'flagged' | 'missing' | 'unknown', from the bot's
 // pop-zone-flags answer. Anyone the answer does not name is 'unknown' (never 'missing': an absent record proves nothing).
 // null when this zone has no gate, the raid is empty, or the bot has not answered. The door verdict counts only
@@ -64181,7 +64189,7 @@ function _hailBoardSnapshot(nowMs, raidNames) {
       ms_left: left, ends_at_ms: Math.round((Date.now() + left) / 1000) * 1000 };
     // Flagged vs not flagged for THIS kill's credit, on every window (the guild lead, 2026-11-16: "show flagged vs
     // not flagged on command center, counts and percentages"). Counted over the people this window tracks (the raid at
-    // the kill). The 85% entry rule is a different flag (zone access) and lives on the PoP raid page, not here.
+    // the kill). The raid-in entry rule is a different flag (zone access) and lives on the PoP raid page, not here.
     row.rule = planarFlagRule(still.length + hailed.length + already.length, hailed.length + already.length);
     out.push(row);
   }

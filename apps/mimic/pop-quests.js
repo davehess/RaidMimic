@@ -4202,7 +4202,7 @@ window.POP_QUESTS = {
        "title": "The five Tower of Solusek Ro minis",
        "plane": "solro",
        "who": "raid",
-       "detail": "Xuzl, Arlyxir, the Protector of Dresolik, Rizlona and Jiva, in any order. Each wing is a boss fight and then a click, and everyone clicks their own: when the boss dies a flaming cauldron appears for 30 minutes, and while it is up you click the cauldron to take that wing’s flag. Click when it is not there and you only become disoriented. Dresolik’s Protector appears when the last of the four Guardians of Dresolik dies; Rizlona has a second form where she falls, and it is that one’s death that leaves the cauldron. Nobody speaks to anything here. All five wings, with your Zeks flag at 7 (every flag up to Rallos Zek and the Zek notes), open the lava runes that take you into Solusek Ro’s chamber, and his projection checks all five too. Alts take a wing the same way: whoever reaches a cauldron and clicks it inside its 30 minutes gets that wing. Each cauldron runs its own 30 minutes from its own boss’s death, so send the alts to each wing right after its kill; clearing all five first and clicking later misses the early ones.",
+       "detail": "Xuzl, Arlyxir, the Protector of Dresolik, Rizlona and Jiva, in any order. Each wing is a boss fight and then a click, and everyone clicks their own: when the boss dies a flaming cauldron appears for 30 minutes, and while it is up you click the cauldron to take that wing’s flag. Click when it is not there and you only become disoriented. Dresolik’s Protector appears when the last of the four Guardians of Dresolik dies; Rizlona has a second form where she falls, and it is that one’s death that leaves the cauldron. Nobody speaks to anything here. All five wings, with your Zeks flag at 7 (every flag up to Rallos Zek and the Zek notes), open the lava runes that take you into Solusek Ro’s chamber, unless your raid is let in by the raid-in rule. His projection no longer checks the wings: the Fire flag needs only Miak and your Zeks flag at 7. Alts take a wing the same way: whoever reaches a cauldron and clicks it inside its 30 minutes gets that wing. Each cauldron runs its own 30 minutes from its own boss’s death, so send the alts to each wing right after its kill; clearing all five first and clicking later misses the early ones.",
        "brief": "Five wings, any order. Kill each boss, then click its flaming cauldron within 30 minutes. Everyone clicks their own.",
        "where": [
         {
@@ -5063,8 +5063,8 @@ window.POP_QUESTS = {
        "plane": "time",
        "who": "raid",
        "must": true,
-       "detail": "Loot from Phase 1 bosses is limited for 12 hours and from Phases 2 and 3 for 3.5 days (never past the end of the cycle); Phase 4 to 6 bosses stay down until the cycle ends. Once your guild clears Phase 3 it keeps a checkpoint for the cycle: later visits clear Phase 1, then continue at the first unfinished phase from Phase 4. A visit ends after 10 minutes with no participating players in the zone. The raid cap is 90, with 18 straight into each Phase 1 wing.",
-       "brief": "Phase 1 loot is limited 12 hours, Phases 2 and 3 for 3.5 days, Phase 4 to 6 until the cycle ends. Raid cap 90."
+       "detail": "Loot from Phases 1, 2 and 3 is limited for 3.5 days (never past the end of the cycle; Phase 1 was 12 hours before the 2026-11-23 patch); Phase 4 to 6 bosses stay down until the cycle ends. Once your guild reaches the Phase 4 checkpoint (clearing Phase 3, or any god already killed), Phases 1 to 3 are skipped for the rest of the cycle: later visits go straight to the first unfinished phase from Phase 4. A visit ends after 10 minutes with no participating players in the zone. The raid cap is 90, with 18 straight into each Phase 1 wing.",
+       "brief": "Phase 1 to 3 loot: 3.5 days. The Phase 4 checkpoint skips them for the cycle. Phase 4 to 6: until it ends. Cap 90."
       }
      ]
     }

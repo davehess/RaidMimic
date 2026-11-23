@@ -13,7 +13,7 @@ export type ZoneView = {
   key: string; name: string; short: string; total: number; inCount: number;
   missing: MissingBucket[];     // pieces missing or pending, most names first
   notRecorded: string[];        // nothing missing for them, but some piece is unknown
-  door: DoorLine | null;        // the 85% door line, for Air, Water, Fire, Earth and Time only
+  door: DoorLine | null;        // the raid-in door line, for every gated zone the server lets a raid into (ENTRY_ZONES)
 };
 export type TierView = { tier: number; name: string; color: string; zones: ZoneView[] };
 

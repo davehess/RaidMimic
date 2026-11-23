@@ -211,7 +211,7 @@ const BRIEFS: Record<string, string> = {
   time_timelockout: 'Your guild has one fixed 6 day 18 hour cycle from its first entry; kills no longer extend it.',
   time_quintessence: 'Hail each god’s Essence for its piece (no drop), then combine all four in the vial, which you can pass on.',
   time_join_late: 'The Time A portal puts you in at your guild’s current phase; only another guild’s Time lockout stops you.',
-  flag_quarm: 'Phase 1 loot is limited 12 hours, Phases 2 and 3 for 3.5 days, Phase 4 to 6 until the cycle ends. Raid cap 90.',
+  flag_quarm: 'Phase 1 to 3 loot: 3.5 days. The Phase 4 checkpoint skips them for the cycle. Phase 4 to 6: until it ends. Cap 90.',
 };
 for (const [key, brief] of Object.entries(BRIEFS)) STEP_MORE[key] = { ...STEP_MORE[key], brief };
 
