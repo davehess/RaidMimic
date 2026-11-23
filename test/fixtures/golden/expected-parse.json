@@ -1568,6 +1568,30 @@
         "defender": "a greater gnoll pup",
         "attacker": null
       }
+    },
+    {
+      "i": 57,
+      "line": "[Sun Aug 02 21:11:05 2026] a greater gnoll pup writhes in the grip of agony.",
+      "keep": true,
+      "trigger_visible": true,
+      "event": {
+        "ts": "2026-08-03T01:11:05.000Z",
+        "type": "ability_land",
+        "kind": "harm_touch",
+        "target": "a greater gnoll pup"
+      }
+    },
+    {
+      "i": 58,
+      "line": "[Sun Aug 02 21:11:06 2026] Sylvarra feels a healing touch.",
+      "keep": true,
+      "trigger_visible": true,
+      "event": {
+        "ts": "2026-08-03T01:11:06.000Z",
+        "type": "ability_land",
+        "kind": "lay_on_hands",
+        "target": "Sylvarra"
+      }
     }
   ]
 }

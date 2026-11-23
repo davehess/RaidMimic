@@ -24,38 +24,74 @@ const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</
 const fmtK = (n) => String(n);
 
 // ── 1. the rail ───────────────────────────────────────────────────────────────────────────────────────────────
-describe('the rail is grouped by when you reach for a tab', () => {
+// Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live, Raid,
+// Recap, Diagnostics"), with the "On this PC" pages placed among them.
+describe('the rail folds into five sections', () => {
   const nav = sliceBlock(html, '<div class="nav">', '<div class="wp-rail-foot">');
   const groups = [];
-  for (const m of nav.matchAll(/<div class="wp-rail-h">([^<]*)<\/div>|<button[^>]*data-tab="([a-z]+)"/g)) {
-    if (m[1] != null) groups.push({ title: m[1].replace('&mdash;', '—'), tabs: [] });
-    else groups[groups.length - 1].tabs.push(m[2]);
+  const outside = [];
+  const secs = [...nav.matchAll(/<div class="wp-rail-sec[^"]*" data-sec="([a-z]+)">([\s\S]*?)\n  <\/div>\n/g)];
+  for (const m of secs) {
+    const title = /<div class="wp-rail-h wp-rail-tog"[^>]*>([^<]*)<\/div>/.exec(m[2])[1];
+    const items = [...m[2].matchAll(/<button[^>]*?(?:data-tab="([a-z]+)"|id="(wpLocal[A-Za-z]+)")/g)].map((b) => b[1] || b[2]);
+    groups.push({ sec: m[1], title, items });
   }
+  const afterSecs = nav.slice(nav.lastIndexOf('data-sec="diag"'));
+  for (const b of afterSecs.matchAll(/<button data-tab="([a-z]+)" id="wpAdminTab"/g)) outside.push(b[1]);
 
-  it('has the four groups, in order, with the tabs the guild lead named', () => {
+  it('has the five sections, in order, holding what belongs there', () => {
     expect(groups).toEqual([
-      { title: 'Live — raid night', tabs: ['dash', 'raid', 'fights'] },
-      { title: 'After the raid', tabs: ['myparses', 'stats', 'loot'] },
-      { title: 'Set up', tabs: ['overlays', 'triggers', 'voice', 'buffs'] },
-      { title: 'Machine', tabs: ['diag', 'info', 'optin', 'admin'] },
+      { sec: 'setup', title: 'Setup', items: ['overlays', 'triggers', 'voice', 'buffs', 'optin', 'wpLocalInv', 'wpLocalRebuild'] },
+      { sec: 'live', title: 'Live', items: ['dash', 'fights'] },
+      { sec: 'raid', title: 'Raid', items: ['raid', 'loot', 'wpLocalFlags', 'wpLocalRaid'] },
+      { sec: 'recap', title: 'Recap', items: ['myparses', 'stats', 'replay', 'wpLocalFights', 'wpLocalReplay'] },
+      { sec: 'diag', title: 'Diagnostics', items: ['diag', 'info'] },
     ]);
+    expect(outside).toEqual(['admin']);   // officer-only, outside the five
+  });
+
+  it('opens Live and Raid by default; the rest start folded', () => {
+    const open = secs.filter((m) => /wp-rail-sec open"/.test(m[0])).map((m) => m[1]);
+    expect(open).toEqual(['live', 'raid']);
   });
 
   it('still reaches every tab: one button each, a section each, nothing else lost', () => {
-    const tabs = groups.flatMap((g) => g.tabs);
-    expect([...tabs].sort()).toEqual(['admin', 'buffs', 'dash', 'diag', 'fights', 'info', 'loot', 'myparses', 'optin', 'overlays', 'raid', 'stats', 'triggers', 'voice']);
+    const tabs = groups.flatMap((g) => g.items).filter((t) => !t.startsWith('wpLocal')).concat(outside);
+    expect([...tabs].sort()).toEqual(['admin', 'buffs', 'dash', 'diag', 'fights', 'info', 'loot', 'myparses', 'optin', 'overlays', 'raid', 'replay', 'stats', 'triggers', 'voice']);
     for (const t of tabs) expect(html, `section for ${t}`).toMatch(new RegExp('<div id="' + t + '" class="section[ "]'));
   });
 
-  it('headings are plain divs: not buttons, no data-tab, so nothing that binds the tab buttons sees them', () => {
-    for (const m of nav.matchAll(/<div class="wp-rail-h"[^>]*>/g)) expect(m[0]).not.toContain('data-tab');
+  it('headings are divs with role=button, never .nav buttons, so the tab switcher never sees them', () => {
+    for (const m of nav.matchAll(/<div class="wp-rail-h[^"]*"[^>]*>/g)) {
+      expect(m[0]).not.toContain('data-tab');
+      expect(m[0]).toContain('role="button"');
+    }
     expect(code).toContain(".nav button[data-tab]");
-    // the narrow-window row layout drops them rather than letting them wrap among the buttons
+    // the narrow-window row layout drops the headings and unfolds every section, so nothing can be stranded folded
     expect(html).toMatch(/@media \(max-width: 700px\) \{[\s\S]*?\.nav \.wp-rail-h \{ display:none; \}/);
+    expect(html).toMatch(/@media \(max-width: 700px\) \{[\s\S]*?\.nav \.wp-rail-sec, \.nav \.wp-rail-sec > \.wp-rail-body \{ display:contents !important; \}/);
+  });
+
+  it('a section opens itself when it holds the tab you switch to (the tour, a hash, the tray)', () => {
+    const sw = sliceBlock(code, ".nav button[data-tab]').forEach(b => b.addEventListener('click', () => {", 'wpIndexSync();');
+    expect(sw).toContain('wpRailReveal(b)');
+    // behaviour: reveal opens the section that holds the element and stores it
+    const block = sliceBlock(html, "var WP_RAIL_KEY = 'wp.rail.open';", "{ s.classList.add('open'); _wpRailSave(); }\n}");
+    const store = {};
+    const ls = { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; } };
+    const mk = (sec, open) => { const cls = new Set(open ? ['open'] : []); return { sec, classList: { contains: (c) => cls.has(c), add: (c) => cls.add(c), toggle: (c) => (cls.has(c) ? cls.delete(c) : cls.add(c)) }, getAttribute: () => sec }; };
+    const s1 = mk('recap', false), s2 = mk('live', true);
+    const doc = { querySelectorAll: () => [s1, s2] };
+    const api = new Function('localStorage', 'document', block + '\nreturn { wpRailReveal, wpRailToggle };')(ls, doc);
+    api.wpRailReveal({ closest: () => s1 });
+    expect(s1.classList.contains('open')).toBe(true);
+    expect(JSON.parse(store['wp.rail.open'])).toEqual({ recap: true, live: true });
+    api.wpRailToggle({ parentElement: s2 });
+    expect(JSON.parse(store['wp.rail.open'])).toEqual({ recap: true, live: false });
   });
 
   it('keeps the Admin tab hidden until the bot says the viewer is an officer', () => {
-    expect(nav).toContain('<button data-tab="admin" id="wpAdminTab" style="display:none"');
+    expect(nav).toContain('<button data-tab="admin" id="wpAdminTab" style="display:none');
   });
 });
 
@@ -95,8 +131,8 @@ function fightState() {
 // The cards of the whole Fights tab, in DOM order, named the way the pinned index names them.
 function fightsCards(s) {
   const { api, writes } = loadFights();
-  api.renderReplayCard(s); api.renderTanks(s); api.renderDeeps(s); api.renderFightsMore(s);
-  const dom = writes.fightsReplay + writes.tanks + writes.deeps + writes.fightsMore;
+  api.renderTanks(s); api.renderDeeps(s); api.renderFightsMore(s);
+  const dom = writes.tanks + writes.deeps + writes.fightsMore;
   const cards = [];
   for (const m of dom.matchAll(/<div class="card[^"]*"( data-index="([^"]*)")?>(?:<details[^>]*><summary>)?(?:[\s\S]*?)<h2>([^<]*)/g)) {
     cards.push(m[2] || m[3].split('(')[0].split('—')[0].split('·')[0].trim());
@@ -105,28 +141,29 @@ function fightsCards(s) {
 }
 
 describe('⚔️ Fights runs most important first', () => {
-  it('has the Replay target on top, then tanks, deeps, and the folded three last', () => {
-    const fights = sliceBlock(html, '<div id="fights" class="section">', '</div>\n<div id="myparses"');
+  it('has tanks, deeps, and the folded three last, with Replay gone to its own tab', () => {
+    const fights = sliceBlock(html, '<div id="fights" class="section">', '<div id="replay" class="section">');
     const ids = [...fights.matchAll(/<div id="([A-Za-z]+)"><\/div>/g)].map((m) => m[1]);
-    expect(ids).toEqual(['fightsReplay', 'tanks', 'deeps', 'fightsMore']);
+    expect(ids).toEqual(['tanks', 'deeps', 'fightsMore']);
+    expect(html).toMatch(/<div id="replay" class="section">\s*<div id="fightsReplay"><\/div>/);
     expect(code).toMatch(/\['fightsMore', renderFightsMore\]/);
   });
 
-  it('lists the cards Replay · Threat · Deaths · Incoming · Healers · Exceptional heals · DPS · Abilities · Pets · Shields · Loadouts', () => {
-    expect(fightsCards(fightState()).cards).toEqual(['Replay', 'Threat', 'Deaths', 'Incoming', 'Healers', 'Exceptional heals', 'DPS', 'Abilities', 'Pets', 'Shields', 'Loadouts']);
+  it('lists the cards Threat · Deaths · Incoming · Healers · Exceptional heals · DPS · Abilities · Pets · Shields · Loadouts', () => {
+    expect(fightsCards(fightState()).cards).toEqual(['Threat', 'Deaths', 'Incoming', 'Healers', 'Exceptional heals', 'DPS', 'Abilities', 'Pets', 'Shields', 'Loadouts']);
   });
 
-  it('starts Replay, Exceptional heals, Pets, Damage shields and Weapon loadouts folded (wpKeep, closed)', () => {
+  it('starts Exceptional heals, Pets, Damage shields and Weapon loadouts folded (wpKeep, closed)', () => {
     const { dom } = fightsCards(fightState());
-    for (const k of ['fights|replay', 'fights|exceptional', 'fights|pets', 'fights|damage-shields', 'fights|loadouts']) {
+    for (const k of ['fights|exceptional', 'fights|pets', 'fights|damage-shields', 'fights|loadouts']) {
       expect(dom, k).toContain('<details data-keep="' + k + '"><summary><h2>');   // no " open"
     }
   });
 
   it('puts every one of them behind the same wp-fold card shape, so the Panels hide and overlay matcher still see an h2', () => {
     const { dom } = fightsCards(fightState());
-    expect((dom.match(/class="card[^"]*wp-fold"/g) || []).length).toBe(5);
-    expect((dom.match(/<summary><h2>/g) || []).length).toBe(5);
+    expect((dom.match(/class="card[^"]*wp-fold"/g) || []).length).toBe(4);
+    expect((dom.match(/<summary><h2>/g) || []).length).toBe(4);
   });
 
   it('every <details> it draws carries wpKeep', () => {
@@ -145,8 +182,8 @@ describe('⚔️ Fights runs most important first', () => {
     for (const t of ['Incoming Damage', 'Threat Detail', 'DEEPS']) expect(dom).toContain(t);
   });
 
-  it('a #replay deep link opens the folded card', () => {
-    expect(code).toMatch(/_wpOpenDetails\['fights\|replay'\] = true/);
+  it('a #replay deep link opens the form on the Replay tab', () => {
+    expect(code).toMatch(/_wpOpenDetails\['replay\|form'\] = true/);
   });
 });
 
@@ -224,6 +261,13 @@ describe('ℹ️ Info leads with Parser info and Log archiving', () => {
     expect(at('h += _cvH;')).toBeLessThan(at('<h2>🏷 Zeal tag capture</h2>'));
     // the settings-backups placeholder moved below the grid, after the cards above
     expect(at('id="wpBackupsCard"')).toBeGreaterThan(at('<h2>🏷 Zeal tag capture</h2>'));
+  });
+
+  it('folds Zeal tag capture closed and caps Client versions at five characters behind "N more"', () => {
+    const info = sliceBlock(code, 'function renderInfo(s) {', "setSectionHTML('info', h);");
+    expect(info).toContain("<div class=\"card wp-fold\" data-index=\"Zeal tags\"><details ' + wpKeep('info|zeal-tags')");
+    expect(info).toContain("wpMoreList('info|client-versions'");
+    expect(info).toMatch(/\{ show: 5, cols: 2, noun: 'more characters' \}/);
   });
 });
 

@@ -21,6 +21,7 @@ const CATALOGS = [
   ['spell-catalog', 'logsync.spell-catalog.json'],
   ['item-clickies', 'logsync.item-clickies.json'],
   ['item-catalog',  'logsync.item-catalog.json'],
+  ['quest-scripted', 'logsync.quest-scripted.json'],
 ];
 
 function get(url) {
@@ -47,7 +48,9 @@ async function main() {
       if (!Array.isArray(data.entries) || !data.entries.length) throw new Error('no entries');
       // The agent's own cache shape, etag included, so a signed-in install's
       // first check is a 304 instead of a full download.
+      // (quest-scripted carries more sections beside `entries`; they ride along.)
       const out = { fetched_at: data.fetched_at, etag, entries: data.entries };
+      for (const k of ['script_refs', 'loot', 'timer_overrides', 'source', 'notes']) if (data[k] !== undefined) out[k] = data[k];
       fs.writeFileSync(path.join(OUT, file), JSON.stringify(out));
       console.log(`[stage-catalog] ${name}: ${data.entries.length} entries`);
     } catch (err) {

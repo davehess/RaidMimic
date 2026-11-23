@@ -285,7 +285,9 @@ describe('wiring', () => {
   });
   it('mini and the Timers canvas keep their own look: no strip in mini, none on the canvas, no pin carried into mini', () => {
     expect(html).toMatch(/<div id="pager" class="pager wp-mini-hide">/);
-    expect(css).toMatch(/body\.wp-in-canvas \.pager,body\.wp-in-canvas #tabRecent\{display:none !important\}/);
+    // The whole canvas panel keeps its pager (the guild lead, 2026-11-19, 3e5d6fd3); only a ?wpsect= piece drops the Recent tab.
+    expect(css).toMatch(/body\.wp-in-canvas\.wp-piece #tabRecent\{display:none !important\}/);
+    expect(js).toMatch(/var _pgOff = !!_wpQs\.get\('wpsect'\);\s*if \(_pgOff\) document\.body\.classList\.add\('wp-piece'\)/);
     expect(js).toMatch(/classList\.contains\('wp-mini'\) && _pg\.key\) \{ _pg\.key = null; _pg\.mi = null; \}/);
   });
   it('the strip keeps clear of the ✕ in the corner', () => {

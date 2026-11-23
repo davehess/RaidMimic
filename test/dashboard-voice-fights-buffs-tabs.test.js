@@ -84,21 +84,21 @@ describe('the 🗣 Voice tab', () => {
   });
 });
 
-describe('the ⏪ Replay card on the ⚔️ Fights tab', () => {
+describe('the ⏪ Replay card on its own tab (it left Fights under Layout A - Triage)', () => {
   const logs = { watchedLogs: [{ character: 'Aldenmar', logPath: 'C:/eq/eqlog_Aldenmar_pq.proj.txt' }] };
 
-  it('lives inside #fights, at the TOP, ahead of the tanks and deeps targets (Layout A)', () => {
-    const fights = sliceBlock(html, '<div id="fights" class="section">', '</div>\n<div id="myparses"');
-    expect(fights).toContain('<div id="fightsReplay"></div>');
-    expect(fights.indexOf('id="fightsReplay"')).toBeLessThan(fights.indexOf('id="tanks"'));
-    expect(fights.indexOf('id="fightsReplay"')).toBeLessThan(fights.indexOf('id="deeps"'));
+  it('lives inside #replay, and no longer inside #fights', () => {
+    const fights = sliceBlock(html, '<div id="fights" class="section">', '<div id="replay" class="section">');
+    expect(fights).not.toContain('fightsReplay');
+    expect(html).toContain('<div id="replay" class="section">\n  <div id="fightsReplay"></div>\n</div>');
+    expect(html).toContain('<button data-tab="replay">⏪ Replay</button>');
     expect(stripJs(html)).toMatch(/\['fightsReplay', renderReplayCard\]/);
   });
 
-  it('is a folded card that says the Rehearse tab is coming', () => {
+  it('is an open-by-default card that says the Rehearse tab is coming', () => {
     const w = runRender('function renderReplayCard(s) {', '\n// 🗣 Voice tab', 'renderReplayCard', {}, logs);
     expect(w.fightsReplay).toContain('wp-fold');
-    expect(w.fightsReplay).toMatch(/<details data-keep="fights\|replay"><summary><h2>⏪ Replay/);
+    expect(w.fightsReplay).toMatch(/<details data-keep="replay\|form"( open)?><summary><h2>⏪ Replay/);
     expect(w.fightsReplay).toContain('Rehearse tab coming');
   });
 
@@ -110,11 +110,11 @@ describe('the ⏪ Replay card on the ⚔️ Fights tab', () => {
     }
   });
 
-  it('routes Start / Stop clicks from #fights, and #replay opens the Fights tab', () => {
+  it('routes Start / Stop clicks from #replay (and #fights), and #replay opens the Replay tab', () => {
     const src = stripJs(html);
-    expect(src).toMatch(/\[section, document\.getElementById\('fights'\)\]\.forEach\(function\(host\)\{\s*if \(host && !host\._wpTrigClickBound\) \{ host\.addEventListener\('click', onSectionClick\)/);
+    expect(src).toMatch(/\[section, document\.getElementById\('fights'\), document\.getElementById\('replay'\)\]\.forEach\(function\(host\)\{\s*if \(host && !host\._wpTrigClickBound\) \{ host\.addEventListener\('click', onSectionClick\)/);
     const deepLink = sliceBlock(src, "if (hash.indexOf('#replay') !== 0) return;", '_wpApplyReplayPrefill(0);');
-    expect(deepLink).toContain('data-tab="fights"');
+    expect(deepLink).toContain('data-tab="replay"');
     expect(deepLink).not.toContain('data-tab="triggers"');
   });
 });

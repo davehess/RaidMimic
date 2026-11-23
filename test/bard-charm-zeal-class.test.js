@@ -22,10 +22,11 @@ beforeAll(() => { agent = createRequire(import.meta.url)('../packages/wolfpack-l
 afterEach(() => { vi.useRealTimers(); });
 
 // Two reconcile passes 1.5s apart: the gauge must hold the pet through the land debounce.
-function holdPet(owner, klass, pet) {
+function holdPet(owner, klass, pet, level) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(Date.UTC(2026, 8, 29, 1, 0, 0));
-  agent._setZealStateForTest(owner, { gauges: [{ slot: 16, text: pet }], charInfo: klass ? [{ id: 3, value: klass }] : [] });
+  const charInfo = (klass ? [{ id: 3, value: klass }] : []).concat(level ? [{ id: 2, value: String(level) }] : []);
+  agent._setZealStateForTest(owner, { gauges: [{ slot: 16, text: pet }], charInfo });
   agent._reconcileGaugeCharms();
   vi.setSystemTime(Date.UTC(2026, 8, 29, 1, 0, 2));
   agent._reconcileGaugeCharms();
@@ -48,6 +49,15 @@ describe('the owner\'s class from Zeal', () => {
     const c = holdPet('Nyssara', 'Bard', 'Dragen Faux');
     expect(c.charm_class).toBe('bard');
     expect(c.duration_sec).toBe(60);    // Solon's Bewitching Bravura
+  });
+
+  it('a level 64+ bard with no charm song seen is assumed on Call of the Banshee, a lower one on Bravura', () => {
+    // The guild lead, 2026-11-19: "Bard charm is assuming solons but we have a new one".
+    const hi = holdPet('Nyssara', 'Bard', 'Dragen Faux', 65);
+    expect(hi.charm_spell).toBe('Call of the Banshee');
+    expect(hi.duration_sec).toBe(60);
+    const lo = holdPet('Nyssara', 'Bard', 'Dragen Faux', 60);
+    expect(lo.charm_spell).toBe("Solon's Bewitching Bravura");
   });
 
   it('a magician\'s proper-named pet is a summon, not a charm', () => {

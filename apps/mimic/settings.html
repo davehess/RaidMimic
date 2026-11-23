@@ -206,6 +206,22 @@
   <div class="hint" id="zealSrcLegacy" style="display:none">You are on the older Wolf Pack build (Zeal 1.4 plus our fixes). Pick one of the three above to move to it.</div>
   <div class="hint">Switching installs nothing by itself: Check then offers that build. To go back, pick Stable and install.</div>
 
+  <div id="zealWatch" style="margin-top:10px">
+    <div class="hint"><b>Your watch list</b> — other Zeal builds you follow. Each one is set to its newest release, one pinned release, or its pre-releases too.</div>
+    <div id="zealWatchRows"></div>
+    <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <input id="zealWatchRepo" type="text" placeholder="owner/repo" style="width:170px" aria-label="GitHub repository, owner/repo">
+      <select id="zealWatchMode" aria-label="Which release to follow">
+        <option value="newest">Newest release</option>
+        <option value="pre">Newest incl. pre-releases</option>
+        <option value="pinned">Pinned to a tag</option>
+      </select>
+      <input id="zealWatchPin" type="text" placeholder="tag, e.g. v1.5.0" style="width:120px;display:none" aria-label="Pinned release tag">
+      <button id="zealWatchAdd" type="button" style="background:var(--wp-panel);border:1px solid var(--wp-border)">+ Watch</button>
+      <span id="zealWatchMsg" style="font-size:11px;color:var(--wp-dim)"></span>
+    </div>
+  </div>
+
   <div id="zealPanel" style="margin-top:10px">
     <div class="hint" id="zealStatusLine">Checking your Zeal install…</div>
     <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -225,6 +241,7 @@
   <div id="uiPacksList" style="margin-top:10px">
     <div class="hint">Loading UI packs…</div>
   </div>
+  <div id="uiIconSheets" style="margin-top:10px"></div>
 
   <h2>Overlay sets <span style="background:#2d1b4e;color:#d2a8ff;border:1px solid #6e40c9;border-radius:3px;font-size:9px;padding:1px 5px;margin-left:6px;vertical-align:middle;letter-spacing:1px">ALPHA</span></h2>
   <div class="sub">Save how your overlays are laid out — which are on, where each one sits, how see-through, and the Canvas panels — then switch layouts in one step. Sets are kept on this computer.</div>
@@ -381,6 +398,22 @@
   <button id="openResourcesBtn" type="button"
     style="margin-top:4px;background:#21262d;color:var(--wp-text);border:1px solid var(--wp-border);border-radius:6px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:12px">
     📊 Open Resource use…
+  </button>
+
+  <h2>Raid Mimic party</h2>
+  <div class="hint" style="margin-bottom:8px">
+    Share your numbers live with the people you play with, and the DPS HUD's <b>Party</b> switch shows everyone's numbers
+    merged. Free for everyone. Turn on the box below to follow your in-game group and raid by itself, or use a party code:
+    one of you creates it and the rest join. Create, join and leave by code are on the dashboard's Logsync tab (the same card the tray opens).
+  </div>
+  <label id="partyShareRow" style="display:none;gap:8px;align-items:flex-start;margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="partyShareBox" style="margin-top:3px">
+    <span>Share with my in-game group and raid<br>
+      <span class="hint">Shares only with people in your group or raid who also use Mimic. It connects when you group up and leaves after two minutes on your own. Off by default. Needs Mimic signed in with Discord.</span></span>
+  </label>
+  <button id="openPartyBtn" type="button"
+    style="margin-top:4px;background:#21262d;color:var(--wp-text);border:1px solid var(--wp-border);border-radius:6px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:12px">
+    🐺 Open the party card…
   </button>
 
   <div id="parserCard" style="display:none">
@@ -700,11 +733,21 @@
     try { p = await window.mimic.uiRestorePlan(t); } catch (err) { p = { ok: false, error: err && err.message }; }
     if (!p || !p.ok) { box.innerHTML = '<div class="uicmp" style="color:var(--wp-red)">✕ ' + _uiEsc(p && p.error ? p.error : 'could not compare') + '</div>'; return; }
     const use = {};
-    // Default: take the backup where it differs, except keybinds (shared by every character on this PC).
-    p.parts.forEach(x => { use[x.key] = x.inBackup && !x.same && x.scope !== 'all' ? 'backup' : 'mine'; });
-    const when = p.busy === 'camp' ? ' when ' + t.character + ' camps' : p.busy === 'close' ? ' when EverQuest closes' : ' now';
+    // Default: take the backup where it differs, except the parts inside the files every character on this PC shares:
+    // keybinds, and Zeal's shared options and bar positions ('zeal': its scope says 'character', but the sections
+    // it carries are Zeal's own settings for the whole PC; the bring-in card keeps it behind the shared tick too).
+    const shared = x => x.scope === 'all' || x.key === 'zeal';
+    p.parts.forEach(x => { use[x.key] = x.inBackup && !x.same && !shared(x) ? 'backup' : 'mine'; });
+    // Parts that write eqclient.ini / zeal.ini wait for EverQuest to close; the rest write the character's own files.
+    const needsClose = x => x.key === 'keybinds' || x.key === 'zeal' || x.key === 'zealchar';
+    const whenOf = b => b === 'camp' ? ' when ' + t.character + ' camps' : b === 'close' ? ' when EverQuest closes' : ' now';
     function paint() {
       const n = p.parts.filter(x => use[x.key] === 'backup').length;
+      const picked = p.parts.filter(x => use[x.key] === 'backup');
+      const ownW = whenOf(p.busy), sharedW = whenOf(p.busyShared === undefined ? p.busy : p.busyShared);
+      const hasOwn = picked.some(x => !needsClose(x)), hasShared = picked.some(needsClose);
+      const when = hasOwn && hasShared && ownW !== sharedW ? ' (own files' + ownW + ', shared files' + sharedW + ')'
+        : hasShared ? sharedW : ownW;
       box.innerHTML = '<div class="uicmp">' +
         '<div class="src"><span>📦 <b>' + _uiEsc(p.source.machine || 'backup') + '</b> <span class="m">' + _uiRes(p.source.w, p.source.h) + '</span></span>' +
           '<span style="color:var(--wp-gold)">vs</span><span>💻 <b>This PC</b> <span class="m">' + _uiRes(p.target.w, p.target.h) + '</span></span></div>' +
@@ -713,7 +756,7 @@
             '<div>' + _uiThumb(p.preview.mine) + '<div class="cap">this PC now</div></div></div>' : '') +
         '<table><tr><th>Part</th><th>Difference</th><th>Use</th></tr>' + p.parts.map(x => {
           const can = x.inBackup > 0 && !x.same;
-          const diff = x.summary + (x.scope === 'all' && x.inBackup ? ' · all characters' : '');
+          const diff = x.summary + (shared(x) && x.inBackup ? ' · all characters' : '');
           return '<tr><td>' + _uiEsc(x.label) + '</td><td class="d' + (can ? ' chg' : '') + '">' + _uiEsc(diff) + '</td><td>' +
             (can ? '<span class="seg"><button type="button" data-part="' + x.key + '" data-use="mine" class="' + (use[x.key] === 'mine' ? 'on' : '') + '">Keep mine</button>' +
                    '<button type="button" data-part="' + x.key + '" data-use="backup" class="' + (use[x.key] === 'backup' ? 'on' : '') + '">Backup</button></span>'
@@ -732,9 +775,12 @@
         catch (err) { r = { ok: false, error: err && err.message }; }
         if (r && r.ok) {
           msg.style.color = 'var(--wp-green)';
+          // Every queued half is named: the own files wait for the camp, the shared-file parts for EverQuest to close.
+          const nowTxt = 'Restored (' + (r.written ? r.written.length : 0) + ' file' + (r.written && r.written.length === 1 ? '' : 's') + ' changed)';
+          const qTxt = (r.queuedParts || [{ busy: r.busy }]).map(q => whenOf(q.busy).trim()).filter((v, i, a) => a.indexOf(v) === i).join(' and ');
           msg.textContent = r.queued
-            ? '✓ Queued. It applies' + (r.busy === 'camp' ? ' when ' + t.character + ' camps.' : ' when EverQuest closes.')
-            : '✓ Restored (' + (r.written ? r.written.length : 0) + ' file' + (r.written && r.written.length === 1 ? '' : 's') + ' changed).';
+            ? '✓ ' + (r.written && r.written.length ? nowTxt + '; the rest is queued: it applies ' : 'Queued. It applies ') + qTxt + '.'
+            : '✓ ' + nowTxt + '.';
           if (t.onDone) t.onDone(true);
         } else { msg.style.color = 'var(--wp-red)'; msg.textContent = '✕ ' + (r && r.error ? r.error : 'restore failed'); e.target.disabled = false; }
       });
@@ -841,6 +887,7 @@
             (c.has_eqclient ? ' · eqclient.ini' : '') + ' · <code>' + c.eqDir.replace(/</g,'&lt;') + '</code></span></div>' +
           '<div style="display:flex;gap:6px">' +
             '<button type="button" class="ui-capture" data-idx="' + i + '" style="margin:0;background:var(--wp-accent);padding:5px 10px;font-size:11px">📦 Back up</button>' +
+            '<button type="button" class="ui-local-backup" data-idx="' + i + '" title="Keep a copy of this character\u2019s UI files and your overlay layout on this PC. No account, nothing is sent." style="margin:0;background:var(--wp-panel);border:1px solid var(--wp-border);padding:5px 10px;font-size:11px;color:var(--wp-text)">💾 Back up on this PC</button>' +
             '<button type="button" class="ui-snapshots" data-idx="' + i + '" style="margin:0;background:#21262d;border:1px solid #2a3140;padding:5px 10px;font-size:11px;color:var(--wp-text)">🔄 Backups</button>' +
           '</div>' +
         '</div>' +
@@ -900,6 +947,22 @@
         }
       });
     });
+    list.querySelectorAll('.ui-local-backup').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const idx = parseInt(e.currentTarget.dataset.idx, 10);
+        const c = chars[idx];
+        const msg = list.querySelector('[data-msg="' + idx + '"]');
+        btn.disabled = true;
+        try {
+          const r = await window.mimic.uiLocalBackupNow({ character: c.character, eqDir: c.eqDir });
+          msg.style.color = r && r.ok ? 'var(--wp-green)' : '#f87171';
+          msg.textContent = r && r.ok
+            ? (r.created ? '✓ Kept a copy on this PC (' + r.file_count + ' files, newest 10 kept). Restore it under 🔄 Backups.' : '✓ Nothing changed since your last copy on this PC.')
+            : '✕ ' + (r && r.error ? r.error : 'could not back up');
+        } catch (err) { msg.style.color = '#f87171'; msg.textContent = '✕ ' + (err && err.message ? err.message : String(err)); }
+        finally { _uiRowMsg[c.character] = { text: msg.textContent, color: msg.style.color }; btn.disabled = false; }
+      });
+    });
     list.querySelectorAll('.ui-snapshots').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const idx  = parseInt(e.target.dataset.idx, 10);
@@ -911,9 +974,9 @@
           // Versions this PC kept itself (localVersions.js), newest first: restorable offline, same compare-first path.
           let lv = [];
           try { lv = (await window.mimic.uiLocalVersions(c.character)) || []; } catch { lv = []; }
-          if (!r || !r.ok) {
+          if ((!r || !r.ok) && lv.length === 0) {
             slot.innerHTML = '<div style="color:#f87171;font-size:11px;margin-top:6px">✕ ' + (r && r.error ? r.error : 'failed to list backups') + '</div>';
-          } else if ((!r.snapshots || r.snapshots.length === 0) && lv.length === 0) {
+          } else if ((!r || !r.ok || !r.snapshots || r.snapshots.length === 0) && lv.length === 0) {
             slot.innerHTML = '<div style="color:#6b7280;font-size:11px;font-style:italic;margin-top:6px">No backups yet. Click 📦 Back up first.</div>';
           } else {
             slot.innerHTML = '<table style="width:100%;margin-top:8px;font-size:11px;border-collapse:collapse">' +
@@ -925,7 +988,7 @@
                   '<td style="padding:3px 4px;text-align:right"><button type="button" class="ui-restore" data-id="' + v.id + '" data-charidx="' + idx + '" data-machine="" style="margin:0;padding:3px 9px;font-size:10px;background:var(--wp-green)">↩ Restore</button></td></tr>' +
                 '<tr data-restore-for="' + v.id + '" style="display:none"><td colspan="5" style="padding:4px 0 8px"></td></tr>'
               ).join('') +
-              (r.snapshots || []).map(s =>
+              ((r && r.snapshots) || []).map(s =>
                 '<tr style="border-top:1px solid #2a3140">' +
                   '<td style="padding:3px 4px;color:var(--wp-text)">' + new Date(s.created_at).toLocaleString() + '</td>' +
                   // A named layout's backup carries "Layout: <name>" in its label (UI Studio); show the name.
@@ -1125,6 +1188,7 @@
     }
     _renderZealStatus();
     _renderUiPacks();
+    _renderUiIconSheets();
     _initVoice(c.voice);
     const tm = c.tellsMode || 'off';
     document.querySelectorAll('input[name=tells]').forEach(r => { r.checked = (r.value === tm); });
@@ -1637,6 +1701,28 @@
   // refuses while EQ is running). _latestRelease caches the last check so the
   // Install click doesn't re-fetch the metadata.
   var _zealLatestTag = null;
+  // The watch list (zealUpdater.cleanWatch is the one validator; main.js re-checks whatever is sent).
+  var _zealWatch = [];
+  var _ZEAL_MODE_TXT = { newest: 'newest release', pre: 'incl. pre-releases', pinned: 'pinned' };
+  function _renderZealWatch(active){
+    var host = document.getElementById('zealWatchRows');
+    if (!host) return;
+    host.innerHTML = _zealWatch.map(function(w){
+      var id = 'zealW_' + w.id;
+      return '<div class="row"><input type="radio" name="zealSource" value="w:' + _esc(w.id) + '" id="' + id + '"'
+        + (active === 'w:' + w.id ? ' checked' : '') + '><label for="' + id + '">' + _esc(w.label) + ' — ' + _esc(w.repo)
+        + ' · ' + _esc(_ZEAL_MODE_TXT[w.mode] || w.mode) + (w.mode === 'pinned' ? ' ' + _esc(w.pin) : '')
+        + '</label> <button type="button" data-zw-del="' + _esc(w.id) + '" aria-label="Stop watching ' + _esc(w.repo)
+        + '" style="background:none;border:0;margin:0;color:var(--wp-dim);cursor:pointer">✕</button></div>';
+    }).join('');
+  }
+  async function _saveZealWatch(list, msgEl){
+    var r = await window.mimic.zealWatchSave(list);
+    if (!r || !r.ok) { if (msgEl) { msgEl.style.color = 'var(--wp-red)'; msgEl.textContent = '✕ ' + ((r && r.error) || 'could not save'); } return false; }
+    _zealWatch = r.watch || [];
+    _renderZealWatch(r.source);
+    return true;
+  }
   async function _renderZealStatus(){
     var line = document.getElementById('zealStatusLine');
     if (!line) return;
@@ -1647,6 +1733,8 @@
       var srcId = { test: 'zealSrcTest', zeal15: 'zealSrcZeal15', official: 'zealSrcOfficial' }[s && s.source];
       var srcRadio = srcId ? document.getElementById(srcId) : null;
       if (srcRadio) srcRadio.checked = true;
+      _zealWatch = (s && s.watch) || [];
+      _renderZealWatch(s && s.source);
       var legacy = document.getElementById('zealSrcLegacy');
       if (legacy) legacy.style.display = s && s.source === 'wolfpack' ? '' : 'none';
       if (!s || !s.eqDir) {
@@ -1675,15 +1763,30 @@
     if (!checkBtn) return;
     // Official ↔ Wolf Pack ↔ test build: saved at once (main.js zeal-set-source), then Check
     // runs so the Install button offers the chosen source's build.
-    document.querySelectorAll('input[name=zealSource]').forEach(function(r){
-      r.addEventListener('change', async function(){
-        if (!r.checked) return;
-        try {
-          var res = await window.mimic.zealSetSource(r.value);
-          if (!res || !res.ok) { msg.style.color = '#ff9b9b'; msg.textContent = '✕ ' + ((res && res.error) || 'could not switch'); return; }
-          checkBtn.click();
-        } catch (err) { msg.style.color = '#ff9b9b'; msg.textContent = '✕ ' + ((err && err.message) || err); }
-      });
+    // Delegated, so the watch-list radios drawn later take the same path as the three fixed ones.
+    document.getElementById('zealWatch').parentNode.addEventListener('change', async function(ev){
+      var r = ev.target;
+      if (!r || r.name !== 'zealSource' || !r.checked) return;
+      try {
+        var res = await window.mimic.zealSetSource(r.value);
+        if (!res || !res.ok) { msg.style.color = 'var(--wp-red)'; msg.textContent = '✕ ' + ((res && res.error) || 'could not switch'); return; }
+        checkBtn.click();
+      } catch (err) { msg.style.color = 'var(--wp-red)'; msg.textContent = '✕ ' + ((err && err.message) || err); }
+    });
+    var wMode = document.getElementById('zealWatchMode'), wPin = document.getElementById('zealWatchPin');
+    var wRepo = document.getElementById('zealWatchRepo'), wMsg = document.getElementById('zealWatchMsg');
+    wMode.addEventListener('change', function(){ wPin.style.display = wMode.value === 'pinned' ? '' : 'none'; });
+    document.getElementById('zealWatchAdd').addEventListener('click', async function(){
+      wMsg.style.color = 'var(--wp-dim)'; wMsg.textContent = '';
+      var repo = wRepo.value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\/+$/, '');
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) { wMsg.style.color = 'var(--wp-red)'; wMsg.textContent = 'Write it as owner/repo.'; return; }
+      if (wMode.value === 'pinned' && !wPin.value.trim()) { wMsg.style.color = 'var(--wp-red)'; wMsg.textContent = 'Type the tag to pin.'; return; }
+      var entry = { id: Date.now().toString(36), repo: repo, label: repo, mode: wMode.value, pin: wPin.value.trim() };
+      if (await _saveZealWatch(_zealWatch.concat([entry]), wMsg)) { wRepo.value = ''; wPin.value = ''; }
+    });
+    document.getElementById('zealWatchRows').addEventListener('click', async function(ev){
+      var id = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-zw-del');
+      if (id) await _saveZealWatch(_zealWatch.filter(function(w){ return w.id !== id; }), wMsg);
     });
     checkBtn.addEventListener('click', async function(){
       var orig = checkBtn.textContent; checkBtn.disabled = true; checkBtn.textContent = 'Checking…';
@@ -1693,7 +1796,7 @@
         var r = await window.mimic.zealCheckUpdate();
         if (!r || !r.ok) { msg.style.color = '#ff9b9b'; msg.textContent = '✕ ' + ((r && r.error) || 'check failed'); return; }
         _zealLatestTag = r.latestTag;
-        var what = r.source === 'test' ? 'build of ours on 1.5' : r.source === 'wolfpack' ? 'Wolf Pack build'
+        var what = String(r.source).indexOf('w:') === 0 ? 'watched build' : r.source === 'test' ? 'build of ours on 1.5' : r.source === 'wolfpack' ? 'Wolf Pack build'
           : r.source === 'zeal15' ? 'Zeal 1.5' : 'Zeal';
         if (r.updateAvailable) {
           msg.style.color = '#7ee787';
@@ -1745,6 +1848,33 @@
     return out.join(', ');
   }
   function _uiLabel(c){ return c.variant ? c.option + ' · ' + c.variant : c.option; }
+  // Item-icon sheets the active custom UI lacks (uiDragItems.js; a member, 2026-11-15: some items showed as a pearl
+  // necklace). Shows nothing unless sheets are missing; Fix keeps a dated copy of EQUI_Animations.xml first.
+  async function _renderUiIconSheets(){
+    var host = document.getElementById('uiIconSheets');
+    if (!host || !window.mimic || !window.mimic.uiIconSheetsCheck) return;
+    var r;
+    try { r = await window.mimic.uiIconSheetsCheck(); } catch (e) { return; }
+    if (!r || !r.ok || (r.status !== 'missing' && r.status !== 'malformed')) { host.innerHTML = ''; return; }
+    var n = (r.missing || []).length;
+    host.innerHTML = '<div style="padding:10px 12px;background:var(--wp-panel);border:1px solid var(--wp-gold);border-radius:6px">' +
+      (r.status === 'missing'
+        ? '<div style="font-size:12px;color:var(--wp-text)">Your custom UI is missing ' + n + ' item-icon sheet' + (n === 1 ? '' : 's') + ', so some items show as the wrong icon (often a pearl necklace).</div>' +
+          '<div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<button type="button" id="uiIconFix" style="background:var(--wp-accent);color:var(--wp-text);border:0;border-radius:5px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:12px">Fix</button>' +
+          '<span id="uiIconMsg" style="font-size:11px;color:var(--wp-dim)"></span></div>'
+        : '<div style="font-size:12px;color:var(--wp-text)">' + _esc(r.message) + '</div>') +
+      '</div>';
+    var b = document.getElementById('uiIconFix'), m = document.getElementById('uiIconMsg');
+    if (!b) return;
+    b.addEventListener('click', async function(){
+      b.disabled = true; m.style.color = 'var(--wp-dim)'; m.textContent = 'Fixing…';
+      var f;
+      try { f = await window.mimic.uiIconSheetsFix(); } catch (e) { f = { ok: false, error: String(e && e.message || e) }; }
+      if (f && f.ok) { m.style.color = 'var(--wp-green)'; m.textContent = '✓ ' + f.message + (f.backup ? ' Your old file is kept as ' + f.backup + '.' : '') + ' Type /loadskin in-game, or relog.'; }
+      else { m.style.color = 'var(--wp-red)'; m.textContent = '✕ ' + ((f && (f.error || f.message)) || 'could not fix it'); b.disabled = false; }
+    });
+  }
   var _uiPackPrepTried = {};   // one defaults fetch per pack per Settings open
   async function _renderUiPacks(){
     var host = document.getElementById('uiPacksList');
@@ -2011,6 +2141,30 @@
     if (!(window.mimic && window.mimic.openResources)) { btn.style.display = 'none'; return; }
     btn.addEventListener('click', function () {
       try { window.mimic.openResources(); } catch (e) { void e; }
+    });
+  })();
+
+  // ── Raid Mimic party ──────────────────────────────────────────────────────
+  // A way in to the dashboard's party card (create / join / leave live there, one implementation). Same internals as the
+  // tray's "Raid Mimic party…" item.
+  (function () {
+    var btn = document.getElementById('openPartyBtn');
+    if (!btn) return;
+    if (!(window.mimic && window.mimic.openPartyCard)) { btn.style.display = 'none'; return; }
+    btn.addEventListener('click', function () {
+      try { window.mimic.openPartyCard(); } catch (e) { void e; }
+    });
+  })();
+  // The setting lives in the agent (not in this form's Save): the box reads it on open and writes it at once.
+  (function () {
+    var row = document.getElementById('partyShareRow'), box = document.getElementById('partyShareBox');
+    if (!row || !box || !(window.mimic && window.mimic.getPartyShare && window.mimic.setPartyShare)) return;
+    window.mimic.getPartyShare().then(function (r) {
+      if (!r || !r.ok) return;
+      box.checked = !!r.on; row.style.display = 'flex';
+    }, function () { });
+    box.addEventListener('change', function () {
+      window.mimic.setPartyShare(box.checked).then(function (r) { if (r && r.ok) box.checked = !!r.on; else box.checked = !box.checked; }, function () { box.checked = !box.checked; });
     });
   })();
 

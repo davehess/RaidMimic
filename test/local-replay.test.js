@@ -196,11 +196,11 @@ describe('nav, rail, tray and release checks', () => {
   });
   it('the dashboard rail\'s "On this PC" group opens My replay in its own window, and the tray has the same item', () => {
     const dash = read('packages/wolfpack-logsync/dashboard.html');
-    expect(dash).toMatch(/id="wpLocalReplay"[^>]*onclick="wpOpenLocalSite\('replay'\)"/);
+    expect(dash).toMatch(/id="wpLocalReplay"[^>]*onclick="wpOpenLocalSite\('replay', event\)"/);
     expect(dash).not.toMatch(/Coming soon: replay your own movement/);
     expect(stripJs(read('apps/mimic/main.js'))).toMatch(/label: '🎬 My replay \(on this PC\)', click: \(\) => \{ if \(!openLocalSite\('replay'\)\)/);
     // the generated literal carries it too (check:dashboard keeps them in step; this fails loudly if the sync was skipped)
-    expect(readSource(AGENT_INDEX)).toContain("wpOpenLocalSite('replay')");
+    expect(readSource(AGENT_INDEX)).toContain("wpOpenLocalSite('replay', event)");
   });
   it('both release workflows fail when out/replay/index.html is missing', () => {
     for (const wf of ['.github/workflows/release-mimic.yml', '.github/workflows/build-mimic-linux.yml']) {

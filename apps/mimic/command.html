@@ -113,15 +113,23 @@
   /* 🎟 Guests (officers only): one row per guest Mimic link, with +1h / +3h. Same right gutter as the rolls card. */
   .card.guests-card{padding-right:28px}
   .guest-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6edf3}
-  .guest-row .gwhen{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
+  .guest-row .gwhen,.mgb-clock{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
   .guest-row .gwhen.soon{color:#f0a52d}
   .guest-row .gwhen.out{color:#f87171}
-  .guest-row .gn{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
+  .guest-row .gn,.mgb-spell,.mgb-basis{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
   .guest-row .guestExt{cursor:pointer;flex-shrink:0;color:#e6edf3;font-size:9px;border:1px solid rgba(110,118,129,0.5);
     border-radius:3px;padding:0 4px;opacity:0.85;user-select:none}
   .guest-row .guestExt:hover{opacity:1;color:#f0c419;border-color:#f0c419}
-  .guest-row .gflash{flex-shrink:0;font-size:9px;color:#56d364}
+  .guest-row .gflash,.mgb-clock.ready{flex-shrink:0;font-size:9px;color:#56d364}
   .guest-row .gflash.bad{color:#f87171}
+  /* MGB board: holders by class, a ready/down clock per row (painted each second, never in the HTML). */
+  .mgb-last{font-size:11px;margin:1px 0 3px}
+  .mgb-last .mgb-basis{margin-right:3px;font-size:11px}
+  .mgb-clock.ready{font-size:11px}
+  .mgb-cls{font-size:11px;margin-top:3px}
+  .mgb-row,.mgb-own{font-size:11px}
+  .mgb-clock{flex-shrink:0;font-size:11px}
+  .mgb-row .mgb-spell{flex-shrink:0;font-size:11px;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roll-row .rollMore{cursor:pointer;color:#8b949e;font-size:9px;flex-shrink:0;opacity:0.8;user-select:none}
   .roll-row .rollMore:hover{opacity:1;color:#e6edf3}
   .roll-row .rollCopy{cursor:pointer;color:#8b949e;font-size:10px;flex-shrink:0;opacity:0.8;user-select:none;margin-right:4px}
@@ -133,7 +141,7 @@
     border-left:1px solid rgba(110,118,129,0.35);padding-left:6px}
   .roll-detail .d{display:flex;gap:6px;font-size:9px;color:#9aa4ad;line-height:1.5}
   .roll-detail .d .v{color:#e6edf3;font-variant-numeric:tabular-nums;margin-left:auto}
-  .roll-detail .d.win .v{color:#f0c419;font-weight:700}
+  .roll-detail .d.win .v,.mgb-cls{color:#f0c419;font-weight:700}
   .roll-detail .d.lose .v{color:#f85149;font-weight:700}
   .roll-detail .d .rng{opacity:.6;flex-shrink:0;font-variant-numeric:tabular-nums}
   /* A tie at the top of a set (the guild lead, 2026-10-14). Orange, bordered and spelled TIE so it reads
@@ -210,7 +218,8 @@
   .hail-clock{margin-left:auto;text-transform:none;letter-spacing:0;font-size:10px;font-weight:700;
     color:#d29922;font-variant-numeric:tabular-nums}
   .hail-clock.soon{color:#ffa657}
-  .hail-clock.crit{color:#f85149}
+  .hail-clock.crit,.hail-rule.fail,.hail-rule.fail b{color:#f85149}
+  .hail-rule.fail{font-weight:700}
   /* The NPC's flag cap (the guild lead, 2026-10-07): "Flags: 23 / 72 used", amber and bold when the flags left
      do not cover the raiders still to hail. Drawn only when the bot sends a cap. */
   .hail-cap{font-size:9px;margin:3px 0 2px;color:#c9d1d9}
@@ -221,7 +230,7 @@
   .hail-sub b{font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums}
   .hail-sub.todo{color:#e6edf3;font-weight:700}
   .hail-sub.done{color:#7ee787;font-weight:700}
-  .hail-sub.done b{color:#7ee787}
+  .hail-sub.done b,.hail-rule b{color:#7ee787}
   .hail-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:10px;line-height:1.5}
   .hail-chip{padding:0 5px;border-radius:3px;border:1px solid transparent;white-space:nowrap;color:#e6edf3;
     background:rgba(255,255,255,0.06)}
@@ -240,6 +249,28 @@
   .hail-dim{font-size:9px;color:#7d8590;margin-top:4px}
   .hail-foot{font-size:8px;color:#6e7681;margin-top:3px;padding-top:2px;
     border-top:1px solid rgba(110,118,129,0.25)}
+  /* 🚩 Zone flags: who in the raid lacks the flag for the zone you stand in (the guild lead, 2026-11-19). Only people
+     confirmed without it are named; no record is a muted count, never a claim. 11px, nothing smaller. */
+  .flag-card .fl-line{font-size:11px;color:rgb(201 209 217);margin:2px 0}
+  .flag-card .fl-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .flag-card .fl-line.pass,.flag-card .fl-line.pass b{color:rgb(126 231 135)}
+  .flag-card .fl-line.fail,.flag-card .fl-line.fail b{color:rgb(248 113 113)}
+  .flag-card .fl-line.depends,.flag-card .fl-line.depends b{color:rgb(255 166 87)}
+  .flag-card .fl-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:11px;line-height:1.5}
+  .flag-card .fl-chip{padding:0 5px;border-radius:3px;background:rgba(248,81,73,0.22);color:rgb(230 237 243);white-space:nowrap}
+  .flag-card .fl-dim{font-size:11px;color:rgb(154 164 173);margin-top:3px}
+  /* Rathe Council (the guild lead, 2026-11-20): one slim row per councilman, by spawn id. 11px, nothing smaller. */
+  .cn-card .cn-row{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.7;color:rgb(201 209 217);font-variant-numeric:tabular-nums}
+  .cn-card .cn-id{width:44px;color:rgb(154 164 173)}
+  .cn-card .cn-bar{flex:1;min-width:40px;height:7px;border-radius:3px;background:rgba(110,118,129,0.3);overflow:hidden}
+  .cn-card .cn-bar i{display:block;height:100%;background:rgb(86 211 100)}
+  .cn-card .cn-row.low .cn-bar i{background:rgb(248 113 113)}
+  .cn-card .cn-hp{width:34px;text-align:right;color:rgb(230 237 243)}
+  .cn-card .cn-t{min-width:62px;color:rgb(255 166 87)}
+  .cn-card .cn-row.dead{color:rgb(154 164 173)}
+  .cn-card .cn-line{font-size:11px;margin:2px 0;color:rgb(201 209 217)}
+  .cn-card .cn-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .cn-card .cn-line.bad{color:rgb(248 113 113);font-weight:700}
   /* drag/lock/setup chrome — shared pattern. */
   #drag-controls{display:none;position:fixed;top:4px;left:4px;gap:4px;z-index:60}
   body.unlocked #drag-controls{display:flex}
@@ -627,6 +658,15 @@
          + (tight ? '<div class="hail-cap warn">' + (left === 0 ? '⚠ No flags left, ' : '⚠ Only ' + left + ' flag' + (left === 1 ? '' : 's') + ' left, ')
          + stillCount + ' still to hail</div>' : '');
   }
+  // Flagged vs not flagged (the guild lead, 2026-11-16) for the elemental planes and Time: the server lets a
+  // raid in with unflagged members while flagged x 100 >= raid size x 85, counting the whole raid. The agent
+  // does the sums (planarFlagRule) and sends w.rule; nothing is drawn when it is absent.
+  function hailRuleHtml(r){
+    if (!r || !(r.size > 0)) return '';
+    return '<div class="hail-cap hail-rule" title="Who has the flag from this kill: hailed now or already flagged, out of the raid at the kill. A hail we did not see shows as not flagged.">'
+         + 'Flagged <b>' + r.flagged + ' / ' + r.size + ' (' + r.pct_flagged + '%)</b> &middot; Not flagged <b>' + r.not_flagged
+         + ' (' + r.pct_not + '%)</b></div>';
+  }
   function hailMoreHtml(key, total, cap, open){
     if (total <= cap) return '';
     return '<span class="hail-more" data-wp-interact data-hail-more="' + esc(key) + '" title="'
@@ -652,7 +692,7 @@
          +   '<span class="hail-clock" data-end="' + esc(end) + '"></span>'
          + '</div>';
       if (!col) {
-        h += hailCapHtml(w, still.length);
+        h += hailCapHtml(w, still.length) + hailRuleHtml(w.rule);
         if (still.length) {
           var stillOpen = _hailMore.has(wid + '|still');
           var sMax = stillOpen ? still.length : Math.min(still.length, HAIL_STILL_CAP);
@@ -839,6 +879,146 @@
     }, function(){ done('failed', true); });
   }
 
+  // MGB card (the guild lead's pick). s.mgb = { last, holders, own } from the agent, or null (no card). Holders are grouped by
+  // class in this order, then name; every time lives in a data- attribute and paintMgbClocks() writes the text once a second,
+  // so the HTML is byte-identical poll to poll. data-end 0 = ready now (the bot has no cast on record for that name).
+  var MGB_CLASS_ORDER = ['Cleric', 'Druid', 'Shaman', 'Enchanter', 'Necromancer', 'Magician', 'Paladin', 'Ranger', 'Beastlord'];
+  var MGB_BASIS = { own_log: ['✓', "Read from the caster's own log"], cast_stream: ['≈', 'Matched from the raid cast stream'], candidates: ['?', 'Could be any of the raiders named here'] };
+  function mgbClockState(endMs, nowMs){
+    var left = Math.ceil((endMs - nowMs) / 1000);
+    if (!(endMs > 0) || !(left > 0)) return { text: 'ready', ready: true };
+    return { text: 'down ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0'), ready: false };
+  }
+  function mgbAgoText(atMs, nowMs){
+    var s = Math.max(0, Math.floor((nowMs - atMs) / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' ago';
+  }
+  function mgbHtml(m){
+    if (!m || typeof m !== 'object') return '';
+    var holders = Array.isArray(m.holders) ? m.holders : [];
+    var own = m.own && m.own.ready_ms ? m.own : null;
+    var last = m.last && m.last.at_ms ? m.last : null;
+    if (!holders.length && !own && !last) return '';
+    var col = _isCollapsed('mgb');
+    var h = '<div class="card mgb-card"><div class="head">' + secToggle('mgb', 'MGB', holders.length) + '</div>';
+    if (col) return h + '</div>';
+    if (last) {
+      var bm = MGB_BASIS[last.basis] || ['', ''];
+      var who = last.caster || 'unknown';
+      var tip = bm[1] + (last.candidates && last.candidates.length ? ': ' + last.candidates.join(', ') : '');
+      h += '<div class="mgb-last" title="' + esc(tip) + '"><span class="mgb-basis">' + bm[0] + '</span>Last MGB: ' + esc(last.spell || 'unknown spell')
+         + ' by ' + esc(who) + ' <span class="mgb-ago" data-at="' + Math.round(last.at_ms) + '"></span>'
+         + (last.targets > 0 ? ' (' + last.targets + ' raiders)' : '') + '</div>';
+    }
+    if (own) {
+      h += '<div class="list"><div class="row mgb-own"><span class="nm">Your MGB</span><span class="mgb-clock" data-end="' + Math.round(own.ready_ms) + '"></span></div></div>';
+    }
+    var groups = {}, order = [];
+    for (var i = 0; i < holders.length; i++) {
+      var hd = holders[i];
+      if (!hd || !hd.name) continue;
+      var ck = hd.cls || 'Other';
+      if (!groups[ck]) { groups[ck] = []; order.push(ck); }
+      groups[ck].push(hd);
+    }
+    order.sort(function(a, b){
+      var ia = MGB_CLASS_ORDER.indexOf(a), ib = MGB_CLASS_ORDER.indexOf(b);
+      if (ia < 0) ia = a === 'Other' ? 1001 : 1000;
+      if (ib < 0) ib = b === 'Other' ? 1001 : 1000;
+      return ia !== ib ? ia - ib : (a < b ? -1 : (a > b ? 1 : 0));
+    });
+    for (var gi = 0; gi < order.length; gi++) {
+      var rows = groups[order[gi]].slice().sort(function(a, b){ var x = a.name.toLowerCase(), y = b.name.toLowerCase(); return x < y ? -1 : (x > y ? 1 : 0); });
+      h += '<div class="mgb-cls">' + esc(order[gi]) + '</div><div class="list">';
+      for (var ri = 0; ri < rows.length; ri++) {
+        var r = rows[ri];
+        h += '<div class="row mgb-row"><span class="nm">' + esc(r.name) + '</span>'
+           + '<span class="mgb-clock" data-end="' + (r.ready_ms ? Math.round(r.ready_ms) : 0) + '"></span>'
+           + (r.last_spell ? '<span class="mgb-spell" title="' + esc(r.last_spell) + '">' + esc(r.last_spell) + '</span>' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  function paintMgbClocks(){
+    var now = Date.now(), els = contentEl.querySelectorAll('.mgb-clock'), i;
+    for (i = 0; i < els.length; i++) {
+      var st = mgbClockState(Number(els[i].getAttribute('data-end')), now);
+      var cls = 'mgb-clock' + (st.ready ? ' ready' : '');
+      if (els[i].textContent !== st.text) els[i].textContent = st.text;
+      if (els[i].className !== cls) els[i].className = cls;
+    }
+    els = contentEl.querySelectorAll('.mgb-ago');
+    for (i = 0; i < els.length; i++) {
+      var t = mgbAgoText(Number(els[i].getAttribute('data-at')), now);
+      if (els[i].textContent !== t) els[i].textContent = t;
+    }
+  }
+
+  // The zone-flags card. The agent sends state.zone_flags (null outside a gated zone). Only counts and names from
+  // known records; "At least" whenever some have no record. Same input, same HTML.
+  function zoneFlagsHtml(z){
+    if (!z || !(z.size > 0)) return '';
+    var key = 'zoneflags', col = _isCollapsed(key), miss = z.missing || [], unk = z.unknown || 0;
+    var h = '<div class="card flag-card"><div class="head">' + secToggle(key, '🚩 ' + z.zone, miss.length ? 'not flagged ' + miss.length : 'all flagged') + '</div>';
+    if (col) return h + '</div>';
+    var d = z.door;
+    if (d) {
+      var lead = (unk ? 'At least <b>' : 'Flagged <b>') + z.flagged + ' of ' + z.size + '</b> (' + d.pct + '%)';
+      var tail = d.verdict === 'pass' ? 'raid can enter'
+        : d.verdict === 'fail' ? 'cannot enter until ' + (unk ? 'at least ' : '') + d.need + ' more ' + (d.need === 1 ? 'is' : 'are') + ' flagged'
+        : 'enters if ' + d.need + ' of the ' + unk + ' with no record ' + (d.need === 1 ? 'is' : 'are') + ' flagged';
+      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Planes of Air, Water, Fire, Earth and Time let a raid in while 85% of it holds the flag, counting everyone in the raid.">' + lead + ': ' + tail + '</div>';
+    }
+    if (miss.length) {
+      h += '<div class="fl-line">Not flagged for ' + esc(z.zone) + ': <b>' + miss.length + '</b></div><div class="fl-chips">';
+      for (var i = 0; i < miss.length && i < 12; i++) h += '<span class="fl-chip">' + esc(miss[i]) + '</span>';
+      if (miss.length > 12) h += '<span class="fl-dim">+' + (miss.length - 12) + ' more</span>';
+      h += '</div>';
+    } else if (!unk) {
+      h += '<div class="fl-line pass">Everyone has the ' + esc(z.zone) + ' flag</div>';
+    }
+    if (unk) h += '<div class="fl-dim" title="We have no flag record for these raiders, so we cannot say they are unflagged.">No flag record: ' + unk + '</div>';
+    return h + '</div>';
+  }
+
+  // The Rathe Council card. The agent sends state.council only in Plane of Earth B once a councilman is known. Times
+  // arrive as absolute ms and count down against nowMs; an unknown HP reads "?", never 0. Same input, same HTML.
+  function councilHtml(c, nowMs){
+    if (!c || !c.rows || !c.rows.length) return '';
+    function mm(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
+    function clock(ms){ var d = new Date(ms), p = function(n){ return (n < 10 ? '0' : '') + n; }; return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+    var key = 'council', col = _isCollapsed(key);
+    var left = c.back_at && c.back_at > nowMs && c.down < 12 ? ' · 12th within ' + mm(c.back_at - nowMs) : '';
+    var h = '<div class="card cn-card"><div class="head">' + secToggle(key, '🏛 Rathe Council', c.down + '/12 down' + left) + '</div>';
+    if (col) return h + '</div>';
+    h += '<div class="cn-line"><b>' + c.down + '/12 down' + left + '</b></div>';
+    if (c.warn != null) h += '<div class="cn-line bad">Do not kill: only ' + c.warn + ' of 12 seen</div>';
+    if (c.low) h += '<div class="cn-line bad">#' + c.low.id + ' low ' + c.low.hp + '% - hold dps</div>';
+    for (var i = 0; i < c.rows.length; i++) {
+      var r = c.rows[i];
+      if (r.dead_at != null) {
+        if (r.back_at <= nowMs) continue;
+        h += '<div class="cn-row dead"><span class="cn-id">#' + r.id + '</span><span>dead ' + clock(r.dead_at) + '</span><span class="cn-t">back ' + mm(r.back_at - nowMs) + '</span></div>';
+        continue;
+      }
+      var low = c.low && c.low.id === r.id, hp = r.hp;
+      h += '<div class="cn-row' + (low ? ' low' : '') + '"><span class="cn-id">#' + r.id + '</span><span class="cn-bar"><i style="width:' + (hp == null ? 0 : hp) + '%"></i></span>'
+        + '<span class="cn-hp">' + (hp == null ? '?' : hp + '%') + '</span>'
+        + '<span class="cn-t">' + (r.root_end && r.root_end > nowMs ? 'root ' + mm(r.root_end - nowMs) : '') + '</span>'
+        + '<span class="cn-t">' + (r.slow_end && r.slow_end > nowMs ? 'slow ' + mm(r.slow_end - nowMs) : '') + '</span></div>';
+    }
+    return h + '</div>';
+  }
+  var _councilSaid = 0;
+  function councilSpeak(c){
+    var id = c && c.low ? c.low.id : 0;
+    if (id === _councilSaid) return;
+    _councilSaid = id;
+    if (!id) return;
+    try { if (window.speechSynthesis) { var u = new SpeechSynthesisUtterance('Council low, hold dps'); u.rate = 1.05; window.speechSynthesis.speak(u); } } catch (e) {}
+  }
+
   function render(s){
     if (!s || s.character == null) {
       contentEl.innerHTML = '<div id="empty">No focused character yet — launch EQ + Zeal and target a mob.</div>';
@@ -910,6 +1090,9 @@
     } else if (_hailMore.size) {
       _hailMore.clear();
     }
+    html += zoneFlagsHtml(s.zone_flags);
+    html += councilHtml(s.council, Date.now());
+    councilSpeak(s.council);
 
     // Raid-wide DA/invuln broadcasts — every tank currently reporting status
     // via their own raid-chat macro (a member's ">> DA up << 18 secs" etc),
@@ -1197,6 +1380,9 @@
       html += '</div>';
     }
 
+    // MGB board: a throw in the card hides the card, never the Command Center.
+    if (s.mgb) { try { html += mgbHtml(s.mgb); } catch (e) { void e; } }
+
     // ── Last deaths (FB-84) ───────────────────────────────────────────────
     // One line per recent death from this machine's own log, next to the rez board it explains.
     // Local only: /api/command-center is this machine's agent; nothing here is uploaded.
@@ -1215,6 +1401,7 @@
   // The hail clocks tick on their own: each card carries its end (data-end, this machine's clock) and
   // the text is written here, once a second, so a clock never makes the card's HTML differ.
   function paintHailClocks(){
+    try { paintMgbClocks(); } catch (e) { void e; }
     var els = contentEl.querySelectorAll('.hail-clock'), now = Date.now();
     for (var i = 0; i < els.length; i++) {
       var st = hailClockState(Number(els[i].getAttribute('data-end')), now);

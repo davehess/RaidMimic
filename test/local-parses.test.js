@@ -389,10 +389,10 @@ describe('the page, the rail, the tray and the release checks', () => {
   });
   it('the dashboard rail opens it as "My fights (this PC)" (not the 📈 My parses tab), the tray has the same item, the generated literal carries it', () => {
     const dash = read('packages/wolfpack-logsync/dashboard.html');
-    expect(dash).toMatch(/id="wpLocalFights"[^>]*onclick="wpOpenLocalSite\('parses'\)"[^>]*>📊 My fights \(this PC\)</);
+    expect(dash).toMatch(/id="wpLocalFights"[^>]*onclick="wpOpenLocalSite\('parses', event\)"[^>]*>📊 My fights \(this PC\)</);
     expect(dash).not.toMatch(/Coming soon: your own parses/);
     expect(stripJs(read('apps/mimic/main.js'))).toMatch(/label: '📊 My fights \(on this PC\)', click: \(\) => \{ if \(!openLocalSite\('parses'\)\)/);
-    expect(readSource(AGENT_INDEX)).toContain("wpOpenLocalSite('parses')");
+    expect(readSource(AGENT_INDEX)).toContain("wpOpenLocalSite('parses', event)");
   });
   it('both release workflows fail when out/parses/index.html is missing', () => {
     for (const wf of ['.github/workflows/release-mimic.yml', '.github/workflows/build-mimic-linux.yml']) {

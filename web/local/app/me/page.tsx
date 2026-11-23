@@ -17,6 +17,7 @@ const SITE_CHARACTERS = 'https://wolfpack.quest/me#my-characters';
 
 const PAGES: { href: string; icon: string; name: string; site: string; blurb: string }[] = [
   { href: '/inventory/', icon: '🎒', name: 'Inventory', site: '/me/inventory', blurb: 'Every item across your characters, from the inventory files on this PC.' },
+  { href: '/flags/',     icon: '🗺️', name: 'PoP flags',  site: '/characters',   blurb: 'Your Planes of Power flags and what each character needs next, from the files and logs on this PC.' },
   { href: '/parses/',    icon: '📈', name: 'My parses',  site: '/me/parses',    blurb: 'Your own fights as this PC recorded them.' },
   { href: '/replay/',    icon: '🎬', name: 'My replay',  site: '',              blurb: 'Where you and your raid stood, from the recording Mimic keeps here.' },
 ];

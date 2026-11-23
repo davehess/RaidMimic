@@ -115,18 +115,58 @@ describe('main.js wiring', () => {
     expect(await busyFor(true, true, false)('Aldenmar', ['zealchar'], 'd')).toBe('close');
     expect(await busyFor(true, true, false)('Aldenmar', ['keybinds', 'zeal'], 'd')).toBe('close');
     expect(await busyFor(true, true, false)('Aldenmar', undefined, 'd')).toBe('camp');        // the compare card: the character as a whole
+    // no part list answers for the own files: another running EverQuest must not read as "close" for them
+    expect(await busyFor(false, true, false)('Aldenmar', undefined, 'd')).toBe(null);
+    expect(await busyFor(false, true, true)('Aldenmar', undefined, 'd')).toBe('camp');
     expect(await busyFor(false, true, false)('Aldenmar', ['keybinds'], 'd')).toBe('close');
     expect(await busyFor(false, true, true)('Aldenmar', ['layout'], 'd')).toBe('camp');       // in game with the pipe down
     expect(await busyFor(false, true, false)('Aldenmar', ['layout'], 'd')).toBe(null);        // someone else's client is running
     expect(await busyFor(false, false, true)('Aldenmar', ['keybinds'], 'd')).toBe(null);
+  });
+  it('an open UI Studio is told when a restore is WRITTEN, never when it is queued or wrote nothing', () => {
+    const sent = [];
+    const mk = (win) => evalBlock(`let uiStudioWindow = ${win};\n` + sliceBlock(main, 'function _tellUiStudioRestored(character, eqDir, written) {', '\n}\n'),
+      ['_tellUiStudioRestored'])._tellUiStudioRestored;
+    const live = '{ isDestroyed: () => false, webContents: { send: (ch, info) => globalThis.__sent.push([ch, info]) } }';
+    globalThis.__sent = sent;
+    mk(live)('Aldenmar', 'C:\\EQ', ['UI_Aldenmar_pq.proj.ini']);
+    mk(live)('Aldenmar', 'C:\\EQ', []);
+    mk('null')('Aldenmar', 'C:\\EQ', ['x.ini']);
+    expect(sent).toEqual([['ui-studio-restored', { character: 'Aldenmar', eqDir: 'C:\\EQ', files: ['UI_Aldenmar_pq.proj.ini'] }]]);
+    delete globalThis.__sent;
+    // every restore write (immediate, queued-then-applied, quiet sync) goes through _uiWriteRestore, which tells it
+    expect(stripJs(sliceBlock(main, 'function _uiWriteRestore(entry, backupTag) {', '\n}\n'))).toMatch(/_tellUiStudioRestored\(entry\.character, entry\.eqDir, written\);/);
   });
   it('a restore runs in two halves: own files now or at camp, shared-file parts when EverQuest closes, and the queue keeps both', () => {
     const h = stripJs(sliceBlock(main, "ipcMain.handle('ui-restore-parts', async (_e, params) => {", '\n});\n'));
     expect(h).toMatch(/const halves = \[parts\.filter\(k => !_uiNeedsEqClosed\(\[k\]\)\), parts\.filter\(k => _uiNeedsEqClosed\(\[k\]\)\)\]/);
     expect(h).toMatch(/const busy = await _uiEqBusyFor\(character, g, eqDir\);/);
     expect(h).toMatch(/queuedParts: queued/);
+    // a half that waits carries "made on this computer" with it, so it is not re-fitted when it lands
+    expect(h).toMatch(/_queueUiRestore\(\{[^}]*target, sameMachine, sourceRes: _uiSnapSource\(snap\) \}\)/);
+    expect(h).toMatch(/_uiWriteRestore\(\{[^}]*target, sameMachine, sourceRes: _uiSnapSource\(snap\) \}\)/);
     const q = stripJs(sliceBlock(main, 'function _queueUiRestore(entry) {', '\n}\n'));
     expect(q).toMatch(/_uiNeedsEqClosed\(e\.parts\) === shared/);
+  });
+  it('the deferred queue applies a keysplit entry before any other character\'s shared half, whatever the queue order', async () => {
+    const run = async (queue, { activeFor = [] } = {}) => {
+      globalThis.__applied = []; globalThis.__active = activeFor;
+      const src = `let _uiDeferTickBusy = false; let _uiDeferred = ${JSON.stringify(queue)};
+        const _uiCharActiveInZeal = (c) => globalThis.__active.includes(c); const _isEqRunning = async () => false;
+        const _uiCharLogFresh = () => false; const _applyDeferredEntry = (e) => { globalThis.__applied.push(e.character + ':' + e.parts.join('+')); return true; };
+        const _saveUiDeferred = () => {};\n`
+        + sliceBlock(main, 'function _uiNeedsEqClosed(parts) {', '\n}\n') + sliceBlock(main, 'async function _tickUiDeferred() {', '\n}\n');
+      const { _tickUiDeferred } = evalBlock(src, ['_tickUiDeferred']);
+      await _tickUiDeferred();
+      return globalThis.__applied;
+    };
+    const old = Date.now() - 60000;
+    const e = (character, parts) => ({ kind: 'restore', character, parts, eqDir: 'd', queuedAt: old, sawActive: false });
+    // the other character's keys half was queued BEFORE the shared step: the step still goes first
+    expect(await run([e('Brackwyn', ['zealchar', 'zeal']), e('Aldenmar', ['keysplit'])])).toEqual(['Aldenmar:keysplit', 'Brackwyn:zealchar+zeal']);
+    // while the step waits (its character is in game), no other shared half is applied; own-files halves still are
+    expect(await run([e('Brackwyn', ['zealchar', 'zeal']), e('Corvale', ['layout']), e('Aldenmar', ['keysplit'])], { activeFor: ['aldenmar'] })).toEqual(['Corvale:layout']);
+    delete globalThis.__applied; delete globalThis.__active;
   });
   it('the old single Zeal choice still brings the character\'s own Zeal settings', () => {
     expect(sync.cleanSyncCfg({ parts: ['layout', 'zeal'] }).parts).toEqual(expect.arrayContaining(['zeal', 'zealchar']));

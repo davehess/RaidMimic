@@ -54,6 +54,8 @@ const https = require('https');
 const http  = require('http');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const netSock = require('net');   // the party relay's WebSocket client (see "Raid Mimic party")
+const tlsSock = require('tls');
 const { URL } = require('url');
 
 // Read version from package.json so we only have to bump it in one place per release.
@@ -458,6 +460,11 @@ const KEEP_PATTERNS = [
   // so the EncounterBuilder can attribute the next "was hit by non-melee" to
   // the bard's specific dirge (damage lands 3-6s later on the server tick).
   /\byou\s+throw\s+your\s+head\s+back\s+and/i,
+  // Harm Touch / Lay on Hands landing lines — spell text from eqemu_spells (ids 88, 2821 / 87), verified.
+  // Numberless, so the damage patterns above never kept them; parseEvent turns them into `ability_land`,
+  // which pairs the uploader's own HT with the damage line that follows (EncounterBuilder._noteAbilityLand).
+  /\bwrithes? in the grip of agony\./i,
+  /\bfeels? a healing touch\./i,
   // Avoidance / miss lines — "X tries to <verb> Y, but misses!" / "but Y dodges!" etc.
   // Needed for tanking stats (avoidance %, hits-taken, accuracy). The parseEvent
   // handler classifies each into miss/dodge/parry/riposte/block/invulnerable.
@@ -624,6 +631,10 @@ const CHARM_SPELLS = new Map([
   ["solon`s bewitching bravura", { cls: 'bard', dur: 60 }],
   ["solon's song of the sirens",  { cls: 'bard', dur: 18 }],
   ["solon`s song of the sirens",  { cls: 'bard', dur: 18 }],
+  // Call of the Banshee (spell 3371, bard 64, charm to level 57): the same 10-tick rule as Bravura, and the same
+  // "'s eyes glaze over." land line. Missing here, a bard singing it was tracked as Bravura (the guild lead,
+  // 2026-11-19: "Bard charm is assuming solons but we have a new one").
+  ["call of the banshee",         { cls: 'bard', dur: 60 }],
   // NOT charm, don't re-add: the "Dreams of" line (Ayonae L60 / Thule L64 /
   // Terris L65) is the bard MEZ — briefly shipped here 2026-07-13 after
   // misreading a field report, which would have staged a false pending-charm
@@ -689,7 +700,8 @@ function _charmDurationSec(spellName, mapDur, owner) {
   const e = _spellByNameLower.get(key) || _spellByNameLower.get(key.replace(/`/g, "'"));
   if (e && Number(e.dur) > 0) {
     const lvl = (whoData.get(String(owner || '').toLowerCase()) || {}).level || _assumedCasterLevel();
-    const t = _durTicksForLevel(e.durf, e.dur, lvl);
+    // The owner's own focus on the chain (a charm is detrimental: no Reinforcement; only a detrimental-capable item focus, 3843-3846).
+    const t = _durationWithExtensions(e, lvl, { character: owner }).ticks;
     if (t > 0 && t < 72000) return t * 6;
   }
   return mapDur;
@@ -816,7 +828,7 @@ const MELEE_HIT_MAX = Math.max(6000, parseInt(process.env.WP_MELEE_HIT_MAX, 10) 
 // first word ("You flying" / "Torvahk round"), producing a phantom combatant
 // whose damage the multi-word anti-NPC filter then discards — monk specials
 // were credited to nobody and Harm Touch damage never parsed at all
-// (pq-companion comparison, analysis 04 §3-A).
+// (an earlier comparison with another parser).
 const SPECIAL_VERB_RX =
   '(?:harm\\s+touch(?:es)?|flying\\s+kicks?|round\\s+kicks?|dragon\\s+punch(?:es)?|' +
   'eagle\\s+strikes?|tiger\\s+claws?|tail\\s+rakes?|frenzies\\s+on|frenzy\\s+on)';
@@ -978,7 +990,12 @@ function parseEvent(line, ts) {
   if (m) {
     if (parseInt(m[2], 10) > MELEE_HIT_MAX) { _finishingBlowsDropped++; return null; }   // finishing blow — not real melee
     const verb = m[0].match(new RegExp(`\\bYou\\s+(${ATTACK_VERBS_RX})\\b`, 'i'))?.[1] || 'hit';
-    return { ts: tsIso, type: 'damage', attacker: null /* self */, defender: m[1], ability: verb.toLowerCase().replace(/(?:sh|ch|ss|x)es$/, m => m.slice(0, -2)).replace(/s$/, ''), amount: parseInt(m[2], 10) };
+    const selfEv = { ts: tsIso, type: 'damage', attacker: null /* self */, defender: m[1], ability: verb.toLowerCase().replace(/(?:sh|ch|ss|x)es$/, m => m.slice(0, -2)).replace(/s$/, ''), amount: parseInt(m[2], 10) };
+    // "You hit X for N points of non-melee damage." is the CASTER's view of a direct-damage spell (a
+    // bystander sees "X was hit by non-melee"). Flag it like the third-person branch below does, so the
+    // builder can tell the uploader's own spell hit from a weapon hit (Harm Touch pairing).
+    if (/points?\s+of\s+non-melee\s+damage/i.test(line)) selfEv.nonMelee = true;
+    return selfEv;
   }
 
   // "<Name> <verb> X for N points of damage." (third-person; everyone else)
@@ -1335,6 +1352,17 @@ function parseEvent(line, ts) {
       return { ts: tsIso, type: 'dirge_cast', attacker: null, ability: spell.name, tickMs: spell.tickMs };
     }
   }
+
+  // ── Harm Touch / Lay on Hands landing (spell text from eqemu_spells, verified) ─
+  //   Harm Touch (spells 88, 2821): cast_on_other "<target> writhes in the grip of agony.",
+  //                                 cast_on_you   "You writhe in the grip of agony."
+  //   Lay on Hands (spell 87):      cast_on_other "<target> feels a healing touch."
+  // The line never says who cast it; EncounterBuilder._noteAbilityLand decides that from the uploader's
+  // own class and the damage line that follows. `target` is null when the landing is on the uploader.
+  m = line.match(/\]\s+(?:(You) writhe|([^'"\[\]]+?) writhes) in the grip of agony\.\s*$/);
+  if (m) return { ts: tsIso, type: 'ability_land', kind: 'harm_touch', target: m[1] ? null : m[2].trim() };
+  m = line.match(/\]\s+(?:(You) feel|([^'"\[\]]+?) feels) a healing touch\.\s*$/);
+  if (m) return { ts: tsIso, type: 'ability_land', kind: 'lay_on_hands', target: m[1] ? null : m[2].trim() };
 
   // ── Pet leader declaration ────────────────────────────────────────────────
   // Covers both forms that EQ produces:
@@ -1793,6 +1821,13 @@ const PET_CLAIM_FRESH_MS = 15 * 60 * 1000;
 // class + duration to the session, driving the duration bar + class-aware warn.
 let _pendingCharmSpell = null;   // { cls, dur, owner, ts } | null
 const PENDING_CHARM_WINDOW_MS = 12_000;
+// The last charm each owner held in slot 16 (owner lower → { k: pet lower, at }), so a named pet can be re-adopted from
+// the pet window after its entry was dropped (2026-11-17).
+const _lastCharmPetByOwner = new Map();
+const LAST_CHARM_READOPT_MS = 15 * 60 * 1000;
+// A death report held off because the pet window still showed the pet: if the pet then leaves slot 16 within this
+// long, it died (dropped quietly); after it, a missing pet is a break as usual.
+const CHARM_MAYBE_DEAD_MS = 20_000;
 
 // ── Mob tick learner (the guild lead, 2026-09-26) ───────────────────────────
 // "charm overlay needs both server and mob tick on them (they're different,
@@ -1972,6 +2007,8 @@ function _bumpCharmTick(pet, owner, eventKind, atMs, opts) {
     charm_class:  (opts && opts.charm_class)  || (prev ? prev.charm_class  : null),
     duration_sec: (opts && opts.duration_sec != null) ? opts.duration_sec
                 : (prev ? prev.duration_sec : null),
+    // The staged spell's name, for the party timers (a charm shows as "<caster>'s pet" with the spell beside it).
+    charm_spell:  (opts && opts.charm_spell_name) || (prev ? prev.charm_spell : null),
   });
   // Mirror the charm spell into _buffLandingsByTarget so the Mob Info debuff
   // section shows e.g. "Allure (Sorvane)" with a live countdown — Allure's
@@ -2218,14 +2255,16 @@ function _gaugeOwnerIsBard(name) {
 }
 // A bard's charm that was not caught being cast (the pet was already charmed when it was seen, or
 // the song began outside the 12s window) still gets a real duration: the charm song in their twist,
-// else Solon's Bewitching Bravura. Without one the tracker showed "~" and kept its callouts quiet
+// else the best one for their level (Call of the Banshee from 64, else Solon's Bewitching Bravura).
+// Without one the tracker showed "~" and kept its callouts quiet
 // ("charm breaking", "recharm now" are off on a guessed duration) — the guild lead, 2026-09-29:
 // "i did not get a recharm pet tts at 4 seconds left". Null for anyone who is not a bard.
 function _bardCharmSongFor(owner) {
   if (!_gaugeOwnerIsBard(owner)) return null;
   const st = _bardMelody.get(String(owner || '').toLowerCase());
   const names = (st && Array.isArray(st.order)) ? st.order.map((o) => o && o.name).filter(Boolean) : [];
-  const song = names.find((n) => CHARM_SPELLS.has(String(n).toLowerCase())) || "Solon's Bewitching Bravura";
+  const song = names.find((n) => CHARM_SPELLS.has(String(n).toLowerCase()))
+    || ((_levelOf(owner) || 0) >= 64 ? 'Call of the Banshee' : "Solon's Bewitching Bravura");
   const ci = CHARM_SPELLS.get(String(song).toLowerCase());
   return ci ? { charm_class: ci.cls, duration_sec: ci.dur, charm_spell_name: song } : null;
 }
@@ -2318,6 +2357,11 @@ function _reconcileGaugeCharms() {
       // gone and called a break 6s later while it was still charmed (FB-121, Giwin Mirakon).
       const open = _charmTickTracker.get(txt.toLowerCase());
       if (open && open.is_active && String(open.owner || '').toLowerCase() === ownerLower) return true;
+      // The same named pet this owner had charmed in the last 15 minutes is back in slot 16: re-adopt it. Once an entry
+      // was dropped (a same-name "slain" line, a missed gauge), a named pet had no way back in without a fresh cast, and
+      // the tracker said "no active charm" while the pet window still showed it (the guild lead, 2026-11-17).
+      const last = _lastCharmPetByOwner.get(ownerLower);
+      if (last && last.k === txt.toLowerCase() && now - last.at < LAST_CHARM_READOPT_MS) return true;
       return false;
     });
     if (!petG) continue;
@@ -2353,6 +2397,7 @@ function _reconcileGaugeCharms() {
       // ~6s and the countdown never visibly ran (a bard, 2026-09-26: "i didnt
       // see it on the regular or mini").
       cur.last_seen_at = now;
+      _lastCharmPetByOwner.set(ownerLower, { k, at: now });   // re-adopt window (filter above)
     }
   }
   // Drop pending entries whose pet is no longer in slot 16 (transient pulse).
@@ -2382,6 +2427,9 @@ function _reconcileGaugeCharms() {
     // case that actually matters. If false "charm break" calls reappear during
     // routine cycling, this is the number to raise.
     if ((!set || !set.has(k)) && (now - (info.last_seen_at || info.last_tick_at || 0)) > 6000) {
+      // A death we held off on because the pet window still named the pet (_slot16StillNames): it really died, so it
+      // goes quietly, as a death does, instead of a "charm break" call.
+      if (info.maybe_dead_at && now - info.maybe_dead_at < CHARM_MAYBE_DEAD_MS) { _charmTickTracker.delete(k); continue; }
       _bumpCharmTick(info.pet, info.owner, 'break', now);     // gauge dropped → break (alert fires now)
     }
   }
@@ -2699,8 +2747,25 @@ function checkCharmPetDeath(line, character) {
   const slainKey = slainName.toLowerCase();
   if (!_charmTickTracker.has(slainKey)) return false;
   if (killerName && isConfirmedPlayer(killerName)) return false;
+  // The owner's pet window still names this pet: the slain one is another of the same name (named mobs come in sets,
+  // "Diaku Armsman"), so keep ours. If it really was ours, slot 16 empties within seconds and the reconcile drops it
+  // quietly (maybe_dead_at). The guild lead, 2026-11-17: the tracker read "no active charm" with the pet still up.
+  const info = _charmTickTracker.get(slainKey);
+  if (info && info.is_active && _slot16StillNames(info.owner, info.pet || slainName)) { info.maybe_dead_at = Date.now(); return false; }
   _charmTickTracker.delete(slainKey);
   return true;
+}
+// Is `petName` still in `owner`'s Zeal pet window (gauge slot 16), on a fresh pipe frame?
+function _slot16StillNames(owner, petName, now = Date.now()) {
+  if (!owner || !petName) return false;
+  const ol = String(owner).toLowerCase(), want = String(petName).toLowerCase();
+  for (const ch of Object.keys(_zealState || {})) {
+    if (String(ch).toLowerCase() !== ol) continue;
+    const st = _zealState[ch];
+    if (!st || !Array.isArray(st.gauges) || (now - (st.updatedAt || 0)) > ZEAL_STALE_MS) return false;
+    return st.gauges.some(g => g && g.slot === 16 && String(g.text || '').toLowerCase() === want);
+  }
+  return false;
 }
 
 // ── /pet health report state (Quarm format) ─────────────────────────────────
@@ -3533,7 +3598,7 @@ function _durTicksForLevel(formula, capTicks, level) {
   if (!lvl || !f) return cap;                       // no level → spell max
   // EQMac/Al'Kabor integer division is FLOOR, and formula 6 carries a +2 term
   // we never had (verified against the EQMacEmu CalcBuffDuration_formula port
-  // in the pq-companion comparison, pinned by its PQDI-checked test vectors:
+  // in an earlier comparison, pinned by PQDI-checked test vectors:
   // f6 L57 → 30 ticks, L60 → 32). On our catalog f6/base-35 is 25 spells —
   // essentially the whole slow line (Forlorn Deeds, Tagar's/Togor's/Tigir's
   // Insects, Languid Pace, Slow, Cloud of Grummus …). At L60 the real answer
@@ -3562,6 +3627,127 @@ function _durTicksForLevel(formula, capTicks, level) {
   if (!(t > 0)) return cap;
   if (cap > 0 && t > cap) t = cap;        // never exceed the spell's own cap
   return t;
+}
+
+// ── Duration with the caster's own AAs and worn foci (the guild lead, 2026-11-15) ────────────────
+// "we can't give accurate accounting of timers without AAs and item focus effects. those are critical."
+// For a spell WE cast, the server's duration is not the bare formula. Mob::CalcBuffDuration
+// (SecretsOTheP/EQMacEmu c2cd265, zone/spells.cpp:2452-2525):
+//   1. CalcBuffDuration_formula(casterLevel, formula, base)         spells.cpp:2608-2679  = _durTicksForLevel
+//   2. CalcBuffDuration_modification: Quarm's per-spell table       spells.cpp:2527-2606  DB-side, NOT mirrored: the residual
+//   3. Spell Casting Reinforcement AA, a CLIENT caster and IsBeneficialSpell only (spells.cpp:2479-2515): rank 1/2/3 = +5/+15/+30
+//      percent of the ticks, plus 20 more points when Reinforcement Mastery is held AND rank >= 1; res += res * bonus / 100 (int).
+//      A permanent formula (50) skips it (:2477 `formula != DF_Permanent`).
+//   4. Client::ApplyDurationFocus (zone/spell_effects.cpp:4630-4662), AFTER the landing, IsBuffSpell and not a "splurt" formula:
+//      ticks = ticks * (100 + focus) / 100, floored; focus = GetFocusEffect(focusSpellDuration) (:4433-4628) = the best SINGLE worn
+//      item + best buff-spell focus + best AA focus (no AA carries SPA 128), and a bard song gets 0 (:4433).
+//      An item's SPA 128 value passes only while CalcFocusEffect's limits hold (:4080-4408): SE_LimitMaxLevel 134 (the cast spell's
+//      level for the caster's class must not exceed base, else 0 with no base2), SE_LimitSpellType 138 (spell.goodEffect == base),
+//      SE_LimitMinDur 140 (the spell's formula duration at the caster's level >= base).
+// Charm is detrimental, so step 3 never applies to it; step 4 does when a focus passes (the detrimental-only ones: Timeburn /
+// Chronoburn / Eterninostrum / Chrononostrum, spells 3843-3846, type limit 0).
+// AA indexes are the CLIENT's (eqemu_altadv_vars.eqmacid), which is what the Quarmy export carries: 21 Spell Casting Reinforcement,
+// 113 Reinforcement Mastery. NOT skill_id (86 / 266, which a naive join confuses with other AAs).
+const AA_SPELL_CAST_REINFORCEMENT = 21, AA_REINFORCEMENT_MASTERY = 113;
+let _durFociByItem = new Map();   // item id → { pct, max_level, type_limit, min_ticks }
+let _durFociKnown = false;        // false while the bot sends no duration_foci: the gear's foci are then unknown, not absent
+function _setDurationFociCatalog(list) {
+  _durFociKnown = Array.isArray(list);
+  const m = new Map();
+  for (const f of (Array.isArray(list) ? list : [])) {
+    const pct = Number(f && f.pct);
+    if (!(pct > 0) || !(Number(f.id) > 0)) continue;
+    m.set(Number(f.id), { pct, max_level: f.max_level == null ? null : Number(f.max_level),
+      type_limit: f.type_limit == null ? null : Number(f.type_limit), min_ticks: f.min_ticks == null ? null : Number(f.min_ticks) });
+  }
+  _durFociByItem = m;
+}
+// Reinforcement percent for an AA list [{index, rank}], per the switch at spells.cpp:2486-2506 (a rank above 3 adds nothing).
+function _reinforcementPct(aas) {
+  const rank = (i) => { const a = (aas || []).find(x => x && Number(x.index) === i); return a ? Number(a.rank) || 0 : 0; };
+  const r = rank(AA_SPELL_CAST_REINFORCEMENT);
+  if (!(r > 0)) return 0;
+  let b = r === 1 ? 5 : r === 2 ? 15 : r === 3 ? 30 : 0;
+  if (rank(AA_REINFORCEMENT_MASTERY) > 0) b += 20;
+  return b;
+}
+// The best worn duration focus for this spell: { pct, itemId, undecided }. `undecided` = a focus whose cast-level cap cannot be
+// judged because the spell's level for the caster's class is unknown (the mirror carries no class levels for most spells).
+function _bestDurationFocus(wornItemIds, spell, beneficial, formulaTicks, spellLevel, eraCap) {
+  let best = { pct: 0, itemId: 0, undecided: false };
+  for (const id of wornItemIds) {
+    const f = _durFociByItem.get(Number(id));
+    if (!f) continue;
+    if (f.type_limit != null && f.type_limit !== (beneficial ? 1 : 0)) continue;           // SE_LimitSpellType 138
+    if (f.min_ticks != null && formulaTicks < f.min_ticks) continue;                        // SE_LimitMinDur 140
+    if (f.max_level != null) {                                                              // SE_LimitMaxLevel 134
+      if (spellLevel > 0) { if (spellLevel > f.max_level) continue; }
+      else if (f.max_level < eraCap) { if (f.pct > best.pct) best.undecided = true; continue; }
+    }
+    if (f.pct > best.pct) best = { pct: f.pct, itemId: Number(id), undecided: best.undecided };
+  }
+  return best;
+}
+// What a character casts with: its Quarmy AAs, its worn item ids and its class, each null when unread.
+function _castingKit(character) {
+  let aas = null, classId = null;
+  try { const q = _quarmyLocalItems(character); if (q) { aas = q.aas || null; classId = q.classId || null; } } catch { /* unread */ }
+  let items = null;
+  try {
+    const invs = stats.characterInventories || {};
+    const cl = String(character || '').toLowerCase();
+    const key = Object.keys(invs).find(k => k.toLowerCase() === cl);
+    const inv = key ? invs[key] : null;
+    items = inv && Array.isArray(inv.items) ? inv.items : null;
+    const since = inv ? (Date.parse(inv._updatedAt || '') || 0) : 0;
+    const q = _quarmyLocalItems(character);
+    if (q && Array.isArray(q.items) && (!items || q.at > since)) items = q.items;
+  } catch { /* unread */ }
+  const worn = items ? items.filter(it => INVENTORY_WORN_SLOTS.has(String(it.loc || '').replace(/\d+$/, '')) && Number(it.id) > 0).map(it => Number(it.id)) : null;
+  return { aas, worn, classId };
+}
+// The duration of a spell WE cast, in ticks, with the chain above. `spell` is a catalog entry or a name; ctx = { character, level,
+// spellLevel, song, kit }. `kit` overrides the character's own (tests, party). estimated = something the chain needs was unread, so
+// the figure is today's bare formula for that step (Quarm's per-spell table is a residual either way and is not flagged).
+function _durationWithExtensions(spell, casterLevel, ctx) {
+  ctx = ctx || {};
+  const e = (spell && typeof spell === 'object') ? spell
+    : (_spellByNameLower.get(String(spell || '').toLowerCase()) || _spellByNameLower.get(String(spell || '').toLowerCase().replace(/`/g, "'")) || null);
+  if (!e) return { ticks: 0, secs: 0, base_ticks: 0, estimated: true, aa_pct: 0, focus_pct: 0, focus_item: 0 };
+  const eraCap = _assumedCasterLevel();
+  let estimated = !(Number(casterLevel) > 0);
+  const lvl = Number(casterLevel) > 0 ? Number(casterLevel) : eraCap;
+  const base = _durTicksForLevel(e.durf, e.dur, lvl);
+  const out = { ticks: base, base_ticks: base, estimated: false, aa_pct: 0, focus_pct: 0, focus_item: 0 };
+  const f = Number(e.durf) || 0;
+  if (!(base > 0) || f === 50 || f === 51) { out.secs = base * 6; out.estimated = estimated; return out; }   // permanent: neither step touches it
+  const kit = ctx.kit || _castingKit(ctx.character);
+  const beneficial = Number(e.good) === 1;
+  let ticks = base;
+  if (beneficial) {
+    if (kit.aas) { const p = _reinforcementPct(kit.aas); out.aa_pct = p; ticks += Math.trunc(ticks * p / 100); }   // spells.cpp:2510-2512
+    else estimated = true;
+  }
+  if (!ctx.song) {
+    if (kit.worn && _durFociKnown) {
+      const b = _bestDurationFocus(kit.worn, e, beneficial, base, Number(ctx.spellLevel) || 0, eraCap);
+      if (b.pct > 0) { out.focus_pct = b.pct; out.focus_item = b.itemId; ticks = Math.floor(ticks * (100 + b.pct) / 100); }   // spell_effects.cpp:4656
+      if (b.undecided) estimated = true;
+    } else estimated = true;
+  }
+  out.ticks = ticks; out.secs = ticks * 6; out.estimated = estimated;
+  return out;
+}
+// A landing event's duration in ticks: the chain above for a cast WE made (the log owner is the caster, `_selfCast`), the bare
+// formula at `fallbackLevel` for everyone else's (their AAs and gear are not ours to read). A bard's casts are songs (no focus).
+function _ownDurTicks(bcEvt, fallbackLevel) {
+  const bare = () => _durTicksForLevel(bcEvt.dur_formula, bcEvt.dur_ticks, fallbackLevel);
+  const who = bcEvt && bcEvt._selfCast && bcEvt.observer ? String(bcEvt.observer) : null;
+  if (!who) return bare();
+  const kit = _castingKit(who);
+  const lvl = (whoData.get(who.toLowerCase()) || {}).level || fallbackLevel;
+  const r = _durationWithExtensions({ durf: bcEvt.dur_formula, dur: bcEvt.dur_ticks, good: _spellGood(bcEvt.spell_name) }, lvl, { character: who, kit, song: kit.classId === 8 });
+  return r.ticks > 0 ? r.ticks : bare();
 }
 
 // A buff landing we already detected (parseBuffLanding) — if its target is one
@@ -3602,7 +3788,7 @@ function recordPetBuffLanding(bcEvt) {
   // while Mob Info (which already uses the era-cap fallback in
   // recordTargetBuffLanding) shows it ticking down correctly.
   const ownerLevel = (whoData.get(owner) || {}).level || _assumedCasterLevel();
-  const durTicks   = _durTicksForLevel(bcEvt.dur_formula, bcEvt.dur_ticks, ownerLevel);
+  const durTicks   = _ownDurTicks(bcEvt, ownerLevel);   // our own cast on our pet carries our AAs and worn foci (2026-11-15)
   const newKey     = String(bcEvt.spell_name).toLowerCase();
   // Slot-based overwrite — if the new buff has a known category (haste / hp /
   // runSpeed / etc.) drop any existing entry in the same category, including
@@ -4189,7 +4375,13 @@ function _activeBuffsForDashboard() {
 // "provide an estimate of how long cast buffs will last by character based on
 // AA/Focus effects."
 //
-// ⚠ WE CANNOT COMPUTE THIS FROM THE AA DATA, AND GUESSING IT WOULD BE WORSE
+// ⚠ UPDATE 2026-11-15: the AA arithmetic is no longer a guess. It is read from the server's own code
+// (Mob::CalcBuffDuration, zone/spells.cpp:2479-2515, EQMacEmu c2cd265) and implemented in _durationWithExtensions with the
+// worn item foci; the AA ids are the client indexes 21 / 113 from the Quarmy export, NOT eqemu_aa_effects. This MEASURED
+// factor stays as the cross-check on that arithmetic (and it is what carries Quarm's own per-spell duration table, which the
+// mirror does not hold). The 2026-09-02 text below is the history of why the effects table could not be used.
+//
+// ⚠ WE CANNOT COMPUTE THIS FROM THE AA DATA (eqemu_aa_effects), AND GUESSING IT WOULD BE WORSE
 // THAN NOT SHIPPING IT. Checked against our own mirror on 2026-09-02: in
 // eqemu_aa_effects, Spell Casting Mastery (mana cost) and Spell Casting
 // Reinforcement (buff DURATION) both carry effectid 5, and Natural Durability
@@ -4450,7 +4642,7 @@ function recordTargetBuffLanding(bcEvt) {
   }
   const entry = {
     name: bcEvt.spell_name,
-    dur_ticks: _durTicksForLevel(bcEvt.dur_formula, bcEvt.dur_ticks, lvl),
+    dur_ticks: _ownDurTicks(bcEvt, lvl),   // our own casts carry our AAs and worn foci (2026-11-15)
     landed_at: bcEvt.cast_at ? Date.parse(bcEvt.cast_at) : Date.now(),
     // Which SPAWN this landed on, when the observer could prove it. The map
     // stays keyed by NAME on purpose — an id-keyed map would fragment a mob's
@@ -4760,7 +4952,7 @@ function _synthesizePacifyLanding(spellName, character, atMs) {
   }
   const e = _spellByNameLower.get(key) || null;
   const lvl = (whoData.get(cl) || {}).level || _assumedCasterLevel();
-  const durTicks = e ? _durTicksForLevel(e.durf, e.dur, lvl) : 0;
+  const durTicks = e ? _durationWithExtensions(e, lvl, { character }).ticks : 0;   // our own cast: our AAs and worn foci
   if (!(durTicks > 0)) return;
   const tk = String(target).toLowerCase();
   let mp = _buffLandingsByTarget.get(tk);
@@ -10324,6 +10516,109 @@ const PVP_ASSIST_WINDOW_MS = 240_000;
 const WIPE_SPLIT_IDLE_MS  = 5 * 60_000;
 const WIPE_SPLIT_CHECK_MS = 10_000;
 
+// ── Per-ability hit-size histogram (rollup.by_char[name].by_skill[ability].h) ─────────────
+// 16 log2 buckets of hit size. Bucket i holds hits in [2^i, 2^(i+1)); bucket 0 also holds a hit of 1,
+// and bucket 15 is open-ended (>= 32768). Edges: 1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768.
+// Only hits > 0 are counted. The web reads a median / p25 / p75 with histQuantile (mirror it there): it
+// walks the buckets to the one holding the rank and interpolates geometrically inside it, clamped to the
+// ability's exact `min` / `max` (sent beside `h`), so a tight spread (a monk's kick) reads close to true
+// and a wide one is good to about a factor of two.
+const HIST_BUCKETS = 16;
+function _histBucket(amt) {
+  return Math.min(HIST_BUCKETS - 1, 31 - Math.clz32(Math.max(1, amt | 0)));
+}
+// Value at quantile q (0..1) of a histogram `h`; `min` / `max` (optional) clamp the interpolation.
+function histQuantile(h, q, min, max) {
+  if (!Array.isArray(h)) return null;
+  let n = 0;
+  for (const c of h) n += Number(c) || 0;
+  if (!(n > 0)) return null;
+  const rank = Math.min(1, Math.max(0, Number(q) || 0)) * n;
+  let acc = 0;
+  for (let i = 0; i < h.length; i++) {
+    const c = Number(h[i]) || 0;
+    if (!c) continue;
+    if (acc + c >= rank) {
+      let lo = 2 ** i, hi = i === HIST_BUCKETS - 1 ? Infinity : 2 ** (i + 1);
+      if (min > lo) lo = min;
+      if (max < hi) hi = max;
+      if (!(hi > lo)) return Math.round(lo);
+      return Math.round(lo * Math.pow(hi / lo, (rank - acc) / c));
+    }
+    acc += c;
+  }
+  return null;
+}
+
+// ── Monk weave per fight (rollup.by_char[uploader].weave) ─────────────────────────────────
+// Weaving = landing a special (kick, tiger claw, ...) between auto-attack rounds without delaying the
+// next round. Built from the uploader's OWN logged events, in log order: auto-attack lines (and swings
+// that missed) in the same log second are one round (primary + off hand); a special is credited to the
+// round before it. Shape: { rounds, roundsWithSpecial, specials, avgRoundGapMs, lateRounds }.
+//  · avgRoundGapMs — mean gap between consecutive rounds, gaps over 10 s ignored (a pause, not a delay).
+//  · lateRounds    — rounds that followed a special and came later than the fight's median gap by more
+//                    than 25%: a clip. ⚠ The log is stamped to the SECOND, so a gap is only good to
+//                    about ±1 s; a round must also be over a full second later than the median to count,
+//                    which under-reports small clips rather than inventing them. Needs 3+ gaps.
+// Omitted when the uploader landed no special or had fewer than two rounds.
+const _WEAVE_AUTO = new Set(['hit', 'slash', 'crush', 'pierce', 'punch']);
+const _WEAVE_SPECIAL = new Set(['kick', 'flying kick', 'round kick', 'tiger claw', 'eagle strike', 'strike', 'dragon punch', 'tail rake']);
+const _WEAVE_MAX_GAP_MS = 10_000;
+function _weaveOf(events) {
+  const rounds = [];     // { sec, t, special }
+  let specials = 0;
+  for (const ev of events) {
+    if (!ev || ev.attacker != null) continue;
+    if (ev.type !== 'damage' && ev.type !== 'avoid') continue;
+    if (ev.ds || ev.nonMelee || ev.spellName) continue;
+    const verb = String(ev.type === 'damage' ? ev.ability : ev.verb || '').toLowerCase();
+    const t = Date.parse(ev.ts);
+    if (!t) continue;
+    const sec = Math.floor(t / 1000);
+    if (_WEAVE_AUTO.has(verb)) {
+      const last = rounds[rounds.length - 1];
+      if (!last || last.sec !== sec) rounds.push({ sec, t, special: false });
+    } else if (_WEAVE_SPECIAL.has(verb)) {
+      specials++;
+      if (rounds.length) rounds[rounds.length - 1].special = true;
+    }
+  }
+  if (!specials || rounds.length < 2) return undefined;
+  const gaps = [];
+  for (let i = 1; i < rounds.length; i++) {
+    const g = rounds[i].t - rounds[i - 1].t;
+    gaps.push(g <= _WEAVE_MAX_GAP_MS ? g : null);
+  }
+  const good = gaps.filter(g => g != null);
+  let late = 0;
+  if (good.length >= 3) {
+    const sorted = [...good].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    const limit = Math.max(med * 1.25, med + 1000);
+    for (let i = 0; i < gaps.length; i++) if (rounds[i].special && gaps[i] != null && gaps[i] > limit) late++;
+  }
+  return {
+    rounds: rounds.length,
+    roundsWithSpecial: rounds.filter(r => r.special).length,
+    specials,
+    avgRoundGapMs: good.length ? Math.round(good.reduce((a, b) => a + b, 0) / good.length) : 0,
+    lateRounds: late,
+  };
+}
+
+// The uploader's class: Zeal's char info, then /who, then the raid roster. null when none knows.
+function _ownClassOf(character) {
+  const cl = String(character || '').toLowerCase();
+  if (!cl) return null;
+  const zst = _meZealFor(cl);
+  const who = whoData.get(cl);
+  return normalizeClass((zst && _meLabel(zst, 3)) || (who && who.class) || _raidClassByName.get(cl) || '') || null;
+}
+
+// Harm Touch pairing window: the landing line and the damage line print in the same server tick, and
+// the log stamps whole seconds, so allow a second either side of the line (see _noteAbilityLand).
+const HT_PAIR_MS = 1500;
+
 class EncounterBuilder {
   constructor({ character, onFlush, silent = false }) {
     this.character  = character;
@@ -10347,6 +10642,10 @@ class EncounterBuilder {
     // lastDirgeCast persists across encounters too — a bard might fire a dirge
     // right before an encounter starts and the damage tick lands inside it.
     this.lastDirgeCast  = null;       // { ts: ms, name: string } | null
+    // Harm Touch pairing (see _noteAbilityLand). Persist across fights like lastDirgeCast: HT is
+    // often the opener, before the fight is open.
+    this._htPending        = null;    // { tgt: lowercase name, tsMs } — a landing line waiting for its damage
+    this._lastSelfNonMelee = null;    // { ev, tsMs } — the uploader's last own spell hit, for damage-before-landing order
     this.reset();
   }
   reset() {
@@ -10480,6 +10779,7 @@ class EncounterBuilder {
     // per-target debounce for mob self-heal ticks (Zeal-gauge sourced).
     this._slowsOnTarget    = new Map();
     this._mobHealDebounce  = new Map();
+    this._lohUses          = 0;   // the uploader's own Lay on Hands landings this fight (count only)
     // petLeaders and lastDirgeCast intentionally NOT reset — persists for the agent's runtime
   }
   // ── Callout-replay timeline (#98) ──────────────────────────────────────────
@@ -10973,6 +11273,53 @@ class EncounterBuilder {
     ba.total += amount;
   }
 
+  // ── Harm Touch / Lay on Hands (uploader's own) ─────────────────────────────
+  // VERIFIED (eqemu_spells): the landing text. Harm Touch (88, 2821) prints "<target> writhes in the grip
+  // of agony." on others; Lay on Hands (87) prints "<target> feels a healing touch.".
+  // INFERRED (not seen in a live log): that the Harm Touch damage prints as the caster's own "You hit X for
+  // N points of non-melee damage." within a second of the landing line, in either order. Nothing in the log
+  // says WHO cast a landing, so it is only credited to the uploader when (a) the uploader is a Shadow Knight
+  // (Zeal / /who class) and (b) the uploader's own spell-hit line on that same target pairs with it. A
+  // bystander's Harm Touch has no "You hit" line of ours, so it pairs with nothing. Class unknown (backfill
+  // with no /who) -> no pairing, the hit stays in 'hit'.
+  // Lay on Hands: no heal line is proven, so it is a COUNT only (by_skill['lay on hands'].hits), credited
+  // when the uploader is a Paladin and the landing is on their Zeal target (or on them, with no target).
+  _noteAbilityLand(event) {
+    const tsMs = Date.parse(event.ts) || Date.now();
+    const cls = _ownClassOf(this.character);
+    if (event.kind === 'harm_touch') {
+      if (cls !== 'Shadow Knight' || !event.target) return;
+      const tgt = String(event.target).toLowerCase();
+      const p = this._lastSelfNonMelee;
+      if (p && p.ev.ability === 'hit' && String(p.ev.defender || '').toLowerCase() === tgt && Math.abs(tsMs - p.tsMs) <= HT_PAIR_MS) {
+        this._lastSelfNonMelee = null;
+        this._creditHarmTouch(p.ev);       // the damage line came first; it is already in this.events
+        return;
+      }
+      this._htPending = { tgt, tsMs };
+      return;
+    }
+    if (event.kind === 'lay_on_hands') {
+      if (cls !== 'Paladin') return;
+      const cl = String(this.character || '').toLowerCase();
+      const who = event.target ? String(event.target).toLowerCase() : cl;
+      const zt = _zealTargetForChar(cl);
+      if (!((zt ? zt.toLowerCase() : null) === who || (!zt && who === cl))) return;
+      if (this.startedAt) this._lohUses++;
+      this._pushClassFun('lay_on_hands', 0, event.ts, 'Lay on Hands' + (event.target ? ' on ' + event.target : ''));
+    }
+  }
+  _creditHarmTouch(ev) {
+    ev.ability = 'harm touch';
+    this._pushClassFun('harm_touch', Number(ev.amount) || 0, ev.ts, 'Harm Touch on ' + (ev.defender || '?') + ' for ' + (Number(ev.amount) || 0));
+  }
+  // The existing harm_touch / lay_on_hands fun-events (reagent_qty = damage, or 0 for a count). Live only —
+  // a silent (backfill) builder must not re-announce old fights.
+  _pushClassFun(type, qty, ts, text) {
+    if (this.silent) return;
+    funEventBuffer.push({ type, caster: this.character || null, reagent_qty: qty, ts, raw_text: String(text).slice(0, 200) });
+  }
+
   // Decide the held anonymous non-melee hit and re-add it. `flavor` is the
   // shield named by "<mob> was <verb> by <spell>." when that line landed for
   // the same mob within the pair window, else null. Called from the flavor
@@ -11435,6 +11782,12 @@ class EncounterBuilder {
       return;
     }
 
+    // Harm Touch / Lay on Hands landing line — see _noteAbilityLand.
+    if (event.type === 'ability_land') {
+      this._noteAbilityLand(event);
+      return;
+    }
+
     // /melody markers — stamp the character's bardMelody state so the overlay
     // shows "playing melody…" + the start timestamp even before Zeal label 134
     // delivers the first per-song transition. Zeal label 134 does the heavy
@@ -11515,6 +11868,21 @@ class EncounterBuilder {
       } else if (evTs - this.lastDirgeCast.ts > window + 5000) {
         // stale — drop it so future hits aren't wrongly credited
         this.lastDirgeCast = null;
+      }
+    }
+
+    // Harm Touch damage: the uploader's own direct-damage spell hit ("You hit X for N points of
+    // non-melee damage.") right after a Harm Touch landing on X is the HT itself, so it is credited to
+    // `harm touch` instead of the generic 'hit' bucket. Pending landing -> damage here; damage ->
+    // landing is paired in _noteAbilityLand (the log order is not proven, so both are handled).
+    if (event.type === 'damage' && event.attacker === null && event.nonMelee && event.amount > 0) {
+      const evTs = Date.parse(event.ts) || Date.now();
+      const p = this._htPending;
+      if (p && String(event.defender || '').toLowerCase() === p.tgt && Math.abs(evTs - p.tsMs) <= HT_PAIR_MS) {
+        this._htPending = null;
+        this._creditHarmTouch(event);
+      } else {
+        this._lastSelfNonMelee = { ev: event, tsMs: evTs };
       }
     }
 
@@ -12904,6 +13272,13 @@ class EncounterBuilder {
       if (!s) s = bucket.by_skill[skillKey] = { hits: 0, dmg: 0 };
       s.hits += 1;
       s.dmg  += amt;
+      // Highs / mids / lows (agent 4.0.86+): exact max + smallest non-zero hit, and the log2 histogram
+      // `h` (see HIST_BUCKETS). Older agents send just { hits, dmg }; the bot stores by_skill as-is.
+      if (amt > 0) {
+        if (s.max === undefined || amt > s.max) s.max = amt;
+        if (s.min === undefined || amt < s.min) s.min = amt;
+        (s.h || (s.h = new Array(HIST_BUCKETS).fill(0)))[_histBucket(amt)] += 1;
+      }
       bucket.total_hits   += 1;
       bucket.total_damage += amt;
 
@@ -12911,6 +13286,24 @@ class EncounterBuilder {
         bucket.self_attack_count += 1;
       }
     }
+    // The histogram only earns its bytes with 2+ hits (one hit is just `max`). by_skill is stored as jsonb
+    // per fight per character, so this keeps the common one-hit ability at { hits, dmg, max, min }.
+    for (const b of Object.values(_rollupByChar)) {
+      for (const s of Object.values(b.by_skill)) {
+        if (s.h && s.h.reduce((a, c) => a + c, 0) < 2) delete s.h;
+      }
+    }
+    // The uploader's own Lay on Hands landings: a count (heal size is not in the log). Rides in by_skill
+    // as { hits: n, dmg: 0 } so the bot stores it untouched; it is NOT added to total_hits / total_damage.
+    if (this._lohUses > 0 && _uploader) {
+      const ub = _rollupByChar[_uploader] || (_rollupByChar[_uploader] = {
+        by_skill: {}, total_hits: 0, total_damage: 0, self_attack_count: 0,
+      });
+      ub.by_skill['lay on hands'] = { hits: this._lohUses, dmg: 0 };
+    }
+    // Monk weave: from the uploader's own swings (see _weaveOf). Beside by_skill, not inside it.
+    const _weave = _uploader ? _weaveOf(this.events) : undefined;
+    if (_weave && _rollupByChar[_uploader]) _rollupByChar[_uploader].weave = _weave;
     const _rollup = Object.keys(_rollupByChar).length
       ? { by_char: _rollupByChar }
       : undefined;
@@ -13599,6 +13992,7 @@ function _endpointForKind(kind, botUrl) {
     case 'quake':           return base + '/quake';
     case 'casting':         return base + '/casting';
     case 'ari_lead':        return base + '/ari-lead';
+    case 'mgb':             return base + '/mgb';
     case 'crash_report':    return base + '/crash_report';
     case 'kite_loop':       return base + '/kite-loop';
     case 'track_backfill':  return base + '/track-backfill';
@@ -13703,6 +14097,14 @@ function _maybeUploadRaidRoster(sample) {
     // tab "raid (type 5)" section — the guild lead 2026-07-15). Updated on EVERY
     // pipe fire, before the upload debounce below, so the local view stays
     // live even between heartbeat uploads.
+    // A raider's health swinging is when the buff queue matters (§617): a drop of 10 points or more since the last pipe
+    // fire puts the queue check back on its fast cadence for a while.
+    try {
+      if (_lastRaidPipe && Array.isArray(_lastRaidPipe.members)) {
+        const before = new Map(_lastRaidPipe.members.map(m => [String(m.name).toLowerCase(), Number(m.hp_pct)]));
+        if (compact.some(m => { const b = before.get(String(m.name).toLowerCase()); const n = Number(m.hp_pct); return Number.isFinite(b) && Number.isFinite(n) && b - n >= 10; })) _buffQueueFast();
+      }
+    } catch (e) { void e; }
     _lastRaidPipe = { at: Date.now(), members: compact };
     // Refresh the local raid-member lookup that trigger actions consult via
     // require_raid_member. Lowercased names only — matched against captured
@@ -15731,10 +16133,31 @@ function _resolveMainTank(mainTargetName) {
 // (the guild lead, 2026-07-06). Primes the shared extended-target cache as a side
 // effect, so these overlays get fed even without the Extended Target overlay
 // open. Returns { name, hp_pct, raider_count } or null (out of combat / cold).
+// The raid's KILL tag (2026-11-17): the newest fresh tag whose text is KILL. With `@` it is exclusive, so there is one.
+function _killTagNow(now = Date.now()) {
+  let best = null;
+  for (const t of _zealTags.values()) {
+    if (!t || !/^kill\b/i.test(String(t.text || '')) || !(now - (t.tsMs || 0) <= _TAG_FRESH_MS)) continue;
+    if (!best || t.tsMs > best.tsMs) best = t;
+  }
+  return best;
+}
 function _resolveMainTarget(activeCharacter) {
   try { fetchExtendedTarget(activeCharacter); } catch { /* best-effort prime */ }
   const cached = _extTargetCache.get(String(activeCharacter || '').trim().toLowerCase());
   const targets = cached && cached.payload && Array.isArray(cached.payload.targets) ? cached.payload.targets : null;
+  // The main assist's KILL tag names the mob outright ("consume this for targetting", the guild lead, 2026-11-17). It wins
+  // while that mob is still a live row of the raid's targets, or for a minute after the tag before any row shows it; a
+  // dead or long-gone KILL mob falls back to "most targeted" below.
+  try {
+    const kt = _killTagNow();
+    if (kt) {
+      const row = (targets || []).find(t => t && t.kind === 'npc' && !t.stale
+        && ((t.spawn_id != null && Number(t.spawn_id) === Number(kt.spawn_id)) || String(t.name || '').toLowerCase() === kt.mob));
+      if (row) return { name: row.name, hp_pct: row.hp_pct != null ? row.hp_pct : null, raider_count: row.raider_count || 0, source: 'kill_tag' };
+      if (Date.now() - kt.tsMs <= 60_000) return { name: kt.mobDisplay, hp_pct: null, raider_count: 0, source: 'kill_tag' };
+    }
+  } catch { /* a tag is a hint: never break the target bar */ }
   if (!targets || !targets.length) return null;
   let best = null;
   for (const t of targets) {
@@ -18862,7 +19285,12 @@ function _serializeCommandCenterState() {
                       !!_lastRaidPipe && (nowMs - (_lastRaidPipe.at || 0)) < 60_000;
       return _hailBoardSnapshot(_nowOnServerClock(), ownRaid ? _raidRosterMembers : null);
     })(),
+    zone_flags:    _zoneFlagsSnapshot(activeChar, Date.now()),   // null outside a flag-gated zone or until the bot answers
+    // null outside Plane of Earth B or until a councilman is seen; a throw hides the card, never the Command Center
+    council:       (() => { try { return _councilSnapshot(activeChar, Date.now()); } catch { return null; } })(),
     cures,
+    // MGB board (who has Mass Group Buff ready); null hides the card, and a throw inside never reaches the rest.
+    mgb:           _mgbSnapshot(),
     // Per-cleric Divine Intervention readiness — chips on the board.
     di:            diStatusSnapshot(),
     updated_at:    Date.now(),
@@ -19532,6 +19960,10 @@ function _serializeForDashboard() {
     localOnly:          _localOnly(),
     // The raid code this PC joined (null when none): the dashboard card and Mimic's tray read it.
     raidCode:           _raidCodeStatus(),
+    // The Raid Mimic party (null when none): status, code, tier tag and the merged per-player view. The dashboard card,
+    // the tray and the DPS HUD's Party view read it.
+    partyView:          _partyStateForDashboard(),
+    partyShare:         _partyShareState(),
     // #120 — token present (signed in) but identity may not be confirmed yet.
     // Lets the header show a soft "verifying" state instead of the hard "not
     // signed in" banner, and gate the scary banner on the no-token case only.
@@ -20610,7 +21042,12 @@ tr:hover td { background:#1f242c }
    right-aligned numbers (so every value looked one column to the right of its header). */
 table.wp-abtbl { table-layout:fixed; }
 table.wp-abtbl th:first-child, table.wp-abtbl td:first-child { width:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-table.wp-abtbl th.wp-r, table.wp-abtbl td.wp-r { width:76px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.wp-abgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px 14px; margin-top:6px; align-items:start; }
+.wp-abgrid > div:not(.wp-abcard) { grid-column:1/-1; }
+.wp-abcard { border:1px solid var(--border); border-radius:6px; padding:6px 8px 4px; min-width:0; }
+.wp-abcard h3 { margin:0 0 4px; font-size:13px; text-transform:none; }
+.wp-abcard tr.dim td, .wp-abcard tr.dim td.num { color:var(--dim); }
+table.wp-abtbl th.wp-r, table.wp-abtbl td.wp-r { width:56px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 table.wp-abtbl th.wp-r { color:var(--dim); }
 /* wpMoreList: "▾ N more" row with a gentle pulsing underline; expands in place. */
 .wp-more-btn { display:block; width:100%; position:relative; background:transparent; border:0; color:var(--blue,#58a6ff); font:inherit; font-size:12px; text-align:left; padding:4px 8px 6px; cursor:pointer; }
@@ -20679,6 +21116,19 @@ table.wp-abtbl th.wp-r { color:var(--dim); }
    Set up / Machine. A heading is a plain div (no data-tab, not a button), so the tab switcher, the tour and every
    \`.nav button[data-tab]\` lookup never see it. */
 .nav .wp-rail-h { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.09em; margin:10px 2px 0; }
+/* Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live, Raid,
+   Recap, Diagnostics"). A heading is a div with role=button (not a .nav button, so the tab switcher and its styles never
+   see it); its open state is kept per section in localStorage, and the section holding the active tab opens itself. */
+.nav .wp-rail-sec { display:flex; flex-direction:column; gap:4px; }
+.nav .wp-rail-tog { cursor:pointer; user-select:none; display:flex; align-items:center; gap:5px; padding:2px 0; }
+.nav .wp-rail-tog:hover { color:var(--text); }
+.nav .wp-rail-tog::before { content:'▸'; display:inline-block; width:9px; transition:transform .12s; }
+.nav .wp-rail-sec.open > .wp-rail-tog::before { transform:rotate(90deg); }
+.nav .wp-rail-sec:not(.open) > .wp-rail-body { display:none; }
+.nav .wp-rail-body { display:flex; flex-direction:column; gap:4px; }
+/* An "On this PC" page, loaded into the middle pane (2026-11-17: it used to replace the whole window, rail and all). */
+#wpLocalFrame { display:block; width:100%; height:calc(100vh - var(--wp-topbar-h, 64px) - 24px); min-height:480px; border:0; border-radius:8px; background:transparent; }
+body.wp-overlay-mode #localpage, body.wp-feedback-mode #localpage { display:none !important; }
 .nav .wp-rail-h:first-child { margin-top:0; }
 /* The pinned section index: one row of chips under the top bar naming this tab's cards. Solid background (cards
    pass UNDER it); a single line that scrolls sideways rather than a second and third row. */
@@ -20707,6 +21157,7 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
   .shell { display:block; }
   .shell > .nav { position:static; height:auto; }
   .nav .wp-rail-h { display:none; }          /* the group headings have no room in the wrapping row */
+  .nav .wp-rail-sec, .nav .wp-rail-sec > .wp-rail-body { display:contents !important; }   /* no headings, so nothing stays folded */
   .nav .wp-rail-foot { display:contents; }   /* Tour + Feedback just join the wrapping row; .nav outranks the base rule declared below */
   .nav { flex-direction:row; flex-wrap:wrap; align-items:center; }
   .nav button { text-align:center; }
@@ -20721,6 +21172,11 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
    panes). Items are not data-tab buttons, so the tab switcher ignores them. */
 .wp-rail-grp { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
 .wp-rail-grp .wp-lbl { padding:0 2px 2px; }
+/* A page plus its ↗ "own window" button on one row (2026-11-16). */
+.wp-rail-row { display:flex; gap:4px; }
+.wp-rail-row > button:first-child { flex:1 1 auto; min-width:0; }
+.wp-rail-row > .wp-pop { flex:0 0 auto; padding-left:7px; padding-right:7px; color:var(--dim); }
+.wp-rail-row > .wp-pop:hover { color:var(--text); }
 .nav button:disabled { opacity:.45; cursor:default; }
 .nav button:disabled:hover { background:#21262d; }
 .wp-rail-grp .wp-soon { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin-left:4px; }
@@ -21031,54 +21487,70 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 </div>
 <div class="shell">
 <div class="nav">
-  <!-- The rail is grouped by WHEN you reach for a tab (Layout A, the guild lead, 2026-10-21). The headings are
-       plain divs: no data-tab, not buttons, so nothing that binds '.nav button[data-tab]' ever sees them. -->
-  <div class="wp-rail-h">Live &mdash; raid night</div>
-  <button class="active" data-tab="dash">Dashboard</button>
-  <button data-tab="raid">⚔ Raid</button>
-  <button data-tab="fights">⚔️ Fights</button>
-  <div class="wp-rail-h">After the raid</div>
-  <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
-       The tray's "📈 My parses" opens this tab through the #myparses hash. -->
-  <button data-tab="myparses">📈 My parses</button>
-  <button data-tab="stats">📊 Stats</button>
-  <button data-tab="loot">💰 Loot</button>
-  <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead
-       2026-08-13 — "having to scroll in our dashboard is somewhat annoying to
-       navigate"). Info had grown to 16 cards and Triggers to 12 by mixing three
-       unrelated jobs: what your log SAW (session stats), whether the machinery
-       WORKS (diagnostics), and the thing the tab is actually named for. The
-       sidebar rail is what made room for more destinations. -->
-  <div class="wp-rail-h">Set up</div>
-  <button data-tab="overlays">🪟 Overlays</button>
-  <button data-tab="triggers">⚡ Triggers</button>
-  <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
-  <button data-tab="voice">🗣 Voice</button>
-  <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
-  <button data-tab="buffs">✨ Buffs (and blocking)</button>
-  <div class="wp-rail-h">Machine</div>
-  <button data-tab="diag">🩺 Diagnostics</button>
-  <button data-tab="info">Info</button>
-  <button data-tab="optin">Logsync</button>
-  <!-- 🛡 Admin — officer-only. Hidden by default; renderAdmin flips it visible
-       ONLY when s.mimicIdentity.is_officer (the bot's authenticated reply). The
-       officer-gated card DATA is served only to officers, so this is a real
-       gate, not a CSS hide. -->
-  <button data-tab="admin" id="wpAdminTab" style="display:none" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
-  <!-- 🖥 On this PC (the guild lead, 2026-10-21, option B: the website's own pages bundled into Mimic and
-       served by this agent under /local/). Built from your own logs and inventory files; nothing leaves
-       the PC. Inventory and My replay open in their own Mimic window (the tray's "Inventory (on this PC)"
-       and "My replay (on this PC)" are the same window); in a plain browser they open a new tab. "My fights
-       (this PC)" is the local site's My parses page, named differently here so it is not mistaken for the
-       📈 My parses tab above it. No data-tab, so the tab switcher ignores them. -->
-  <div class="wp-rail-grp" id="wpLocalGrp">
-    <div class="wp-lbl">On this PC</div>
-    <button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory')" title="Every item across your characters, from the inventory files on this PC (opens in its own window). Nothing leaves the PC.">🎒 Inventory</button>
-    <button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses')" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member (opens in its own window). Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button>
-    <button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay')" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC (opens in its own window). Nothing leaves the PC.">🎬 My replay</button>
-    <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
-    <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+  <!-- Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live,
+       Raid, Recap, Diagnostics"), in that order. Headings are divs with role=button: no data-tab, not buttons, so nothing
+       that binds '.nav button[data-tab]' ever sees them. wpRailToggle keeps each section's open state; the section that
+       holds the active tab opens itself (wpRailReveal). The "On this PC" pages (built from this PC's own logs and files;
+       nothing leaves it) sit in the section they belong to and load into the middle pane (#localpage); ↗ (or Ctrl /
+       Shift / middle click) opens one in its own window. "My fights (this PC)" is the local site's My parses page, named
+       so it is not mistaken for the 📈 My parses tab. -->
+  <div class="wp-rail-sec" data-sec="setup">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Setup</div>
+    <div class="wp-rail-body">
+      <button data-tab="overlays">🪟 Overlays</button>
+      <button data-tab="triggers">⚡ Triggers</button>
+      <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
+      <button data-tab="voice">🗣 Voice</button>
+      <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
+      <button data-tab="buffs">✨ Buffs (and blocking)</button>
+      <button data-tab="optin">Logsync</button>
+      <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
+      <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
+    </div>
   </div>
+  <div class="wp-rail-sec open" data-sec="live">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Live</div>
+    <div class="wp-rail-body">
+      <button class="active" data-tab="dash">Dashboard</button>
+      <button data-tab="fights">⚔️ Fights</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec open" data-sec="raid">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Raid</div>
+    <div class="wp-rail-body">
+      <button data-tab="raid">⚔ Raid</button>
+      <button data-tab="loot">💰 Loot</button>
+      <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
+      <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="recap">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Recap</div>
+    <div class="wp-rail-body">
+      <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
+           The tray's "📈 My parses" opens this tab through the #myparses hash. -->
+      <button data-tab="myparses">📈 My parses</button>
+      <button data-tab="stats">📊 Stats</button>
+      <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
+           the raid. The Rehearse tab (§401) will grow out of it. -->
+      <button data-tab="replay">⏪ Replay</button>
+      <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
+      <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="diag">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Diagnostics</div>
+    <div class="wp-rail-body">
+      <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead 2026-08-13 — "having to scroll
+           in our dashboard is somewhat annoying to navigate"). -->
+      <button data-tab="diag">🩺 Diagnostics</button>
+      <button data-tab="info">Info</button>
+    </div>
+  </div>
+  <!-- 🛡 Admin — officer-only, outside the five sections. Hidden by default; renderAdmin flips it visible ONLY when
+       s.mimicIdentity.is_officer (the bot's authenticated reply). The officer-gated card DATA is served only to
+       officers, so this is a real gate, not a CSS hide. -->
+  <button data-tab="admin" id="wpAdminTab" style="display:none;margin-top:10px" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
   <!-- ✨ Tour sits at the FOOT of the rail (the guild lead, 2026-09-23: "We're running out of horizontal real
        estate"); the rail is sticky, so a long page never means scrolling back for it. No data-tab, so the tab
        switcher ignores it. 💬 Feedback moved to the title row's top-right on 2026-10-29 (next to Reload). -->
@@ -21114,15 +21586,17 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <!-- Fights = Tanks/Healers + DPS combined. #tanks and #deeps are inner
      render-targets (renderTanks/renderDeeps still setSectionHTML into them),
      not independent .section tabs, so both show whenever Fights is active.
-     #fightsReplay holds the ⏪ Replay card (renderReplayCard), folded at the TOP; #fightsMore holds the three
-     cards that start folded below everything else (pets, damage shields, weapon loadouts: renderFightsMore).
-     Layout A order, most important first: Replay (folded) · threat · deaths · incoming · healers · DPS breakdown
-     · top abilities · the folded three. -->
+     #fightsMore holds the three cards that start folded below everything else (pets, damage shields, weapon
+     loadouts: renderFightsMore). Layout A order, most important first: threat · deaths · incoming · healers · DPS
+     breakdown · top abilities · the folded three. The ⏪ Replay card (renderReplayCard, host #fightsReplay) left
+     this tab for the ⏪ Replay tab below (Layout A - Triage, the guild lead, 2026-11-15). -->
 <div id="fights" class="section">
-  <div id="fightsReplay"></div>
   <div id="tanks"></div>
   <div id="deeps"></div>
   <div id="fightsMore"></div>
+</div>
+<div id="replay" class="section">
+  <div id="fightsReplay"></div>
 </div>
 <div id="myparses" class="section"></div>
 <div id="loot" class="section"></div>
@@ -21133,6 +21607,8 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <div id="diag" class="section"></div>
 <div id="optin" class="section"></div>
 <div id="admin" class="section"></div>
+<!-- An "On this PC" page in the middle pane (2026-11-17); wpOpenLocalSite sets the frame's address. Never repainted by the poll. -->
+<div id="localpage" class="section"><iframe id="wpLocalFrame" title="On this PC" src="about:blank"></iframe></div>
 </div><!-- /.panes -->
 </div><!-- /.shell -->
 <script>
@@ -21402,11 +21878,61 @@ function wpFeedbackClick() {
   }
   wpOpenFeedback();
 }
-// The rail's "On this PC" items: a page of the local site (/local/<page>/, served by this agent). Mimic opens
-// it in its own window (the same one the tray item opens); with no Mimic bridge, or while the agent has no
-// port yet, a new browser tab does the job.
-function wpOpenLocalSite(page) {
+// The rail's "On this PC" items: a page of the local site (/local/<page>/, served by this agent). A plain click opens it
+// in THIS window (the guild lead, 2026-11-16: "should be able to load in the same window, not external unless people want
+// to launch in a new window"); the page then shows "← Dashboard" (LocalNav reads the session flag set here). The ↗
+// button ('window'), Ctrl / Shift / Cmd click and a middle click open it in its own window, the one the tray item opens;
+// with no Mimic bridge, or while the agent has no port yet, a new browser tab does that job.
+// The rail's five folding sections (2026-11-17). Open state per section in localStorage (a private window or blocked
+// storage just starts from the defaults in the markup: Live and Raid open).
+var WP_RAIL_KEY = 'wp.rail.open';
+function _wpRailSaved() { try { return JSON.parse(localStorage.getItem(WP_RAIL_KEY) || 'null'); } catch (e) { return null; } }
+function _wpRailSave() {
+  var o = {};
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) { o[s.getAttribute('data-sec')] = s.classList.contains('open'); });
+  try { localStorage.setItem(WP_RAIL_KEY, JSON.stringify(o)); } catch (e) { void e; }
+}
+function wpRailToggle(h) {
+  var s = h && h.parentElement;
+  if (!s) return;
+  s.classList.toggle('open');
+  _wpRailSave();
+}
+// Open the section holding \`el\` (the active tab), so a tab chosen another way (the tour, a hash, the tray) is never hidden.
+function wpRailReveal(el) {
+  var s = el && el.closest ? el.closest('.wp-rail-sec') : null;
+  if (s && !s.classList.contains('open')) { s.classList.add('open'); _wpRailSave(); }
+}
+(function wpRailRestore() {
+  var o = _wpRailSaved();
+  if (!o || typeof o !== 'object') return;
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) {
+    var k = s.getAttribute('data-sec');
+    if (typeof o[k] === 'boolean') s.classList.toggle('open', o[k]);
+  });
+  try { wpRailReveal(document.querySelector('.nav button.active')); } catch (e) { void e; }
+})();
+function wpOpenLocalSite(page, how) {
   var url = '/local/' + page + '/';
+  var own = how === 'window' || (how && typeof how === 'object' && (how.ctrlKey || how.metaKey || how.shiftKey || how.button === 1));
+  if (how && typeof how === 'object' && how.type === 'auxclick' && how.button !== 1) return;   // right click: the menu, not a page
+  if (!own) {
+    // In the middle pane, rail and all kept (the guild lead, 2026-11-17: "launched a new tab instead of just the middle
+    // one"). The page hides its own top bar inside the frame (web/local/app/layout.tsx).
+    var frame = document.getElementById('wpLocalFrame'), pane = document.getElementById('localpage');
+    if (!frame || !pane) { try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; } location.href = url; return; }
+    var src = url + '?embed=1';
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
+    document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(function (x) { x.classList.remove('active'); });
+    pane.classList.add('active');
+    var btn = { inventory: 'wpLocalInv', flags: 'wpLocalFlags', parses: 'wpLocalFights', replay: 'wpLocalReplay' }[page];
+    var b = btn ? document.getElementById(btn) : null;
+    if (b) { b.classList.add('active'); try { wpRailReveal(b); } catch (e) { void e; } }
+    try { wpIndexSync(); } catch (e) { void e; }
+    return;
+  }
+  if (how && typeof how === 'object' && how.preventDefault) how.preventDefault();
   var fallback = function () { try { window.open(url, '_blank'); } catch (e) { void e; } };
   if (window.mimic && window.mimic.openLocalSite) {
     try {
@@ -24031,6 +24557,33 @@ function buildHealersHtml(s) {
   return h;
 }
 
+// Top Abilities: split one player's { name: {count,total} } into real abilities (named specials, spells,
+// procs), ONE folded plain-melee total, and damage-shield rows. Class skills (kick, bash, backstab, frenzy,
+// the monk/rogue multi-word ones) are NOT plain verbs, they stay abilities. \`dsNames\` are this player's known
+// damage-shield sources. Sorting breaks ties by name so the HTML is byte-stable across polls.
+const WP_PLAIN_MELEE = new Set(['hit','slash','crush','pierce','punch','strike','bite','claw','gore','maul','slam','smash',
+  'peck','gnaw','sting','trample','snap','stomp','chomp','swing','tear','rend','spit','swipe','buffet','thrash','mangle',
+  'pummel','whip','tail-whip','jab','chop','slice','hack','thrust','gouge','lash','sweep','stab','rap','smite','bludgeon',
+  'crunch','nick','tail-slap','tail-swipe','tail-thrash']);
+const WP_DS_NAME_RX = /^(thorns?|thistles?|brambles?|spikes?|barbs?|non-melee)\\b|\\b(shield of|coat|feedback|psalm)\\b/i;
+function wpAbilityGroups(top, dsNames) {
+  const ds = {};
+  (dsNames || []).forEach(function (n) { ds[String(n).toLowerCase()] = true; });
+  const abilities = [], shields = [];
+  let melee = null;
+  Object.keys(top || {}).forEach(function (k) {
+    const st = top[k], low = k.toLowerCase();
+    if (WP_PLAIN_MELEE.has(low)) {
+      melee = melee || { count: 0, total: 0 };
+      melee.count += st.count; melee.total += st.total;
+    } else if (ds[low] || WP_DS_NAME_RX.test(k)) shields.push([k, st]);
+    else abilities.push([k, st]);
+  });
+  const byTotal = function (a, b) { return (b[1].total - a[1].total) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); };
+  abilities.sort(byTotal); shields.sort(byTotal);
+  return { abilities: abilities, melee: melee, shields: shields };
+}
+
 function renderDeeps(s) {
   let h = '<div class="grid"><div class="card wide" data-index="DPS"><h2>💥 DEEPS — Damage Breakdown (this session)</h2>';
   h += '<div class="subtle">Per-attacker melee / spell / proc / DoT damage and crit stats. Names with spaces (NPCs) are filtered out.</div>';
@@ -24080,22 +24633,30 @@ function renderDeeps(s) {
   if (withAbilities.length > 0) {
     h += '<div class="card wide" data-index="Abilities"><h2>🎯 Top Abilities per Player</h2>';
     h += '<div class="subtle">Aggregated by named ability across the session. Hits, total damage, average.</div>';
-    // Each player is one block (heading + a fixed-layout table, see table.wp-abtbl), so every player's
-    // columns line up; the first 3 players show, the rest sit behind "N more players", and inside a block
-    // the top 5 abilities show with the remaining ones behind "N more".
-    const playerBlocks = withAbilities.slice(0, 10).map(function ([name, d]) {
-      const abs = Object.entries(d.topAbilities).sort((a, b) => b[1].total - a[1].total).slice(0, 8);
-      const abRows = abs.map(function ([ab, st]) {
+    // One compact card per player in a responsive grid (.wp-abgrid): real abilities first, plain melee
+    // verbs folded into one "melee" line, damage shields labelled as such. The first 8 cards show, the
+    // rest sit behind "N more players"; inside a card the top 5 abilities show, the rest behind "N more".
+    const dsAll = s.damageShield || {};
+    const playerBlocks = withAbilities.slice(0, 30).map(function ([name, d]) {
+      const g = wpAbilityGroups(d.topAbilities, Object.keys(dsAll[name] || {}));
+      const row = function (label, st, cls) {
         const avg = st.count > 0 ? Math.round(st.total / st.count) : 0;
-        const label = ab === 'non-melee' ? ab + ' (DS / DoT / procs)' : ab;
-        return '<tr><td title="' + esc(label) + '">' + esc(label) + '</td><td class="num wp-r"><b>' + fmtK(st.total) + '</b></td>' +
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td title="' + esc(label) + '">' + esc(label) + '</td><td class="num wp-r"><b>' + fmtK(st.total) + '</b></td>' +
                '<td class="num wp-r">' + st.count + '</td><td class="num wp-r">' + fmtK(avg) + '</td></tr>';
-      });
-      return '<div><h3 style="color:var(--orange);margin-top:14px">' + esc(name) + '</h3>' +
+      };
+      const abRows = g.abilities.map(function (a) { return row(a[0], a[1]); });
+      if (g.melee) abRows.push(row('melee', g.melee, 'dim'));
+      g.shields.forEach(function (a) { abRows.push(row(a[0] === 'non-melee' ? 'DS / DoT / procs' : a[0] + ' (DS)', a[1], 'dim')); });
+      if (!g.abilities.length && !g.shields.length && g.melee) {
+        const mavg = g.melee.count > 0 ? Math.round(g.melee.total / g.melee.count) : 0;
+        return '<div class="wp-abcard"><h3 class="name">' + esc(name) + '</h3><div class="dim" style="font-size:13px">melee only: <span class="num">' + fmtK(g.melee.total) +
+               '</span> over ' + g.melee.count + ' hits, avg ' + fmtK(mavg) + '</div></div>';
+      }
+      return '<div class="wp-abcard"><h3 class="name">' + esc(name) + '</h3>' +
              '<table class="wp-abtbl"><tr><th>Ability</th><th class="wp-r">Total</th><th class="wp-r">Hits</th><th class="wp-r">Avg</th></tr>' +
              wpMoreList('deeps|abil|' + name, abRows, { show: 5, cols: 4 }) + '</table></div>';
     });
-    h += wpMoreList('deeps|players', playerBlocks, { show: 3, noun: 'more players' });
+    h += '<div class="wp-abgrid">' + wpMoreList('deeps|players', playerBlocks, { show: 8, noun: 'more players' }) + '</div>';
     h += '</div>';
   }
 
@@ -25673,6 +26234,138 @@ function wpRaidCodeOpen() {
   window.addEventListener('hashchange', go);
 })();
 
+// ── 🐺 Raid Mimic party (Logsync tab, above the raid code; the tray's "Raid Mimic party…" opens it) ──
+// Raiders who join one party code share their numbers live: every Mimic publishes its own and gets back ONE merged
+// view (per player the highest value anyone saw, never a sum), which the DPS HUD shows as its Party view. Free for
+// everyone (DECISIONS §588); the tier shows only as a small tag. The state lives in the agent (GET/POST /api/party,
+// and \`s.partyView\` on /api/state). The card paints from the poll and prints nothing that ticks (no "3s ago", no
+// countdown), so its HTML is byte-stable and the section does not rewrite every 2 s.
+var _wpPt = { note: '', tone: '' };
+function wpPtTag(p) {
+  if (!p) return '';
+  if (p.tier === 'pro') return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro</span>';
+  if (p.tier === 'trial') {
+    var d = p.trial_ends_at ? Math.max(0, Math.ceil((Date.parse(p.trial_ends_at) - Date.now()) / 86400000)) : null;
+    return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro trial' + (d != null ? ' · ' + d + ' day' + (d === 1 ? '' : 's') + ' left' : '') + '</span>';
+  }
+  return '';
+}
+// The automatic way in: follows the real in-game group or raid (the Zeal pipe). Off by default; it prints nothing that ticks.
+function wpPtAutoHtml(s, p) {
+  var on = !!(s && s.partyShare && s.partyShare.on);
+  var auto = p && p.mode === 'auto';
+  var h = '<div id="wpPtAuto" style="margin:8px 0"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">'
+    + '<input type="checkbox" id="wpPtShare"' + (on ? ' checked' : '') + ' onchange="wpPtShare(this.checked)" style="margin-top:3px">'
+    + '<span><b>Share with my in-game group and raid</b><br><span class="dim" style="font-size:12px">'
+    + 'Shares only with people in your group or raid who also use Mimic. It follows your group by itself: it connects when you group up and leaves after two minutes on your own. Off by default.</span></span></label>';
+  if (on) {
+    var line;
+    if (p && p.auto_stopped && p.error && p.error.message) line = '<span style="color:var(--orange)">' + esc(p.error.message) + '</span>';
+    else if (auto && p.status === 'joined') line = '<b>' + (p.members || 1) + '</b> sharing from your group or raid' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live') + '. Open the DPS HUD and switch it to <b>Party</b>.';
+    else if (auto && p.status === 'paused') line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' It reconnects by itself.';
+    else if (auto) line = 'Connecting to the party relay…' + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    else line = '<span class="dim">Waiting until you are in a group or raid.' + (p && p.status === 'paused' && p.paused_text ? ' ' + esc(p.paused_text) : '') + '</span>';
+    h += '<div style="font-size:12px;margin:4px 0 0 24px">' + line + '</div>';
+  }
+  return h + '</div>';
+}
+function wpPtHtml(s) {
+  var p = s && s.partyView;
+  var h = wpPtAutoHtml(s, p) + '<div class="dim" style="font-size:12px;margin-top:10px">Or share by code</div>';
+  var inParty = p && p.mode !== 'auto' && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
+  if (inParty) {
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">';
+    if (p.code) {
+      h += '<span id="wpPtActive" style="font-size:20px;font-weight:700;letter-spacing:2px;border:1px solid var(--blue);border-radius:6px;padding:2px 12px">' + esc(p.code) + '</span>'
+        + '<button type="button" class="wp-btn" onclick="wpPtCopy()" title="Copy the code to paste into Discord or /rs">📋 Copy code</button>';
+    }
+    h += wpPtTag(p)
+      + '<button type="button" class="wp-btn" onclick="wpPtLeave()">✕ Leave party</button></div>';
+    var line;
+    if (p.status === 'joined') {
+      line = '<b>' + (p.members || 1) + '</b> in the party' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live')
+        + '. Open the DPS HUD and switch it to <b>Party</b> to see everyone, merged.';
+    } else if (p.status === 'paused') {
+      line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' The code is kept and it reconnects by itself.';
+    } else {
+      line = 'Connecting to the party relay' + (p.status === 'reconnecting' ? ' (it will keep trying)' : '') + '…'
+        + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    }
+    h += '<div style="font-size:12px;margin-bottom:6px">' + line + '</div>';
+  } else {
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">'
+       + '<input id="wpPtCode" type="text" maxlength="12" placeholder="K7M2QX" autocomplete="off" spellcheck="false" style="width:120px;text-transform:uppercase;font-size:14px;letter-spacing:2px" onkeydown="if (event.key === \\'Enter\\') wpPtJoin()">'
+       + '<button type="button" class="wp-btn pri" onclick="wpPtJoin()">🐺 Join</button>'
+       + '<span class="dim">or</span>'
+       + '<button type="button" class="wp-btn" onclick="wpPtCreate()" title="Makes a new party and shows its code, to give to your group or raid">＋ Create a party</button></div>';
+    if (p && !p.auto_stopped && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
+  }
+  if (_wpPt.note) h += '<div id="wpPtNote" style="color:' + (_wpPt.tone === 'ok' ? 'var(--green)' : 'var(--orange)') + ';font-size:12px;margin-bottom:6px">' + esc(_wpPt.note) + '</div>';
+  return h;
+}
+function wpPtRepaint(s) {
+  var el = document.getElementById('wpParty');
+  if (!el) return;
+  if (!document.getElementById('wpPtBody')) {
+    el.innerHTML = '<h2>🐺 Raid Mimic party</h2>'
+      + '<div class="subtle">Share your numbers live with the people you play with: automatically with your in-game group and raid, or by a party code that one of you creates and the rest join. '
+      + 'Each Mimic sends its own damage, healing, damage taken, threat, target and group health, and gets back one merged list, the highest value anyone saw for each player, never added together. '
+      + 'It sends only during a fight or while you are in a group or raid, and nothing else leaves your PC. Needs Mimic signed in with Discord.</div>'
+      + '<div id="wpPtBody"></div>';
+    el._wpLastHtml = null;
+  }
+  morphInto(document.getElementById('wpPtBody'), wpPtHtml(s));
+}
+function renderPartyCard(s) { wpPtRepaint(s); }
+function wpPtPost(body) {
+  return fetch('/api/party', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+}
+function wpPtRefresh() {
+  fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { wpPtRepaint(s); }, function () { });
+}
+function wpPtAct(body, okNote) {
+  wpPtPost(body).then(function (x) {
+    _wpPt.note = x.ok ? (okNote || '') : ((x.j && x.j.error) || 'Could not do that.'); _wpPt.tone = x.ok ? 'ok' : '';
+    wpPtRefresh();
+  }, function () { _wpPt.note = 'The agent did not answer.'; _wpPt.tone = ''; wpPtRefresh(); });
+}
+function wpPtShare(on) { wpPtAct({ action: 'share', on: !!on }, on ? 'Sharing with your group and raid is on.' : 'Sharing with your group and raid is off.'); }
+function wpPtCreate() { wpPtAct({ action: 'create' }, ''); }
+function wpPtJoin() { var inp = document.getElementById('wpPtCode'); wpPtAct({ action: 'join', code: inp ? inp.value : '' }, ''); }
+function wpPtLeave() { wpPtAct({ action: 'leave' }, 'Left the party.'); }
+function wpPtCopy() {
+  var a = document.getElementById('wpPtActive');
+  var code = a ? a.textContent : '';
+  var done = function (ok) { _wpPt.note = ok ? 'Copied ' + code + '.' : 'Could not copy; select the code and copy it.'; _wpPt.tone = ok ? 'ok' : ''; wpPtRefresh(); };
+  try { navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+}
+// The tray's "Raid Mimic party…": the Logsync tab, scrolled to the card.
+function wpPartyOpen() {
+  var tab = document.querySelector('.nav button[data-tab="optin"]');
+  if (tab && !tab.classList.contains('active')) tab.click();
+  var go = function (n) {
+    var card = document.getElementById('wpParty');
+    if (!card) { if (n < 12) setTimeout(function () { go(n + 1); }, 200); return; }
+    var bar = document.getElementById('wpTopBar');
+    var pad = (bar ? bar.getBoundingClientRect().height : 0) + 10;
+    window.scrollTo({ top: Math.max(0, card.getBoundingClientRect().top + window.scrollY - pad), behavior: 'smooth' });
+    var inp = document.getElementById('wpPtCode');
+    if (inp) { try { inp.focus(); } catch (e) { void e; } }
+  };
+  go(0);
+}
+// #party opens the card, the way #raidcode does.
+(function () {
+  function go() {
+    if ((location.hash || '').toLowerCase() !== '#party') return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { void e; }
+    wpPartyOpen();
+  }
+  go();
+  window.addEventListener('hashchange', go);
+})();
+
 // ── 📈 My parses ────────────────────────────────────────────────────────────
 // A member asked (2026-10-06) for "a page in Mimic that graphs my parses over a variable time window"; the
 // guild lead picked this tab plus a page on wolfpack.quest. The numbers are the guild's record of YOUR fights,
@@ -26160,10 +26853,9 @@ function wpReplayLinkSync() {
 }
 function renderReplayCard(s) {
   var h = '<div class="grid">';
-  // Layout A (the guild lead, 2026-10-21): a compact entry at the TOP of Fights, folded until opened. It leaves
-  // this tab for a Rehearse tab of its own later (a separate job); until then the form lives here. A #replay
-  // deep link opens it (see the hash handler).
-  h += '<div class="card wide wp-fold" data-index="Replay"><details ' + wpKeep('fights|replay') + '><summary><h2>⏪ Replay <span class="dim" style="font-size:11px;font-weight:normal">· walk part of a log back through the real trigger pipeline — hear the TTS, nothing uploads · Rehearse tab coming</span></h2></summary>';
+  // Layout A (the guild lead, 2026-11-15): Replay left Fights for the ⏪ Replay tab, the card's only occupant, so it
+  // starts open. The Rehearse tab (§401) grows out of it. A #replay deep link opens the tab (see the hash handler).
+  h += '<div class="card wide wp-fold" data-index="Replay"><details ' + wpKeep('replay|form', true) + '><summary><h2>⏪ Replay <span class="dim" style="font-size:11px;font-weight:normal">· walk part of a log back through the real trigger pipeline — hear the TTS, nothing uploads · Rehearse tab coming</span></h2></summary>';
   var _rls = (s.watchedLogs || []).filter(function(w){ return w && w.logPath; });
   // Characters known to be under 46, or hidden by their owner, sit behind the same toggle as the Me card's
   // list, and ones with no known level close up in a trailing "no known level" group (a <select> cannot hold
@@ -29304,15 +29996,16 @@ function renderInfo(s) {
   if (!_cv.length) {
     _cvH += '<div class="dim">Nothing captured yet. Type <b>/zeal version</b> in game and it appears here — Zeal, eqw.dll and eqgame.dll builds, per character. We never send the command for you.</div>';
   } else {
-    _cvH += '<table>';
-    for (const c of _cv) {
-      _cvH += '<tr><td colspan="2" style="padding-top:6px"><b>' + esc(c.character) + '</b></td></tr>';
-      if (c.zeal)   _cvH += '<tr><td>Zeal</td><td class="num">' + esc(c.zeal) + (c.zeal_hash ? ' <span class="dim">(' + esc(c.zeal_hash) + ')</span>' : '') + '</td></tr>';
-      if (c.eqw)    _cvH += '<tr><td>eqw.dll</td><td class="num">' + esc(c.eqw) + '</td></tr>';
-      if (c.eqgame) _cvH += '<tr><td>eqgame.dll</td><td class="num">' + esc(c.eqgame) + '</td></tr>';
-      if (c.at)     _cvH += '<tr><td class="dim">read</td><td class="dim num">' + esc(String(c.at).replace('T', ' ').slice(0, 19)) + '</td></tr>';
-    }
-    _cvH += '</table>';
+    // One row per character (Layout A - Triage), five shown and the rest behind "N more characters": a long
+    // roster used to run four lines per character down the page.
+    _cvH += '<table>' + wpMoreList('info|client-versions', _cv.map(function (c) {
+      return '<tr><td style="padding-top:6px"><b>' + esc(c.character) + '</b></td><td class="num" style="padding-top:6px">'
+        + (c.zeal ? 'Zeal ' + esc(c.zeal) + (c.zeal_hash ? ' <span class="dim">(' + esc(c.zeal_hash) + ')</span>' : '') : '')
+        + (c.eqw ? '<div>eqw.dll ' + esc(c.eqw) + '</div>' : '')
+        + (c.eqgame ? '<div>eqgame.dll ' + esc(c.eqgame) + '</div>' : '')
+        + (c.at ? '<div class="dim">read ' + esc(String(c.at).replace('T', ' ').slice(0, 19)) + '</div>' : '')
+        + '</td></tr>';
+    }), { show: 5, cols: 2, noun: 'more characters' }) + '</table>';
   }
   _cvH += '</div>';
   // 🏷 Zeal tag capture readiness (#194). Byte-stable: zeal.ini values change
@@ -29370,7 +30063,8 @@ function renderInfo(s) {
     h += '</div>';
   }
   h += _cvH;
-  h += '<div class="card"><h2>🏷 Zeal tag capture</h2>';
+  // Folded (Layout A - Triage): a setup walkthrough you open when tags misbehave, not something to read every visit.
+  h += '<div class="card wp-fold" data-index="Zeal tags"><details ' + wpKeep('info|zeal-tags') + '><summary><h2>🏷 Zeal tag capture</h2></summary>';
   if (s.zealTagRateLimit) {
     h += '<div style="margin-bottom:4px;color:#f2b632;font-size:11px">⚠️ The server rate limited your chat around <code>'
       + esc(new Date(s.zealTagRateLimit.at).toLocaleTimeString())
@@ -29418,7 +30112,7 @@ function renderInfo(s) {
       h += '<div class="dim" style="font-size:11px;margin-top:4px">Arrow in game but nothing here? The arrow only proves Zeal applied the tag locally. Three ways it never reaches the log: <code>/tag local</code> (never broadcasts at all), <code>/tag chat</code> with the channel not actually joined (Zeal prints “You must join a channel”), and <code>/tag suppress on</code> — that one hides the broadcast from your chat window AND your log while still drawing the arrow.</div>';
     }
   }
-  h += '</div>';
+  h += '</details></div>';
   h += '</div>';
   h += '<div id="wpBackupsCard" class="card wide" style="display:none"></div>';
   // GINA/EQLP scan placeholder card — populated by wpScanLocalTriggers() on
@@ -29627,6 +30321,29 @@ var _CLASS_CHECKLIST = {
 // never showed a crown (2026-10-01). Both spellings count.
 function _isRaidLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '2' || /^raid\\s*leader$/i.test(r); }
 function _isGroupLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '1' || /^group\\s*leader$/i.test(r); }
+// MGB ready/down dot on the badge, from the agent's board (q.mgb = { holders: [{ name, ready_ms }], own }). The HTML carries only
+// the end time (0 = ready now); wpPaintMgbDots() writes colour + tooltip each second, so the Raid card stays byte-stable.
+// null = the board has nothing on this raider: no dot, the badge stays as it was.
+function _mgbEndFor(q, name) {
+  var b = q && q.mgb;
+  if (!b || !name) return null;
+  var nl = String(name).toLowerCase(), end = null, i;
+  var hs = b.holders || [];
+  for (i = 0; i < hs.length; i++) if (hs[i] && String(hs[i].name).toLowerCase() === nl) end = hs[i].ready_ms ? Math.round(hs[i].ready_ms) : 0;
+  if (b.own && b.own.ready_ms && String(b.own.character).toLowerCase() === nl) end = Math.max(end || 0, Math.round(b.own.ready_ms));
+  return end;
+}
+function wpPaintMgbDots() {
+  var els = document.querySelectorAll('.wp-mgb-dot'), now = Date.now();
+  for (var i = 0; i < els.length; i++) {
+    var left = Math.ceil((Number(els[i].getAttribute('data-end')) - now) / 1000);
+    var up = !(left > 0);
+    var tip = up ? 'MGB ready' : 'MGB in ' + Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+    els[i].style.cssText = 'display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle;background:' + (up ? 'var(--green)' : 'var(--dim)');
+    if (els[i].title !== tip) els[i].title = tip;
+  }
+}
+setInterval(wpPaintMgbDots, 1000);
 function renderRaidTab(q) {
   var root = document.getElementById('raid');
   if (!root) return;
@@ -29682,7 +30399,8 @@ function renderRaidTab(q) {
         h += '<div class="wp-raid-row" data-raider="' + esc(m.name) + '" style="position:relative;cursor:pointer;padding:3px 6px 4px;font-size:11px;border-left:3px solid ' + _raidTierColor(m.tier) + ';margin-bottom:2px;background:' + (selected ? 'rgba(88,166,255,0.12)' : 'rgba(8,5,16,0.35)') + ';border-radius:3px;overflow:hidden">'
           + '<div style="display:flex;align-items:baseline;gap:5px">'
           + '<span style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (_isRaidLeadRank(m.rank) ? '👑 ' : (_isGroupLeadRank(m.rank) ? '⭐ ' : '')) + esc(m.name)
-          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>' : '') + '</span>'
+          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>'
+              + (_mgbEndFor(q, m.name) != null ? '<span class="wp-mgb-dot" data-end="' + _mgbEndFor(q, m.name) + '"></span>' : '') : '') + '</span>'
           + (hp != null ? '<span class="num" style="margin-left:auto;font-size:10px;color:' + hpColor + '">' + hp + '%</span>' : '')
           + '</div>'
           + '<div style="display:flex;align-items:baseline;gap:5px;font-size:9px" class="dim">'
@@ -29840,6 +30558,7 @@ function renderRaidTab(q) {
   h += '</div>';
   h += '</div>';
   morphInto(root, h);
+  wpPaintMgbDots();
   var sel2 = document.getElementById('wpRaidCls');
   if (sel2) _bindOnce(sel2, 'change', function(){
     _raidTabCls = sel2.value || '';
@@ -30015,6 +30734,7 @@ function renderOptin(o) {
   // 🔁 Rebuild from my logs (the guild lead, 2026-10-21): its own placeholder, filled by renderRebuildCard, so the
   // progress it shows does not rewrite this whole tab every poll.
   wpRebuildSetFiles(o);
+  h += '<div id="wpParty" class="card wide"></div>';   // 🐺 Raid Mimic party: filled by renderPartyCard
   h += '<div id="wpRaidCode" class="card wide"></div>';   // 🎟 Join a raid with a code: filled by renderRaidCodeCard
   h += '<div id="wpRebuild" class="card wide"></div>';
   h += '<div id="wpPopCapture" class="card wide"></div>';   // 📥 Capture latest PoP flags, Seer and Maelin messages: filled by renderPopCaptureCard
@@ -30391,6 +31111,7 @@ async function refresh() {
                      ['diag', renderDiag],
                      ['netmeter', renderNetMeter],
                      ['rebuild', renderRebuildCard], ['raidcode', renderRaidCodeCard], ['popcapture', renderPopCaptureCard],
+                     ['party', renderPartyCard],
                      ['zealcard', renderZealCard],
                      ['recentfires', renderRecentFires], ['mutedtimers', renderMutedTimers], ['replaystatus', renderReplayStatus],
                      ['charmdiag', renderCharmDiag], ['petbuffdiag', renderPetBuffDiag], ['triggerjournal', renderTriggerJournal],
@@ -30619,10 +31340,11 @@ setTimeout(function () {
 // state and then threw on getElementById(undefined). Net effect: dashboard
 // blanked. Scoping to [data-tab] keeps the popover button out of the loop.
 document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.nav button[data-tab]').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   document.getElementById(b.dataset.tab).classList.add('active');
+  try { wpRailReveal(b); } catch (e) { void e; }
   if (b.dataset.tab === 'optin') refreshOptin();
   if (b.dataset.tab === 'raid') refreshRaidTab();
   if (b.dataset.tab === 'myparses') wpMpOpenTab();
@@ -30657,7 +31379,7 @@ document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListen
 })();
 // ⏪ Replay deep-link (#101) — a link like #replay&from=<iso>&to=<iso> (built
 // by wolfpack.quest/parses on the "Replay this fight locally" link) opens the
-// Fights tab (where the Replay card lives since 2026-10-17) with the form prefilled. It never auto-starts — the user
+// ⏪ Replay tab (it left Fights under Layout A - Triage) with the form prefilled. It never auto-starts — the user
 // still clicks Start. from/to arrive as ISO instants; we render them into the
 // datetime-local inputs as LOCAL wall-clock (the basis the agent parses EQ log
 // timestamps on this machine).
@@ -30689,8 +31411,8 @@ function _wpApplyReplayPrefill(attempt) {
     if (i > 0) { try { params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { void e; } }
   });
   window._wpReplayPrefill = { from: params.from || '', to: params.to || '' };
-  _wpOpenDetails['fights|replay'] = true;   // the card starts folded; a link that prefills it wants it open
-  var btn = document.querySelector('.nav button[data-tab="fights"]');
+  _wpOpenDetails['replay|form'] = true;   // a link that prefills the form wants it open
+  var btn = document.querySelector('.nav button[data-tab="replay"]');
   if (btn) btn.click();
   _wpApplyReplayPrefill(0);
 })();
@@ -31267,7 +31989,7 @@ async function dismissTopDamage(key) {
     });
   }
   var obs = new MutationObserver(function(){ applyHidden(); });
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -31436,7 +32158,7 @@ async function dismissTopDamage(key) {
     try { if (window.mimic) window.mimic.createPanelOverlay(pk); } catch (err) {}
   }, true);
   var obs = new MutationObserver(decorateButtons);
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -31476,7 +32198,7 @@ async function dismissTopDamage(key) {
       return matched;
     }
     var obs2 = new MutationObserver(applyOverlayTarget);
-    ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+    ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
       var el = document.getElementById(id);
       if (el) obs2.observe(el, { childList: true, subtree: true });
     });
@@ -31641,7 +32363,7 @@ async function dismissTopDamage(key) {
     }
   }
   var obs = new MutationObserver(decorate);
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -33782,7 +34504,7 @@ function wpTrigApplyForm(base, f) {
       + '    <button id="trigCancelBtn" type="button" style="display:none;background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Cancel edit</button>'
       + '    <button id="trigPreviewBtn" type="button" style="background:#21262d;color:var(--green);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Fire the overlay with the current form text (no save, no DB)">▶ Preview</button>'
       + '    <button id="trigTestBtn" type="button" style="background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Test pattern…</button>'
-      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or PQ Companion trigger file">⬇ Import GINA / EQLP / PQ Companion</button>'
+      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or JSON trigger pack file">⬇ Import GINA / EQLP / JSON pack</button>'
       + '    <span id="trigAddMsg" class="dim" style="font-size:11px"></span>'
       + '  </div>'
       + '  <div id="trigTestPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
@@ -33792,7 +34514,7 @@ function wpTrigApplyForm(base, f) {
       + '    <div id="trigTestResult" class="dim" style="font-size:11px;margin-top:6px"></div>'
       + '  </div>'
       + '  <div id="trigImportPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
-+ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or <b>PQ Companion</b> (its exported .json trigger pack). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
++ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or a <b>JSON trigger pack</b> (a .json export). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
       + '    <input id="trigImportFile" type="file" accept=".tgf,.gz,.gtp,.xml,.json,application/gzip,application/json,text/xml" style="display:block;margin-bottom:6px;font-size:11px;color:var(--text)">'
       + '    <textarea id="trigImportXml" placeholder="…or paste the .tgf JSON / SharedTriggers XML here" style="width:100%;height:120px;background:var(--wp-panel);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;margin-bottom:6px"></textarea>'
       + '    <button id="trigImportRun" type="button" style="background:var(--wp-accent);color:#fff;border:0;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px">Import pasted text</button>'
@@ -34502,7 +35224,7 @@ function wpTrigApplyForm(base, f) {
         summary += '<br><span class="dim" style="font-size:11px">' + j.sound_notes.length + ' trigger' + (j.sound_notes.length === 1 ? '' : 's') + ' played a sound that could not come along, so ' + (j.sound_notes.length === 1 ? 'it keeps' : 'they keep') + ' the spoken callout: '
           + j.sound_notes.slice(0, 4).map(function(n){ return esc(n.name) + (n.file ? ' (' + esc(n.file) + ')' : '') + ' &mdash; ' + esc(n.why); }).join('; ') + (j.sound_notes.length > 4 ? '; and ' + (j.sound_notes.length - 4) + ' more' : '') + '. Drop the file in your sounds folder and pick it in the trigger.</span>';
       }
-      // PQ Companion packs: what a personal trigger has no place for.
+      // JSON trigger packs: what a personal trigger has no place for.
       if (Array.isArray(j.not_carried) && j.not_carried.length > 0) {
         summary += '<br><span class="dim" style="font-size:11px">Not carried over: '
           + j.not_carried.slice(0, 6).map(function(n){ return esc(n.name) + ' (' + n.what.map(esc).join('; ') + ')'; }).join('; ')
@@ -34616,8 +35338,8 @@ function wpTrigApplyForm(base, f) {
     // Clear-overlay buttons get re-rendered by renderTriggers every 2s poll,
     // so direct addEventListener would die on the first refresh. Use event
     // delegation on the section root — it survives every inner morph and
-    // routes clicks by element id. The same handler is bound to #fights too: the ⏪ Replay
-    // card (Start / Stop / journal link) lives there since 2026-10-17.
+    // routes clicks by element id. The same handler is bound to #replay too: the ⏪ Replay
+    // card (Start / Stop / journal link) has its own tab since Layout A (Triage); #fights stays bound for old links.
     var onSectionClick = function(e){
         var t = e.target;
         if (!t) return;
@@ -34672,7 +35394,7 @@ function wpTrigApplyForm(base, f) {
           if (j) j.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
-    [section, document.getElementById('fights')].forEach(function(host){
+    [section, document.getElementById('fights'), document.getElementById('replay')].forEach(function(host){
       if (host && !host._wpTrigClickBound) { host.addEventListener('click', onSectionClick); host._wpTrigClickBound = true; }
     });
     // Delegated change handler (survives the 2s section morph) for the loot
@@ -36043,15 +36765,23 @@ const COMMAND_HTML = `<!doctype html>
   /* 🎟 Guests (officers only): one row per guest Mimic link, with +1h / +3h. Same right gutter as the rolls card. */
   .card.guests-card{padding-right:28px}
   .guest-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6edf3}
-  .guest-row .gwhen{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
+  .guest-row .gwhen,.mgb-clock{flex-shrink:0;font-size:10px;color:#9aa4ad;font-variant-numeric:tabular-nums}
   .guest-row .gwhen.soon{color:#f0a52d}
   .guest-row .gwhen.out{color:#f87171}
-  .guest-row .gn{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
+  .guest-row .gn,.mgb-spell,.mgb-basis{flex-shrink:0;font-size:9px;color:#8b949e;font-variant-numeric:tabular-nums}
   .guest-row .guestExt{cursor:pointer;flex-shrink:0;color:#e6edf3;font-size:9px;border:1px solid rgba(110,118,129,0.5);
     border-radius:3px;padding:0 4px;opacity:0.85;user-select:none}
   .guest-row .guestExt:hover{opacity:1;color:#f0c419;border-color:#f0c419}
-  .guest-row .gflash{flex-shrink:0;font-size:9px;color:#56d364}
+  .guest-row .gflash,.mgb-clock.ready{flex-shrink:0;font-size:9px;color:#56d364}
   .guest-row .gflash.bad{color:#f87171}
+  /* MGB board: holders by class, a ready/down clock per row (painted each second, never in the HTML). */
+  .mgb-last{font-size:11px;margin:1px 0 3px}
+  .mgb-last .mgb-basis{margin-right:3px;font-size:11px}
+  .mgb-clock.ready{font-size:11px}
+  .mgb-cls{font-size:11px;margin-top:3px}
+  .mgb-row,.mgb-own{font-size:11px}
+  .mgb-clock{flex-shrink:0;font-size:11px}
+  .mgb-row .mgb-spell{flex-shrink:0;font-size:11px;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roll-row .rollMore{cursor:pointer;color:#8b949e;font-size:9px;flex-shrink:0;opacity:0.8;user-select:none}
   .roll-row .rollMore:hover{opacity:1;color:#e6edf3}
   .roll-row .rollCopy{cursor:pointer;color:#8b949e;font-size:10px;flex-shrink:0;opacity:0.8;user-select:none;margin-right:4px}
@@ -36063,7 +36793,7 @@ const COMMAND_HTML = `<!doctype html>
     border-left:1px solid rgba(110,118,129,0.35);padding-left:6px}
   .roll-detail .d{display:flex;gap:6px;font-size:9px;color:#9aa4ad;line-height:1.5}
   .roll-detail .d .v{color:#e6edf3;font-variant-numeric:tabular-nums;margin-left:auto}
-  .roll-detail .d.win .v{color:#f0c419;font-weight:700}
+  .roll-detail .d.win .v,.mgb-cls{color:#f0c419;font-weight:700}
   .roll-detail .d.lose .v{color:#f85149;font-weight:700}
   .roll-detail .d .rng{opacity:.6;flex-shrink:0;font-variant-numeric:tabular-nums}
   /* A tie at the top of a set (the guild lead, 2026-10-14). Orange, bordered and spelled TIE so it reads
@@ -36140,7 +36870,8 @@ const COMMAND_HTML = `<!doctype html>
   .hail-clock{margin-left:auto;text-transform:none;letter-spacing:0;font-size:10px;font-weight:700;
     color:#d29922;font-variant-numeric:tabular-nums}
   .hail-clock.soon{color:#ffa657}
-  .hail-clock.crit{color:#f85149}
+  .hail-clock.crit,.hail-rule.fail,.hail-rule.fail b{color:#f85149}
+  .hail-rule.fail{font-weight:700}
   /* The NPC's flag cap (the guild lead, 2026-10-07): "Flags: 23 / 72 used", amber and bold when the flags left
      do not cover the raiders still to hail. Drawn only when the bot sends a cap. */
   .hail-cap{font-size:9px;margin:3px 0 2px;color:#c9d1d9}
@@ -36151,7 +36882,7 @@ const COMMAND_HTML = `<!doctype html>
   .hail-sub b{font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums}
   .hail-sub.todo{color:#e6edf3;font-weight:700}
   .hail-sub.done{color:#7ee787;font-weight:700}
-  .hail-sub.done b{color:#7ee787}
+  .hail-sub.done b,.hail-rule b{color:#7ee787}
   .hail-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:10px;line-height:1.5}
   .hail-chip{padding:0 5px;border-radius:3px;border:1px solid transparent;white-space:nowrap;color:#e6edf3;
     background:rgba(255,255,255,0.06)}
@@ -36170,6 +36901,28 @@ const COMMAND_HTML = `<!doctype html>
   .hail-dim{font-size:9px;color:#7d8590;margin-top:4px}
   .hail-foot{font-size:8px;color:#6e7681;margin-top:3px;padding-top:2px;
     border-top:1px solid rgba(110,118,129,0.25)}
+  /* 🚩 Zone flags: who in the raid lacks the flag for the zone you stand in (the guild lead, 2026-11-19). Only people
+     confirmed without it are named; no record is a muted count, never a claim. 11px, nothing smaller. */
+  .flag-card .fl-line{font-size:11px;color:rgb(201 209 217);margin:2px 0}
+  .flag-card .fl-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .flag-card .fl-line.pass,.flag-card .fl-line.pass b{color:rgb(126 231 135)}
+  .flag-card .fl-line.fail,.flag-card .fl-line.fail b{color:rgb(248 113 113)}
+  .flag-card .fl-line.depends,.flag-card .fl-line.depends b{color:rgb(255 166 87)}
+  .flag-card .fl-chips{display:flex;flex-wrap:wrap;gap:3px;font-size:11px;line-height:1.5}
+  .flag-card .fl-chip{padding:0 5px;border-radius:3px;background:rgba(248,81,73,0.22);color:rgb(230 237 243);white-space:nowrap}
+  .flag-card .fl-dim{font-size:11px;color:rgb(154 164 173);margin-top:3px}
+  /* Rathe Council (the guild lead, 2026-11-20): one slim row per councilman, by spawn id. 11px, nothing smaller. */
+  .cn-card .cn-row{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.7;color:rgb(201 209 217);font-variant-numeric:tabular-nums}
+  .cn-card .cn-id{width:44px;color:rgb(154 164 173)}
+  .cn-card .cn-bar{flex:1;min-width:40px;height:7px;border-radius:3px;background:rgba(110,118,129,0.3);overflow:hidden}
+  .cn-card .cn-bar i{display:block;height:100%;background:rgb(86 211 100)}
+  .cn-card .cn-row.low .cn-bar i{background:rgb(248 113 113)}
+  .cn-card .cn-hp{width:34px;text-align:right;color:rgb(230 237 243)}
+  .cn-card .cn-t{min-width:62px;color:rgb(255 166 87)}
+  .cn-card .cn-row.dead{color:rgb(154 164 173)}
+  .cn-card .cn-line{font-size:11px;margin:2px 0;color:rgb(201 209 217)}
+  .cn-card .cn-line b{color:rgb(230 237 243);font-variant-numeric:tabular-nums}
+  .cn-card .cn-line.bad{color:rgb(248 113 113);font-weight:700}
   /* drag/lock/setup chrome — shared pattern. */
   #drag-controls{display:none;position:fixed;top:4px;left:4px;gap:4px;z-index:60}
   body.unlocked #drag-controls{display:flex}
@@ -36557,6 +37310,15 @@ const COMMAND_HTML = `<!doctype html>
          + (tight ? '<div class="hail-cap warn">' + (left === 0 ? '⚠ No flags left, ' : '⚠ Only ' + left + ' flag' + (left === 1 ? '' : 's') + ' left, ')
          + stillCount + ' still to hail</div>' : '');
   }
+  // Flagged vs not flagged (the guild lead, 2026-11-16) for the elemental planes and Time: the server lets a
+  // raid in with unflagged members while flagged x 100 >= raid size x 85, counting the whole raid. The agent
+  // does the sums (planarFlagRule) and sends w.rule; nothing is drawn when it is absent.
+  function hailRuleHtml(r){
+    if (!r || !(r.size > 0)) return '';
+    return '<div class="hail-cap hail-rule" title="Who has the flag from this kill: hailed now or already flagged, out of the raid at the kill. A hail we did not see shows as not flagged.">'
+         + 'Flagged <b>' + r.flagged + ' / ' + r.size + ' (' + r.pct_flagged + '%)</b> &middot; Not flagged <b>' + r.not_flagged
+         + ' (' + r.pct_not + '%)</b></div>';
+  }
   function hailMoreHtml(key, total, cap, open){
     if (total <= cap) return '';
     return '<span class="hail-more" data-wp-interact data-hail-more="' + esc(key) + '" title="'
@@ -36582,7 +37344,7 @@ const COMMAND_HTML = `<!doctype html>
          +   '<span class="hail-clock" data-end="' + esc(end) + '"></span>'
          + '</div>';
       if (!col) {
-        h += hailCapHtml(w, still.length);
+        h += hailCapHtml(w, still.length) + hailRuleHtml(w.rule);
         if (still.length) {
           var stillOpen = _hailMore.has(wid + '|still');
           var sMax = stillOpen ? still.length : Math.min(still.length, HAIL_STILL_CAP);
@@ -36769,6 +37531,146 @@ const COMMAND_HTML = `<!doctype html>
     }, function(){ done('failed', true); });
   }
 
+  // MGB card (the guild lead's pick). s.mgb = { last, holders, own } from the agent, or null (no card). Holders are grouped by
+  // class in this order, then name; every time lives in a data- attribute and paintMgbClocks() writes the text once a second,
+  // so the HTML is byte-identical poll to poll. data-end 0 = ready now (the bot has no cast on record for that name).
+  var MGB_CLASS_ORDER = ['Cleric', 'Druid', 'Shaman', 'Enchanter', 'Necromancer', 'Magician', 'Paladin', 'Ranger', 'Beastlord'];
+  var MGB_BASIS = { own_log: ['✓', "Read from the caster's own log"], cast_stream: ['≈', 'Matched from the raid cast stream'], candidates: ['?', 'Could be any of the raiders named here'] };
+  function mgbClockState(endMs, nowMs){
+    var left = Math.ceil((endMs - nowMs) / 1000);
+    if (!(endMs > 0) || !(left > 0)) return { text: 'ready', ready: true };
+    return { text: 'down ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0'), ready: false };
+  }
+  function mgbAgoText(atMs, nowMs){
+    var s = Math.max(0, Math.floor((nowMs - atMs) / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' ago';
+  }
+  function mgbHtml(m){
+    if (!m || typeof m !== 'object') return '';
+    var holders = Array.isArray(m.holders) ? m.holders : [];
+    var own = m.own && m.own.ready_ms ? m.own : null;
+    var last = m.last && m.last.at_ms ? m.last : null;
+    if (!holders.length && !own && !last) return '';
+    var col = _isCollapsed('mgb');
+    var h = '<div class="card mgb-card"><div class="head">' + secToggle('mgb', 'MGB', holders.length) + '</div>';
+    if (col) return h + '</div>';
+    if (last) {
+      var bm = MGB_BASIS[last.basis] || ['', ''];
+      var who = last.caster || 'unknown';
+      var tip = bm[1] + (last.candidates && last.candidates.length ? ': ' + last.candidates.join(', ') : '');
+      h += '<div class="mgb-last" title="' + esc(tip) + '"><span class="mgb-basis">' + bm[0] + '</span>Last MGB: ' + esc(last.spell || 'unknown spell')
+         + ' by ' + esc(who) + ' <span class="mgb-ago" data-at="' + Math.round(last.at_ms) + '"></span>'
+         + (last.targets > 0 ? ' (' + last.targets + ' raiders)' : '') + '</div>';
+    }
+    if (own) {
+      h += '<div class="list"><div class="row mgb-own"><span class="nm">Your MGB</span><span class="mgb-clock" data-end="' + Math.round(own.ready_ms) + '"></span></div></div>';
+    }
+    var groups = {}, order = [];
+    for (var i = 0; i < holders.length; i++) {
+      var hd = holders[i];
+      if (!hd || !hd.name) continue;
+      var ck = hd.cls || 'Other';
+      if (!groups[ck]) { groups[ck] = []; order.push(ck); }
+      groups[ck].push(hd);
+    }
+    order.sort(function(a, b){
+      var ia = MGB_CLASS_ORDER.indexOf(a), ib = MGB_CLASS_ORDER.indexOf(b);
+      if (ia < 0) ia = a === 'Other' ? 1001 : 1000;
+      if (ib < 0) ib = b === 'Other' ? 1001 : 1000;
+      return ia !== ib ? ia - ib : (a < b ? -1 : (a > b ? 1 : 0));
+    });
+    for (var gi = 0; gi < order.length; gi++) {
+      var rows = groups[order[gi]].slice().sort(function(a, b){ var x = a.name.toLowerCase(), y = b.name.toLowerCase(); return x < y ? -1 : (x > y ? 1 : 0); });
+      h += '<div class="mgb-cls">' + esc(order[gi]) + '</div><div class="list">';
+      for (var ri = 0; ri < rows.length; ri++) {
+        var r = rows[ri];
+        h += '<div class="row mgb-row"><span class="nm">' + esc(r.name) + '</span>'
+           + '<span class="mgb-clock" data-end="' + (r.ready_ms ? Math.round(r.ready_ms) : 0) + '"></span>'
+           + (r.last_spell ? '<span class="mgb-spell" title="' + esc(r.last_spell) + '">' + esc(r.last_spell) + '</span>' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  function paintMgbClocks(){
+    var now = Date.now(), els = contentEl.querySelectorAll('.mgb-clock'), i;
+    for (i = 0; i < els.length; i++) {
+      var st = mgbClockState(Number(els[i].getAttribute('data-end')), now);
+      var cls = 'mgb-clock' + (st.ready ? ' ready' : '');
+      if (els[i].textContent !== st.text) els[i].textContent = st.text;
+      if (els[i].className !== cls) els[i].className = cls;
+    }
+    els = contentEl.querySelectorAll('.mgb-ago');
+    for (i = 0; i < els.length; i++) {
+      var t = mgbAgoText(Number(els[i].getAttribute('data-at')), now);
+      if (els[i].textContent !== t) els[i].textContent = t;
+    }
+  }
+
+  // The zone-flags card. The agent sends state.zone_flags (null outside a gated zone). Only counts and names from
+  // known records; "At least" whenever some have no record. Same input, same HTML.
+  function zoneFlagsHtml(z){
+    if (!z || !(z.size > 0)) return '';
+    var key = 'zoneflags', col = _isCollapsed(key), miss = z.missing || [], unk = z.unknown || 0;
+    var h = '<div class="card flag-card"><div class="head">' + secToggle(key, '🚩 ' + z.zone, miss.length ? 'not flagged ' + miss.length : 'all flagged') + '</div>';
+    if (col) return h + '</div>';
+    var d = z.door;
+    if (d) {
+      var lead = (unk ? 'At least <b>' : 'Flagged <b>') + z.flagged + ' of ' + z.size + '</b> (' + d.pct + '%)';
+      var tail = d.verdict === 'pass' ? 'raid can enter'
+        : d.verdict === 'fail' ? 'cannot enter until ' + (unk ? 'at least ' : '') + d.need + ' more ' + (d.need === 1 ? 'is' : 'are') + ' flagged'
+        : 'enters if ' + d.need + ' of the ' + unk + ' with no record ' + (d.need === 1 ? 'is' : 'are') + ' flagged';
+      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Planes of Air, Water, Fire, Earth and Time let a raid in while 85% of it holds the flag, counting everyone in the raid.">' + lead + ': ' + tail + '</div>';
+    }
+    if (miss.length) {
+      h += '<div class="fl-line">Not flagged for ' + esc(z.zone) + ': <b>' + miss.length + '</b></div><div class="fl-chips">';
+      for (var i = 0; i < miss.length && i < 12; i++) h += '<span class="fl-chip">' + esc(miss[i]) + '</span>';
+      if (miss.length > 12) h += '<span class="fl-dim">+' + (miss.length - 12) + ' more</span>';
+      h += '</div>';
+    } else if (!unk) {
+      h += '<div class="fl-line pass">Everyone has the ' + esc(z.zone) + ' flag</div>';
+    }
+    if (unk) h += '<div class="fl-dim" title="We have no flag record for these raiders, so we cannot say they are unflagged.">No flag record: ' + unk + '</div>';
+    return h + '</div>';
+  }
+
+  // The Rathe Council card. The agent sends state.council only in Plane of Earth B once a councilman is known. Times
+  // arrive as absolute ms and count down against nowMs; an unknown HP reads "?", never 0. Same input, same HTML.
+  function councilHtml(c, nowMs){
+    if (!c || !c.rows || !c.rows.length) return '';
+    function mm(ms){ var s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
+    function clock(ms){ var d = new Date(ms), p = function(n){ return (n < 10 ? '0' : '') + n; }; return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
+    var key = 'council', col = _isCollapsed(key);
+    var left = c.back_at && c.back_at > nowMs && c.down < 12 ? ' · 12th within ' + mm(c.back_at - nowMs) : '';
+    var h = '<div class="card cn-card"><div class="head">' + secToggle(key, '🏛 Rathe Council', c.down + '/12 down' + left) + '</div>';
+    if (col) return h + '</div>';
+    h += '<div class="cn-line"><b>' + c.down + '/12 down' + left + '</b></div>';
+    if (c.warn != null) h += '<div class="cn-line bad">Do not kill: only ' + c.warn + ' of 12 seen</div>';
+    if (c.low) h += '<div class="cn-line bad">#' + c.low.id + ' low ' + c.low.hp + '% - hold dps</div>';
+    for (var i = 0; i < c.rows.length; i++) {
+      var r = c.rows[i];
+      if (r.dead_at != null) {
+        if (r.back_at <= nowMs) continue;
+        h += '<div class="cn-row dead"><span class="cn-id">#' + r.id + '</span><span>dead ' + clock(r.dead_at) + '</span><span class="cn-t">back ' + mm(r.back_at - nowMs) + '</span></div>';
+        continue;
+      }
+      var low = c.low && c.low.id === r.id, hp = r.hp;
+      h += '<div class="cn-row' + (low ? ' low' : '') + '"><span class="cn-id">#' + r.id + '</span><span class="cn-bar"><i style="width:' + (hp == null ? 0 : hp) + '%"></i></span>'
+        + '<span class="cn-hp">' + (hp == null ? '?' : hp + '%') + '</span>'
+        + '<span class="cn-t">' + (r.root_end && r.root_end > nowMs ? 'root ' + mm(r.root_end - nowMs) : '') + '</span>'
+        + '<span class="cn-t">' + (r.slow_end && r.slow_end > nowMs ? 'slow ' + mm(r.slow_end - nowMs) : '') + '</span></div>';
+    }
+    return h + '</div>';
+  }
+  var _councilSaid = 0;
+  function councilSpeak(c){
+    var id = c && c.low ? c.low.id : 0;
+    if (id === _councilSaid) return;
+    _councilSaid = id;
+    if (!id) return;
+    try { if (window.speechSynthesis) { var u = new SpeechSynthesisUtterance('Council low, hold dps'); u.rate = 1.05; window.speechSynthesis.speak(u); } } catch (e) {}
+  }
+
   function render(s){
     if (!s || s.character == null) {
       contentEl.innerHTML = '<div id="empty">No focused character yet — launch EQ + Zeal and target a mob.</div>';
@@ -36840,6 +37742,9 @@ const COMMAND_HTML = `<!doctype html>
     } else if (_hailMore.size) {
       _hailMore.clear();
     }
+    html += zoneFlagsHtml(s.zone_flags);
+    html += councilHtml(s.council, Date.now());
+    councilSpeak(s.council);
 
     // Raid-wide DA/invuln broadcasts — every tank currently reporting status
     // via their own raid-chat macro (a member's ">> DA up << 18 secs" etc),
@@ -37127,6 +38032,9 @@ const COMMAND_HTML = `<!doctype html>
       html += '</div>';
     }
 
+    // MGB board: a throw in the card hides the card, never the Command Center.
+    if (s.mgb) { try { html += mgbHtml(s.mgb); } catch (e) { void e; } }
+
     // ── Last deaths (FB-84) ───────────────────────────────────────────────
     // One line per recent death from this machine's own log, next to the rez board it explains.
     // Local only: /api/command-center is this machine's agent; nothing here is uploaded.
@@ -37145,6 +38053,7 @@ const COMMAND_HTML = `<!doctype html>
   // The hail clocks tick on their own: each card carries its end (data-end, this machine's clock) and
   // the text is written here, once a second, so a clock never makes the card's HTML differ.
   function paintHailClocks(){
+    try { paintMgbClocks(); } catch (e) { void e; }
     var els = contentEl.querySelectorAll('.hail-clock'), now = Date.now();
     for (var i = 0; i < els.length; i++) {
       var st = hailClockState(Number(els[i].getAttribute('data-end')), now);
@@ -37372,6 +38281,8 @@ function startWebDashboard(port) {
       // files by /api/local/*. Read-only, never uploads.
       if (req.url && (req.url === '/local' || req.url.indexOf('/local/') === 0 || req.url.indexOf('/local?') === 0)) return _serveLocalSite(req, res);
       if (req.url && req.url.split('?')[0] === '/api/local/inventory') return _handleLocalInventory(req, res);
+      if (_localQuestScriptedRoute(req, res)) return;
+      if (req.url && req.url.split('?')[0] === '/api/local/pop-flags') return _handleLocalPopFlags(req, res);
       if (req.url && req.url.split('?')[0] === '/api/local/account-list') return _handleLocalAccountList(req, res);
       if (req.url === '/api/state') {
         // Serve every poller the SAME serialized snapshot for 400ms. The
@@ -37454,6 +38365,8 @@ function startWebDashboard(port) {
       if (await _localPopRescanRoute(req, res)) return;
       if (_localParsesRoute(req, res)) return;
       if (await _raidCodeRoute(req, res)) return;
+      // Raid Mimic party: GET/POST /api/party (create / join / leave, and the merged view). Local only.
+      if (await _partyRoute(req, res)) return;
       // Item icons cut from this PC's own EQ files (local-first slice 2). Never uploaded.
       if (_localIconRoute(req, res)) return;
       // Tank overlay snapshot (the guild lead, 2026-06-25). Aggregates everything the
@@ -37886,6 +38799,8 @@ function startWebDashboard(port) {
         // Tell the overlay which class AUTO resolved to so the picker can
         // read "Auto (Druid)" instead of a blank.
         payload.auto_class = autoClass;
+        // Ready/down dots on the Raid tab's MGB badge (null when no board and no local timer).
+        payload.mgb = _mgbSnapshot();
         // Section filters (dashboard "Buff queue options") ride every payload
         // so a checkbox change reaches the overlay on its next 1.5s poll.
         payload.sections = {
@@ -38489,7 +39404,7 @@ function startWebDashboard(port) {
       // ⚠ GONE (2026-08-27): the local /api/loot/dkp route used to call
       // api.opendkp.com DIRECTLY from this machine, once a minute per running
       // agent, to fetch the whole 472-character standings array and render one
-      // number. Moncs saw ~54 calls/hour from a single member's home ip.
+      // number. The upstream maintainer saw ~54 calls/hour from a single member's home ip.
       //
       // The guild lead: "agents shouldnt be reaching out to opendkp like this."
       // The bot now owns that call — one fetch for the whole guild, counted,
@@ -39526,7 +40441,7 @@ function startWebDashboard(port) {
 
       // POST /api/personal-triggers/import — accepts a GINA / EQLogParser
       // XML blob (both export the same SharedTriggers shape), an EQLogParser
-      // .tgf tree or a PQ Companion JSON pack (_parseTriggerImport) and APPENDS
+      // .tgf tree or a third-party trigger pack (JSON) (_parseTriggerImport) and APPENDS
       // parsed entries to the personal triggers list. Existing personal
       // triggers are preserved; duplicates by name are skipped (caller can
       // delete + re-import to overwrite). Returns { imported, skipped,
@@ -39612,14 +40527,14 @@ function startWebDashboard(port) {
         }
         const parsed = _parseTriggerImport(raw);
         if (!parsed.length) {
-          res.writeHead(400); return res.end(JSON.stringify({ error: 'no triggers found in that file (GINA, EQLogParser and PQ Companion exports are supported)' }));
+          res.writeHead(400); return res.end(JSON.stringify({ error: 'no triggers found in that file (GINA, EQLogParser and JSON trigger pack exports are supported)' }));
         }
         const existingNames = new Set(_personalTriggers.map(t => String(t.name || '').toLowerCase()));
         const compiled = [];
         const errors = [];
         let imported = 0, skipped = 0, soundsCopied = 0;
         const soundNotes = [];   // triggers whose sound file could not come along
-        const notCarried = [];   // pieces of a trigger a personal trigger has no place for (PQ Companion packs)
+        const notCarried = [];   // pieces of a trigger a personal trigger has no place for (JSON trigger packs)
         const noteNotCarried = (t) => {
           if (Array.isArray(t.not_carried) && t.not_carried.length) {
             notCarried.push({ name: String(t.name || '').slice(0, 100), what: t.not_carried.slice(0, 8).map(s => String(s).slice(0, 120)) });
@@ -39671,7 +40586,7 @@ function startWebDashboard(port) {
             actions,
           };
           if (t.timer_duration_sec > 0) row.timer_duration_sec = Math.max(1, Math.min(3600, t.timer_duration_sec));
-          // PQ Companion pack fields the parser already cleaned (timer warnings, excludes, capture-timed
+          // JSON trigger pack fields the parser already cleaned (timer warnings, excludes, capture-timed
           // timers, bar colour, loop); other formats never set them.
           for (const k of _PQC_ROW_FIELDS) if (t[k] !== undefined) row[k] = t[k];
           if (t.enabled === false) row.enabled = false;
@@ -39689,7 +40604,7 @@ function startWebDashboard(port) {
             existingNames.add(row.name.toLowerCase());
             imported++;
           } catch (err) {
-            // Import DISABLED rather than drop (pq-companion's contract, and
+            // Import DISABLED rather than drop (the pack format's contract, and
             // the right one): a silently-missing trigger is the worse failure
             // mode. The row sits in the list flagged for manual editing.
             compiled.push({ ...row, enabled: false, import_error: String(err.message || err).slice(0, 200),
@@ -41290,7 +42205,7 @@ function _quarmyLocalItems(character) {
   const c = _quarmyLocal.get(cl);
   if (c && now - c.checkedAt < 30_000) return c.items ? c : null;
   const firstLog = stats.watchedLogs && stats.watchedLogs[0] && stats.watchedLogs[0].logPath;
-  const entry = { checkedAt: now, fp: c ? c.fp : null, at: c ? c.at : 0, items: c ? c.items : null };
+  const entry = { checkedAt: now, fp: c ? c.fp : null, at: c ? c.at : 0, items: c ? c.items : null, aas: c ? c.aas : null, classId: c ? c.classId : null };
   _quarmyLocal.set(cl, entry);
   if (!firstLog) return entry.items ? entry : null;
   try {
@@ -41303,6 +42218,8 @@ function _quarmyLocalItems(character) {
     if (fp !== entry.fp) {
       const q = parseQuarmyExport(fs.readFileSync(full, 'utf8'));
       entry.items = [...q.equipped, ...q.bags].map(i => ({ name: i.item_name, id: i.item_id, count: i.count, loc: i.slot }));
+      entry.aas = q.aas.length ? q.aas : null;   // the duration chain's Reinforcement AAs (an export with no AA section = unread, not rank 0)
+      entry.classId = q.profile ? q.profile.class_id : null;
       entry.fp = fp;
       entry.at = st.mtimeMs;
     }
@@ -41601,8 +42518,9 @@ function _readPopFlagsExport(fullPath) {
   return { parsed, blocked: !!parsed && _pfFileBlocked(parsed.character.toLowerCase()) };
 }
 /** The newest export of one character in one folder (by file time; host-tagged copies compete), read: { path, parsed },
- *  or null for none / unreadable / not an export / kept out of stats. */
-function _latestPopFlagsExport(dir, characterLower) {
+ *  or null for none / unreadable / not an export / kept out of stats. `forThisPc` (the local PoP flags page, the guild
+ *  lead, 2026-11-16) skips the kept-out check: flags are not stats, and that page never leaves this machine. */
+function _latestPopFlagsExport(dir, characterLower, forThisPc) {
   let entries;
   try { entries = fs.readdirSync(dir); } catch { return null; }
   let best = null;
@@ -41618,7 +42536,7 @@ function _latestPopFlagsExport(dir, characterLower) {
   if (!best) return null;
   try {
     const x = _readPopFlagsExport(best.full);
-    return x.parsed && !x.blocked ? { path: best.full, parsed: x.parsed } : null;
+    return x.parsed && (forThisPc || !x.blocked) ? { path: best.full, parsed: x.parsed } : null;
   } catch { return null; }
 }
 function scanPopFlagsFiles(opts) {   // opts: see scanQuarmyExports
@@ -41858,6 +42776,77 @@ async function _handleLocalInventory(req, res) {
     body = JSON.stringify(snap);
   }
   catch (e) { console.error('[api/local/inventory] failed:', e && (e.stack || e.message || e)); res.writeHead(500, { 'Content-Type': 'application/json' }); return res.end('{"error":"could not read the inventory files"}'); }
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  return res.end(body);
+}
+// ── The PoP flags page on this PC (the guild lead, 2026-11-16: "We should have Popflags in the local mimic as well") ──
+// Per character this PC knows: the newest Zeal <Name>-PoPFlags.txt in any of the EQ folders, merged with the rows the
+// log reader kept in the local store (kind pop_flags: #popflags replies and the Seer's recital). Same flag key from two
+// places keeps the EARLIEST time. The page (web/local/app/flags) expands step keys into catalog flags itself. A
+// character with no rows is left out; a missing folder is an empty answer. Flags are not stats, so exclude_from_stats
+// does not hide a character here (the page never leaves this machine).
+function _localPopFlagsSnapshot(dirs, storeRows) {
+  const byChar = new Map();   // lower-cased name -> { name, rows: Map(flag_key -> row), export_at, exportMs }
+  const slot = (name) => {
+    const k = String(name).toLowerCase();
+    let c = byChar.get(k);
+    if (!c) { c = { name: String(name), rows: new Map(), export_at: null, exportMs: 0 }; byChar.set(k, c); }
+    return c;
+  };
+  const keep = (c, r) => {
+    const have = c.rows.get(r.flag_key);
+    if (!have || r.earned_at < have.earned_at) c.rows.set(r.flag_key, { flag_key: r.flag_key, earned_at: r.earned_at, source: r.source });
+  };
+  for (const r of Array.isArray(storeRows) ? storeRows : []) {
+    if (!r || typeof r.character !== 'string' || typeof r.flag_key !== 'string' || typeof r.earned_at !== 'string') continue;
+    keep(slot(r.character), { flag_key: r.flag_key, earned_at: r.earned_at, source: r.source === 'recital' ? 'recital' : 'popflags' });
+  }
+  const best = new Map();   // lower-cased name -> the newest parsed export over every folder
+  for (const dir of dirs) {
+    let entries;
+    try { entries = fs.readdirSync(dir); } catch { continue; }
+    const names = new Set();
+    for (const name of entries) { const m = name.match(POPFLAGS_FILENAME_RX); if (m) names.add(m[1].toLowerCase()); }
+    for (const cl of names) {
+      const x = _latestPopFlagsExport(dir, cl, true);
+      if (!x || x.parsed.character.toLowerCase() !== cl) continue;   // a renamed copy of another character's file is not this one's
+      const cur = best.get(cl);
+      if (!cur || x.parsed.atMs > cur.atMs) best.set(cl, x.parsed);
+    }
+  }
+  for (const [cl, parsed] of best) {
+    // popFlagsOutputEvents keeps a 6 h "already sent" memory per character for the upload path; this read must neither
+    // be starved by it nor spend it, so the character's entry is set aside while the file is read.
+    const saved = _pfState.get(cl);
+    _pfState.delete(cl);
+    let events;
+    try { events = popFlagsFileEvents(parsed, parsed.character).events; }
+    finally { if (saved) _pfState.set(cl, saved); else _pfState.delete(cl); }
+    const c = slot(parsed.character);
+    c.export_at = new Date(parsed.atMs).toISOString();
+    for (const r of _localPopFlagRows(events)) keep(c, r);
+  }
+  const characters = [];
+  for (const c of byChar.values()) {
+    if (!c.rows.size) continue;
+    const rows = [...c.rows.values()].sort((a, b) => (a.earned_at < b.earned_at ? -1 : a.earned_at > b.earned_at ? 1 : a.flag_key.localeCompare(b.flag_key)));
+    characters.push({ name: c.name, rows, export_at: c.export_at });
+  }
+  characters.sort((a, b) => a.name.localeCompare(b.name));
+  return { ok: true, generated_at: new Date().toISOString(), characters };
+}
+async function _handleLocalPopFlags(req, res) {
+  if (req.method !== 'GET') { res.writeHead(405, { 'Content-Type': 'application/json', 'Allow': 'GET' }); return res.end('{"error":"method not allowed"}'); }
+  let body;
+  try {
+    let stored = [];
+    try { stored = _localStore.scan('pop_flags').map(e => e.rec); } catch { stored = []; }
+    body = JSON.stringify(_localPopFlagsSnapshot(_localInventoryDirs(), stored));
+  } catch (e) {
+    console.error('[api/local/pop-flags] failed:', e && (e.stack || e.message || e));
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    return res.end('{"error":"could not read the PoP flags"}');
+  }
   res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   return res.end(body);
 }
@@ -47065,6 +48054,9 @@ function parseCursorFull(line, character) {
 // we record the COUNT (reagent_qty=0) and the display layer multiplies count ×
 // that paladin's max HP (from /who or char data) to get the heal total. When the
 // line DOES carry a heal number we record it directly.
+// ⚠ 2026-11: the two regexes below have never matched a live line (fun_events holds no harm_touch / lay_on_hands
+// rows). The working path is EncounterBuilder._noteAbilityLand, which pairs the verified landing text from
+// eqemu_spells with the damage line and pushes these same fun-event types. Left in place, not deleted.
 const HARM_TOUCH_RX = /\b(?:you|your)\s+harm[\s-]?touch(?:es|ed)?\b[^\d]*?(\d+)\s+points?\s+of\s+damage/i;
 const LAY_ON_HANDS_RX = /\byou\s+lay\s+(?:your\s+)?hands?\s+on\b/i;
 // Optional heal amount on the LoH line / its companion heal message.
@@ -47498,10 +48490,11 @@ function _loadItemClickiesFromDisk() {
       if (e && e.name) _itemClickyByNameLower.set(String(e.name).toLowerCase(), e);
     }
     // A file written before `worn_ds` was kept: forget its etag, so the next fetch is a full 200.
-    const etag = (Array.isArray(raw.worn_ds) && 'worn_haste' in raw) ? (raw.etag || null) : null;
+    const etag = (Array.isArray(raw.worn_ds) && 'worn_haste' in raw && 'duration_foci' in raw) ? (raw.etag || null) : null;   // (+ duration_foci, 2026-11-15)
     _itemClickyMeta = { fetchedAt: raw.fetched_at, etag, count: raw.entries.length };
     _setWornDsCatalog(raw.worn_ds);
     _setWornHasteCatalog(raw.worn_haste);
+    _setDurationFociCatalog(raw.duration_foci);
     console.log(`[item-clickies] loaded ${raw.entries.length} clicky items from disk (cached ${raw.fetched_at || '?'})`);
   } catch (err) {
     console.warn('[item-clickies] disk load failed:', err && err.message);
@@ -47548,8 +48541,9 @@ function fetchItemClickies({ botUrl, token }) {
             _itemClickyMeta = { fetchedAt: data.fetched_at, etag: etag || null, count: data.entries.length };
             _setWornDsCatalog(data.worn_ds);
             _setWornHasteCatalog(data.worn_haste);
+            _setDurationFociCatalog(data.duration_foci);
             try {
-              const out = { fetched_at: data.fetched_at, etag: etag || null, entries: data.entries, worn_ds: data.worn_ds || [], worn_haste: data.worn_haste === undefined ? null : data.worn_haste };
+              const out = { fetched_at: data.fetched_at, etag: etag || null, entries: data.entries, worn_ds: data.worn_ds || [], worn_haste: data.worn_haste === undefined ? null : data.worn_haste, duration_foci: data.duration_foci === undefined ? null : data.duration_foci };
               fs.writeFileSync(ITEM_CLICKY_FILE + '.tmp', JSON.stringify(out));
               fs.renameSync(ITEM_CLICKY_FILE + '.tmp', ITEM_CLICKY_FILE);
             } catch (e) { /* disk cache best-effort */ }
@@ -47643,6 +48637,84 @@ function fetchItemCatalog({ botUrl, token }) {
       req.end();
     } catch (err) { console.warn('[item-catalog] setup error:', err && err.message); resolve(); }
   });
+}
+
+// ── Quest-scripted spawns and loot (2026-11-19) ──────────────────────────────────────────────────────────────────
+// What the server's quest scripts spawn and drop that the eqemu_* mirror cannot show (bot data/quest-scripted.json).
+// Same pattern as the item catalog: the installer bundles logsync.quest-scripted.json next to the agent (seeded by
+// Mimic), boot reads it, a daily ETag refresh from the bot's PUBLIC catalog route (no sign-in) replaces it, and a
+// failed or missing copy leaves the last good one in place. Local pages read it at GET /api/local/quest-scripted.
+const QUEST_SCRIPTED_FILE = path.join(__dirname, 'logsync.quest-scripted.json');
+let _questScripted = null;      // { fetched_at, etag, entries, ...the dataset's other sections }
+let _questScriptedBody = '';    // serialized once, served as is
+
+function _questScriptedSet(raw) {
+  _questScripted = raw;
+  _questScriptedBody = JSON.stringify(raw);
+}
+
+function loadQuestScriptedFromDisk(file) {
+  try {
+    const f = file || QUEST_SCRIPTED_FILE;
+    if (!fs.existsSync(f)) return false;
+    const raw = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (!raw || !Array.isArray(raw.entries)) return false;
+    _questScriptedSet(raw);
+    console.log(`[quest-scripted] loaded ${raw.entries.length} scripted spawns from disk (cached ${raw.fetched_at || '?'})`);
+    return true;
+  } catch (err) {
+    console.warn('[quest-scripted] disk load failed:', err && err.message);
+    return false;
+  }
+}
+
+function fetchQuestScripted({ botUrl, file }) {
+  const url = botUrl && botUrl.replace(/\/api\/agent\/[^/?]*(\?.*)?$/, '/api/public/catalog/quest-scripted');
+  if (!url || url === botUrl) return Promise.resolve();
+  const target = file || QUEST_SCRIPTED_FILE;
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const mod = u.protocol === 'https:' ? https : http;
+      const headers = { 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` };
+      if (_questScripted && _questScripted.etag) headers['If-None-Match'] = _questScripted.etag;
+      const req = mod.request({
+        method: 'GET', hostname: u.hostname, port: u.port,
+        path: u.pathname + u.search, headers, timeout: 60000,
+      }, (res) => {
+        if (res.statusCode !== 200) { res.resume(); return resolve(); }   // 304 = unchanged; anything else keeps the copy
+        const etag = (res.headers && res.headers.etag) || null;
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            if (!Array.isArray(data.entries) || !data.entries.length) return resolve();
+            data.etag = etag;
+            _questScriptedSet(data);
+            try {
+              fs.writeFileSync(target + '.tmp', _questScriptedBody);
+              fs.renameSync(target + '.tmp', target);
+            } catch (e) { void e; /* disk cache best-effort */ }
+            console.log(`[quest-scripted] fetched ${data.entries.length} scripted spawns from bot`);
+          } catch (err) { console.warn('[quest-scripted] parse failed:', err && err.message); }
+          resolve();
+        });
+      });
+      req.on('error',   () => resolve());
+      req.on('timeout', () => { req.destroy(); resolve(); });
+      req.end();
+    } catch (err) { console.warn('[quest-scripted] setup error:', err && err.message); resolve(); }
+  });
+}
+
+// GET /api/local/quest-scripted -> the dataset, or { loaded:false, entries:[] } when this install has no copy.
+// Read-only; the dashboard server's one guard (_localGuardBlock) has already run.
+function _localQuestScriptedRoute(req, res) {
+  if (!req || req.method !== 'GET' || !req.url || req.url.split('?')[0] !== '/api/local/quest-scripted') return false;
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(_questScripted ? _questScriptedBody : '{"loaded":false,"entries":[]}');
+  return true;
 }
 
 // Local item search for the wishlist picker. No network, no database.
@@ -48865,7 +49937,7 @@ function _escapeForLiteralMatch(s) {
 // ── Trigger pattern compiler (GINA / EQLogParser / native) ──────────────────
 // One pipeline for every pattern, no matter which door it came through —
 // import, guild poll, personal load, or the dashboard test box. Built from the
-// pq-companion comparison (scratchpad analysis 01), which ran 1,189 real
+// an earlier comparison, which ran 1,189 real
 // GINA/EQLP fixture triggers through the OLD translators: 92 threw at compile,
 // 311 ^-anchored patterns could never fire, and 82 bound their action tokens
 // to the wrong capture. With this pipeline the same corpus compiles 583/583.
@@ -48918,7 +49990,7 @@ function _rewriteAnchorsForRawLine(pattern) {
 }
 
 // .NET / RE2 dialect → JavaScript. GINA and EQLogParser write .NET regex; a
-// pq-companion pack writes Go/RE2. JS has lookbehind and backrefs (RE2's gap —
+// third-party trigger pack writes Go/RE2. JS has lookbehind and backrefs (RE2's gap —
 // our advantage) but NOT scoped inline flags, which .NET packs use heavily.
 // Rewrites: (?P<n>…)→(?<n>…) · (?#comment) removed · (?i:…)→(?:…)+flag ·
 // (?i) hoisted · (?>…)→(?:…) · duplicate (?<x>…) renamed x_2 with an alias so
@@ -49317,6 +50389,11 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
   // more natural raid action than two people tagging simultaneously.
   const first = text[0];
   let mode = 'set';
+  // `@` is `+` plus exclusivity (a member, in the guild's raid channel, 2026-11-17): "+ does 'Add this TAG to my current
+  // target, but don't remove any of its existing tags' ... @ does 'Add this TAG to my current target, but don't remove any
+  // of its existing tags. Also remove specifically this TAG from other targets in the zone'". The main assist's kill macro
+  // is `/tag rsgs @^r^KILL`, so KILL moves with each new target and `/tag target KILL` finds it.
+  const exclusive = first === '@';
   if (first === '+' || first === '@') { mode = 'append'; text = text.slice(1); }
   else if (first === '!') { mode = 'replace'; text = text.slice(1); }
   else if (first === '-') {
@@ -49330,7 +50407,13 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
     shape = _ZEAL_TAG_SHAPES[sm[1].toLowerCase()] || null;            // '^-^' → null = shape cleared
     text = text.slice(sm[0].length);
   }
-  text = text.replace(/\s+/g, ' ').trim().slice(0, 48);
+  text = text.replace(/\^.\^/g, '').replace(/\s+/g, ' ').trim().slice(0, 48);   // a colour code mid-text is not text either
+  // Exclusive: the same tag comes off every OTHER spawn here. Its entry stays, text blanked, as the game leaves the old
+  // target its arrow but no text.
+  if (exclusive && text) {
+    const want = text.toLowerCase();
+    for (const [sid, t] of _zealTags) if (sid !== spawnId && t && String(t.text || '').toLowerCase() === want) t.text = '';
+  }
   const prev = _zealTags.get(spawnId);
   _zealTags.set(spawnId, {
     spawn_id: spawnId, mob: name.toLowerCase(), mobDisplay: name,
@@ -49374,15 +50457,19 @@ function _applyZealTagMessage(msg, tagger, tsMs) {
 // with only chat+rsay and the first live test (two `a Darkpaw warrior`s tagged
 // Bardy and Cano, NOT in a raid) captured nothing at all. So: find the header,
 // take the payload from there to end-of-line, and read the speaker off whatever
-// prefix precedes it. The `ZEALTAG | ` header is machine-generated and can't
-// collide with human chat, which is what makes the loose match safe.
+// prefix precedes it.
+// The header alone is not a tag: this hook runs on the raw line, before the
+// channel filters, so the prefix must be one of Zeal's transports (raid, group,
+// or a numbered/ZT tag channel). Text on any other channel is chat, not a tag.
+const _TAG_TRANSPORT_RX = /(?:^|\s)(?:tells? the raid|tells? the group|tell your (?:raid|party)|(?:tells?|say to) zt[^\s,]*:\d+),\s*['"]?\s*$|^\[(?:R|P|\d+)\]\s+\[[A-Za-z]+\]:\s*$/i;
 function _tagLineParts(line, selfCharacter) {
   let idx = line.indexOf('ZEALTAG | ');
   if (idx === -1) idx = line.indexOf('ZT | ');
   if (idx === -1) return null;
   // Quoted shape closes with the quote; abbreviated shape just ends.
-  const payload = line.slice(idx).replace(/\s*['"]\s*$/, '').trim();
+  const payload = line.slice(idx).replace(/\s*['"]\s*$/, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200).trim();
   let prefix = line.slice(0, idx).replace(/^\[[^\]]*\]\s*/, '');   // drop the EQ timestamp
+  if (!_TAG_TRANSPORT_RX.test(prefix)) return null;
   let tagger = null;
   // Abbreviated form ends `…[Sender]: ` — Zeal already substitutes the real
   // name for "You" there (abbreviateChat), so trust it as-is.
@@ -51240,8 +52327,8 @@ function _parseTriggerXml(xml) {
     const enableRegex = get('EnableRegex').toLowerCase() === 'true';
     const displayText = get('DisplayText');
     const ttsText     = get('TextToVoiceText');
-    // GINA timer semantics — corrected 2026-08-07 (pq-companion analysis 01
-    // §3.9): TimerDuration is the COUNTDOWN length, and we used to import it
+    // GINA timer semantics — corrected 2026-08-07 (found in an earlier
+    // comparison): TimerDuration is the COUNTDOWN length, and we used to import it
     // as cooldown_seconds — a semantic inversion that turned a 450s raid
     // timer into a 450s MUTE on the trigger with no timer at all. GINA has no
     // lockout concept, so cooldown is always 0 here; the duration becomes a
@@ -51375,7 +52462,7 @@ function _parseTriggerTgfJson(text) {
   return out;
 }
 
-// PQ Companion's trigger pack (2026-10-20): plain JSON, {pack_name, description, triggers:[…]}, written by
+// A third-party trigger pack (2026-10-20): plain JSON, {pack_name, description, triggers:[…]}, written by
 // its Triggers page "Export" (a whole list or one category). Read from its published trigger model; the
 // code here is our own. A trigger is one record: `pattern` (Go regex, run on the message with the timestamp
 // already stripped, so a leading ^ is normal — compileTriggerPattern handles that and the (?P<name>…) groups,
@@ -51385,7 +52472,7 @@ function _parseTriggerTgfJson(text) {
 // sentences for whatever has no home in a personal trigger, which the import result lists. A trigger with
 // nothing to match on comes back with no pattern, so the endpoint reports it without storing it.
 // `characters` is deliberately never carried — it names the exporter's own characters.
-// Returns null when the text is not a PQ Companion pack, so the caller can try the next format.
+// Returns null when the text is not a JSON trigger pack, so the caller can try the next format.
 const _PQC_ROW_FIELDS = ['timer_warnings', 'exclude_patterns', 'timer_duration_capture', 'timer_key_capture',
   'bar_color', 'pinned', 'display_threshold_sec', 'timer_loop', 'timer_loop_max'];
 function _parsePqCompanionPack(text) {
@@ -51483,7 +52570,7 @@ function _parsePqCompanionPack(text) {
   }
   return out;
 }
-// One door for the import endpoint: XML (GINA / EQLogParser share-data), a PQ Companion pack, or an
+// One door for the import endpoint: XML (GINA / EQLogParser share-data), a JSON trigger pack, or an
 // EQLogParser .tgf tree — told apart by what the text is, never by file name.
 function _parseTriggerImport(raw) {
   if (!/^\s*[[{]/.test(raw)) return _parseTriggerXml(raw);
@@ -53198,7 +54285,10 @@ function _charmPetDiedById(spawnId) {
   const out = [];
   if (!(id > 0)) return out;
   for (const [k, info] of _charmTickTracker) {
-    if (info && Number(info.pet_id) === id) { out.push(info.pet || k); _charmTickTracker.delete(k); }
+    if (!info || Number(info.pet_id) !== id) continue;
+    // Same hold as checkCharmPetDeath: the id may belong to another same-named mob; the pet window decides.
+    if (info.is_active && _slot16StillNames(info.owner, info.pet || k)) { info.maybe_dead_at = Date.now(); continue; }
+    out.push(info.pet || k); _charmTickTracker.delete(k);
   }
   return out;
 }
@@ -54037,6 +55127,11 @@ const MOB_PACK_DIR           = path.join(__dirname, 'mobinfo-cache');
 const MOB_PACK_INDEX         = path.join(MOB_PACK_DIR, 'index.json');
 const MOB_PACK_TICK_MS       = 20 * 1000;
 const MOB_PACK_REVALIDATE_MS = 24 * 60 * 60 * 1000;
+// The mob-info row shape this agent reads, matching the bot's _MOB_PACK_VERSION (12 = aggro and assist radius, bot
+// 4.1.1). A pack saved under an older shape is checked again at once instead of waiting out the day: Target Info hid
+// the radii on a zone fetched a few hours before the bot started sending them (the guild lead, 2026-11-16, Plane of
+// Air). The check is the usual etag request, so an unchanged pack costs a 304. Bump it with the bot's version.
+const MOB_PACK_SHAPE = 12;
 const MOB_PACK_UNVISITED_MS  = 90 * 24 * 60 * 60 * 1000;
 const MOB_PACK_MAX_BYTES     = 80 * 1024 * 1024;
 let _mobPackIndex = null;               // zone id (string) → { etag, fetchedAt, visitedAt, bytes, pinned, retryAt }
@@ -54086,7 +55181,7 @@ function _mobPackLookup(name, zoneId) {
 }
 function _mobPackDue(e, now) {
   if (e.retryAt && now < e.retryAt) return false;
-  return !e.bytes || !e.fetchedAt || (now - e.fetchedAt) >= MOB_PACK_REVALIDATE_MS;
+  return !e.bytes || !e.fetchedAt || e.shape !== MOB_PACK_SHAPE || (now - e.fetchedAt) >= MOB_PACK_REVALIDATE_MS;
 }
 function _mobPackGet(query, etag, done) {
   const opts = _uploadOpts;
@@ -54128,7 +55223,7 @@ function _mobPackFetch(zoneId) {
           // 202: the bot is building it; anything else, back off longer.
           e.retryAt = now + (status === 202 ? 2 * 60 * 1000 : 30 * 60 * 1000);
         } else if (status === 304) {
-          e.fetchedAt = now; e.retryAt = 0;
+          e.fetchedAt = now; e.retryAt = 0; e.shape = MOB_PACK_SHAPE;
         } else {
           const body = JSON.parse(buf.toString('utf8'));
           if (!body || !body.mobs || typeof body.mobs !== 'object') throw new Error('no mobs');
@@ -54137,7 +55232,7 @@ function _mobPackFetch(zoneId) {
           fs.writeFileSync(file + '.tmp', buf);
           fs.renameSync(file + '.tmp', file);
           _mobPackMobs.set(k, body.mobs);
-          Object.assign(e, { etag, fetchedAt: now, bytes: buf.length, retryAt: 0 });
+          Object.assign(e, { etag, fetchedAt: now, bytes: buf.length, retryAt: 0, shape: MOB_PACK_SHAPE });
         }
       } catch (e2) {
         e.retryAt = now + 30 * 60 * 1000;
@@ -56146,6 +57241,17 @@ function _mapApplyShared(zone, j, now) {
         n: Math.max(1, Math.trunc(Number(t.n)) || 1), age: Math.max(0, botNow - at) });   // age on the bot's clock, when the pull came back
     }
     _mapSync.targets[zone] = { rows, pulledAt: now };
+    // Another raider's target is a sighting here too (the guild lead, 2026-11-17: "if another raider has targetted a mob
+    // and knows that mob has died" it should come off everyone's map). The FIRST place we hear of a spawn id is kept, as a
+    // first tab of our own is; a later death of that id (Zeal's death message, a slain line) is then placed on its spawn
+    // point by the same certainty rules, and the point's "died" goes out to the guild. Standing on its spot, it is pinned
+    // now, the way our own target is.
+    const ch = _mapActiveCharacter(now);
+    for (const r of rows) {
+      const loc = { x: r.x, y: r.y, z: r.z };
+      try { _mapNoteSighting(zone, r.id, r.name, loc, now - r.age); } catch (e) { void e; }
+      try { if (ch) _mapTryPin(zone, ch, r.id, r.name, loc, now, {}); } catch (e) { void e; }
+    }
   }
   if (j.trails && typeof j.trails === 'object' && !Array.isArray(j.trails)) {
     const tracked = MAP_TRACKED_PATHS[zone] || [];
@@ -57031,6 +58137,13 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     .filter(s => s && now - s.at <= MAP_SEEN_KEEP_MS && !(zd.timers[String(s.point_id)] && zd.timers[String(s.point_id)].died_at >= s.at))
     .map(s => ({ point_id: s.point_id, spawn_id: s.spawn_id == null ? null : s.spawn_id, name: s.name, at: s.at, by: s.by || null }))
     .sort((a, b) => b.at - a.at);
+  // A seen mob that is now someone's charm pet (the guild lead, 2026-11-17: "charm pets aren't showing up on the map"): the
+  // row says whose, and the Map draws no aggro ring for it. Matched by spawn id only, never by name.
+  try {
+    const charmById = new Map();
+    for (const c of _charmTickTracker.values()) if (c && c.is_active && Number(c.pet_id) > 0) charmById.set(Number(c.pet_id), c.owner || null);
+    if (charmById.size) for (const s of out.seen) if (s.spawn_id != null && charmById.has(Number(s.spawn_id))) s.charmed_by = charmById.get(Number(s.spawn_id)) || '?';
+  } catch { /* a nicety: never break the map */ }
   try {   // health on the alive rows (FB-87): your target, else the Extended Target cache; blank when it is not certain
     const ec = typeof _extTargetCache === 'undefined' ? null : _extTargetCache.get(String(character).trim().toLowerCase());
     const ecRows = ec && ec.payload && ec.payload.targets;
@@ -57876,13 +58989,27 @@ const SNAPPY_WINDOW  = 60_000;
 // every 1.5s, so 2s still means most ticks reuse the cache rather than
 // re-fetching every single one. Override via WP_BUFF_QUEUE_TTL_MS.
 const BUFF_QUEUE_TTL_MS = parseInt(process.env.WP_BUFF_QUEUE_TTL_MS, 10) || 2000;
+// Change-driven (the guild lead, 2026-11-17: "We don't need to check those that often. We're more concerned with when things
+// change… when someone's health is fluxuating that's a sign we need to pay attention to them. Also when someone died they
+// need to be rebuffed"; DECISIONS §617). The queue was ~45% of the bot's raid-night data out: >30 KB to every raider every
+// 2 s. Now, on top of gzip: the bot's ETag (bot 4.1.6) makes an unchanged answer a ~200-byte 304, and the check slows to
+// 6 s while nothing happens, back to 2 s for 20 s after a raider's HP
+// drops 10 points or more, your own death or rez, or a dispel of your buffs. Overlay ticks keep reading the cache.
+const BUFF_QUEUE_IDLE_TTL_MS = parseInt(process.env.WP_BUFF_QUEUE_IDLE_TTL_MS, 10) || 6000;
+const BUFF_QUEUE_FAST_WINDOW = 20_000;
+let _buffQueueFastUntil = 0;
+function _buffQueueFast(now) { _buffQueueFastUntil = Math.max(_buffQueueFastUntil, (now == null ? Date.now() : now) + BUFF_QUEUE_FAST_WINDOW); }
+function _buffQueueTtl(now) {
+  if (now < _buffQueueSnappyUntil) return SNAPPY_TTL_MS;
+  return now < _buffQueueFastUntil ? BUFF_QUEUE_TTL_MS : BUFF_QUEUE_IDLE_TTL_MS;
+}
 function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
   const opts = _uploadOpts;
   if (!opts || !opts.botUrl || !opts.token) return;
   const key = String(bufferClass || '').trim().toLowerCase() + '|' + String(bufferCharacter || '').trim().toLowerCase();
   if (_buffQueueInflight.has(key)) return;
   const cached = _buffQueueCache.get(key);
-  const ttl = (Date.now() < _buffQueueSnappyUntil) ? SNAPPY_TTL_MS : BUFF_QUEUE_TTL_MS;
+  const ttl = _buffQueueTtl(Date.now());
   if (cached && (Date.now() - cached.at) < ttl) return;
   _buffQueueInflight.add(key);
   const qs = [];
@@ -57894,14 +59021,27 @@ function fetchRaidBuffQueue(bufferClass, bufferCharacter) {
     const mod = u.protocol === 'https:' ? https : http;
     const req = mod.request({
       method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search,
-      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` },
+      // Accept-Encoding: the bot gzips this reply when asked (bot 4.1.3, utils/gzipReply.js; the guild lead's
+      // hosting-sizes "gzip-now" pick). An older bot ignores the header and answers plain, which the end handler reads too.
+      // If-None-Match: bot 4.1.6 tags the answer and sends 304 when nothing that matters changed (§617).
+      headers: Object.assign(
+        { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}`, 'Accept-Encoding': 'gzip' },
+        (cached && cached.etag) ? { 'If-None-Match': cached.etag } : {}),
       timeout: 8000,
     }, (res) => {
-      let body = '';
-      res.on('data', c => body += c);
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
       res.on('end', () => {
         _buffQueueInflight.delete(key);
-        try { const j = JSON.parse(body); _buffQueueCache.set(key, { at: Date.now(), payload: j }); _noteRaidSplit(j); }
+        // 304: our copy is still the answer, so it is current again.
+        if (res.statusCode === 304 && cached) { cached.at = Date.now(); return; }
+        try {
+          let buf = Buffer.concat(chunks);
+          if (/gzip/i.test(String(res.headers['content-encoding'] || ''))) buf = zlib.gunzipSync(buf);
+          const j = JSON.parse(buf.toString('utf8'));
+          _buffQueueCache.set(key, { at: Date.now(), payload: j, etag: res.statusCode === 200 ? (res.headers.etag || null) : null });
+          _noteRaidSplit(j);
+        }
         catch { _buffQueueCache.set(key, { at: Date.now(), payload: { buff_queue: [], debuff_queue: [] } }); }
       });
     });
@@ -58007,6 +59147,131 @@ function extendGuestLink(id, hours) {
       req.end(payload);
     } catch { resolve({ status: 502, body: { ok: false, error: 'bad bot url' } }); }
   });
+}
+
+// ── MGB board (Command Center "MGB" card + the Raid tab's MGB ready dot) ─────────────────────────────────────────
+// The guild lead picked a board of who has Mass Group Buff ready. Three pieces, all fail-soft:
+//   1. Reader: this PC's own log prints "The next group buff you cast will hit all targets in range." when its player
+//      arms the AA (docs/data/class-abilities.json log_text). It is matched on the WHOLE message after the timestamp, so a
+//      line quoted in /rs or /gu chat ("<Name> tells the raid, '...'") can never arm anything. The first "You begin
+//      casting <spell>." within 60 s names the spell, and the activation is queued once (kind 'mgb' -> POST /api/agent/mgb),
+//      after that cast or after the 60 s, whichever comes first, so the bot gets the spell with it.
+//   2. Local timer: 72 min (4320 s) from the activation, kept here so the viewer's own timer works with no bot.
+//   3. Board: GET /api/agent/mgb-board, read lazily by the Command Center poll (15 s), last good kept for 3 min. 404/503/403
+//      hide the card for 5 min; a throw anywhere returns null, which hides the card and never the Command Center.
+const MGB_ACTIVATE_TEXT   = 'The next group buff you cast will hit all targets in range.';
+const MGB_RECAST_MS       = 4320 * 1000;
+const MGB_SPELL_WINDOW_MS = 60 * 1000;
+const MGB_OLD_LINE_MS     = 5 * 60 * 1000;     // an activation older than this is a replayed log, not a live press
+const MGB_BOARD_TTL_MS    = 15 * 1000;
+const MGB_BOARD_STALE_MS  = 3 * 60 * 1000;
+const MGB_BOARD_BACKOFF_MS = 5 * 60 * 1000;
+const _mgbOwn = new Map();                     // lowercase character -> { character, at, spell, sent }
+let _mgbBoard = { at: 0, board: null, okAt: 0, retryAt: 0, inflight: false, logged: false };
+function parseMgbActivation(line) {
+  if (!line || String(line).indexOf('group buff') === -1) return false;
+  const m = String(line).match(/^\[[^\]]+\]\s+(.*?)\s*$/);
+  return !!m && m[1] === MGB_ACTIVATE_TEXT;
+}
+function _mgbFlush(e, send) {
+  if (e.sent) return;
+  e.sent = true;
+  if (!send) return;
+  const body = { character: e.character, at: new Date(e.at).toISOString() };
+  if (e.spell) body.spell = e.spell;
+  try { enqueueUpload('mgb', body); } catch (err) { void err; }
+}
+// One log line of one character. atMs = the line's own time; nowMs = this machine's clock; send = false for a guest log.
+function noteMgbLine(line, character, atMs, nowMs, send) {
+  try {
+    if (!line || !character) return false;
+    const cl = String(character).toLowerCase();
+    if (parseMgbActivation(line)) {
+      if (nowMs - atMs > MGB_OLD_LINE_MS) return false;
+      const e = { character: String(character), at: atMs, spell: null, sent: false };
+      _mgbOwn.set(cl, e);
+      const t = setTimeout(() => _mgbFlush(e, send), MGB_SPELL_WINDOW_MS);
+      if (t && t.unref) t.unref();
+      return true;
+    }
+    const e = _mgbOwn.get(cl);
+    if (e && !e.spell && !e.sent && String(line).indexOf('You begin casting') !== -1) {
+      const m = String(line).match(/\]\s+You begin casting (.+?)\.\s*$/);
+      if (m && atMs - e.at >= 0 && atMs - e.at <= MGB_SPELL_WINDOW_MS) { e.spell = m[1].trim(); _mgbFlush(e, send); }
+    }
+  } catch (err) { void err; }
+  return false;
+}
+// The newest activation this machine saw, for the viewer's own timer.
+function mgbOwnSnapshot() {
+  let best = null;
+  for (const e of _mgbOwn.values()) if (!best || e.at > best.at) best = e;
+  return best ? { character: best.character, at_ms: best.at, spell: best.spell, ready_ms: best.at + MGB_RECAST_MS } : null;
+}
+// The bot's board with every time moved onto this machine's clock (its own `now` is the reference).
+function _mgbNormalizeBoard(j, localNowMs) {
+  if (!j || typeof j !== 'object' || (!Array.isArray(j.holders) && !Array.isArray(j.mgbs))) return null;
+  const botNow = Date.parse(j.now);
+  const skew = Number.isFinite(botNow) ? localNowMs - botNow : 0;
+  const toLocal = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? t + skew : null; };
+  const str = (v) => (typeof v === 'string' && v ? v : null);
+  const mgbs = (Array.isArray(j.mgbs) ? j.mgbs : []).map(m => m && ({
+    at_ms: toLocal(m.at), spell: str(m.spell), caster: str(m.caster), basis: str(m.basis),
+    targets: Number(m.targets) || 0, candidates: Array.isArray(m.candidates) ? m.candidates.filter(n => typeof n === 'string').slice(0, 8) : [],
+  })).filter(m => m && m.at_ms != null).sort((a, b) => b.at_ms - a.at_ms);
+  const holders = (Array.isArray(j.holders) ? j.holders : []).filter(h => h && typeof h.name === 'string' && h.name).map(h => ({
+    name: h.name, cls: str(h.class), ready_ms: h.ready_at ? toLocal(h.ready_at) : null, last_spell: str(h.last_spell), basis: str(h.basis),
+  }));
+  return { last: mgbs[0] || null, holders };
+}
+function fetchMgbBoard() {
+  const now = Date.now();
+  if (_mgbBoard.inflight || now < _mgbBoard.retryAt || (now - _mgbBoard.at) < MGB_BOARD_TTL_MS) return;
+  const opts = _uploadOpts;
+  if (!opts || !opts.botUrl || !opts.token) return;
+  _mgbBoard.inflight = true;
+  const done = (board, retryMs, why) => {
+    _mgbBoard.inflight = false;
+    _mgbBoard.at = Date.now();
+    if (board) { _mgbBoard.board = board; _mgbBoard.okAt = _mgbBoard.at; }
+    else if (retryMs) { _mgbBoard.board = null; }
+    _mgbBoard.retryAt = retryMs ? Date.now() + retryMs : 0;
+    if (!board && why && !_mgbBoard.logged) { _mgbBoard.logged = true; console.log('[mgb] no board (' + why + '); the MGB card stays hidden'); }
+  };
+  try {
+    const u = new URL(opts.botUrl.replace(/\/encounter(\?.*)?$/, '/mgb-board'));
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request({
+      method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search,
+      headers: { 'Authorization': 'Bearer ' + opts.token, 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` },
+      timeout: 8000,
+    }, (res) => {
+      let body = '';
+      res.on('data', c => { if (body.length < 256 * 1024) body += c; });
+      res.on('end', () => {
+        if (res.statusCode === 404 || res.statusCode === 503 || res.statusCode === 403) return done(null, MGB_BOARD_BACKOFF_MS, 'bot answered ' + res.statusCode);
+        if (res.statusCode !== 200) return done(null, 0, 'bot answered ' + res.statusCode);
+        try { done(_mgbNormalizeBoard(JSON.parse(body), Date.now()), 0, 'unreadable answer'); }
+        catch { done(null, 0, 'unreadable answer'); }
+      });
+    });
+    req.on('error',   () => done(null, 0, 'bot unreachable'));
+    req.on('timeout', () => { req.destroy(); done(null, 0, 'timed out'); });
+    req.end();
+  } catch { done(null, 0, 'bad bot url'); }
+}
+// What the Command Center and the Raid tab carry: { last, holders, own } or null (nothing known -> no card, no dot).
+// This machine's own timer wins for its own character, so the card is right the second the AA is pressed.
+function _mgbSnapshot() {
+  try {
+    fetchMgbBoard();
+    const b = (_mgbBoard.board && (Date.now() - _mgbBoard.okAt) < MGB_BOARD_STALE_MS) ? _mgbBoard.board : null;
+    const own = mgbOwnSnapshot();
+    if (!b && !own) return null;
+    const ol = own ? own.character.toLowerCase() : null;
+    const holders = b ? b.holders.map(h => (own && h.name.toLowerCase() === ol && own.ready_ms > (h.ready_ms || 0)) ? { ...h, ready_ms: own.ready_ms } : h) : [];
+    return { last: b ? b.last : null, holders, own };
+  } catch { return null; }
 }
 
 // ── PoP raid objectives proxy (popraid.html) ─────────────────────────────────
@@ -59561,7 +60826,22 @@ function buildMobInfo() {
     target_invis:   seeInvisObsFor(st.target_name, _curIdForRelay),
     // Which Target Info history entry this target is, so the pager steps past it (null when none).
     target_hist_key: _tgtLiveKey(st),
+    // Where you and the target stand (Zeal loc / target_loc), for Target Info's live distance. Local only.
+    target_pos: _mobInfoPos(st),
   };
+}
+// { self: {x,y,z}, target: {x,y,z} } in the server's axes, or null unless BOTH positions arrived with a real z (the
+// server measures aggro and rampage in 3D, so a missing z is "unknown", never a flat 0) and neither is the
+// all-zero "no position" an older Zeal sends. Past entries and non-Zeal targets have none.
+function _mobInfoPos(st) {
+  if (!st || !st.target_name) return null;
+  const pick = (loc) => {
+    if (!loc || !Number.isFinite(Number(loc.z)) || loc.z === null) return null;
+    const p = _mapServerXY(loc);
+    return p && !(p.x === 0 && p.y === 0 && p.z === 0) ? p : null;
+  };
+  const self = pick(st.loc), target = pick(st.target_loc);
+  return self && target ? { self, target } : null;
 }
 
 // ── Live character state → bot → Supabase (wolfpack.quest/me) ───────────────
@@ -59767,7 +61047,7 @@ function _readZipEntry(zipPath, entryName) {
 
 // Buffer-based sibling of _readZipEntry for GINA .gtp packages — a .gtp is a
 // PKZIP holding one ShareData.xml, which our gzip-only import path could never
-// read (the "advertised and broken" finding in the pq-companion comparison).
+// read (the "advertised and broken" finding in an earlier comparison).
 // Prefers a member whose basename matches `preferBase`, else the first .xml
 // member, else the first member. Store (0) and deflate (8) only.
 function _readZipMemberFromBuf(buf, preferBase) {
@@ -62056,6 +63336,14 @@ const DISPEL_SETTLE_MS        = 1_500;    // after the last removal, wait for th
 const DISPEL_SELF_SETTLE_MS   = 2_500;    // Zeal's buff slots lag the log by a poll
 const DISPEL_SELF_COOLDOWN_MS = 8_000;    // one callout per dispel
 const DISPEL_QUIET_MS         = 10_000;   // after zoning or dying nothing counts: buffs and mobs go away on their own
+// Your own death and rez (the guild lead, 2026-11-17: "When you die we shouldn't announce the the user (X/Y/Z Dispelled,
+// rebuff) because they already know that. The same when they accept a rez."). Dead, you can lie on the floor for minutes
+// before a rez or a respawn, so a death stays quiet until one of those (or this long); the rez itself, its zone-in and
+// the "Resurrection Effects" buff that follows it each start a fresh quiet window.
+const DISPEL_DEAD_QUIET_MS    = 30 * 60_000;
+const DISPEL_REZ_QUIET_MS     = 60_000;
+const DISPEL_REZ_RX           = /^You regain some experience from resurrection\.$/;
+const DISPEL_REZ_BUFF_RX      = /^resurrection effects?$/i;   // spells 756 / 757 in the catalog
 const _dispelState = {
   lines: new Map(),   // charLower → [{ at, arrived, mob (lower) | null, you }]  the dispel spells' own landing lines
   mine:  new Map(),   // charLower → [{ at, arrived, spell, hits:[{ tk, sk, entry }] }]  worn-off lines for a debuff of ours
@@ -62127,8 +63415,8 @@ function _dispelSelfOpen(cl, arrived) {
   p.lastAt = Math.max(p.lastAt, arrived);
   return p;
 }
-function _dispelQuiet(cl, atMs) {
-  _dispelState.quiet.set(cl, atMs + DISPEL_QUIET_MS);
+function _dispelQuiet(cl, atMs, ms = DISPEL_QUIET_MS) {
+  _dispelState.quiet.set(cl, atMs + ms);
   _dispelState.mine.delete(cl); _dispelState.self.delete(cl); _dispelState.lines.delete(cl); _dispelState.fades.delete(cl);
 }
 // One log line. Live lines only; every kind of evidence is only noted here and decided in flushDispelWatch.
@@ -62143,7 +63431,16 @@ function noteDispelLine(line, character, nowMs) {
   if (Math.abs(now - at) > DISPEL_LIVE_MS) return;
   const cl = String(character).toLowerCase();
   // A zone change (the one zone-line parser, CHAT_ZONE_RX) or a death: buffs and mobs go away on their own after these.
-  if (/^LOADING, PLEASE WAIT|^You died\.$|^You have been slain by /.test(body) || CHAT_ZONE_RX.test(line)) { _dispelQuiet(cl, at); return; }
+  // Your own death: quiet until a rez or a respawn (each of which starts its own window below). The buff queue re-reads
+  // sooner too, since a death is exactly when buffs change.
+  if (/^You died\.$|^You have been slain by /.test(body)) { _dispelQuiet(cl, at, DISPEL_DEAD_QUIET_MS); _buffQueueFast(now); return; }
+  if (DISPEL_REZ_RX.test(body)) { _dispelQuiet(cl, at, DISPEL_REZ_QUIET_MS); _buffQueueFast(now); return; }
+  if (/^LOADING, PLEASE WAIT/.test(body) || CHAT_ZONE_RX.test(line)) {
+    // A zone-in while dead is the rez or the respawn: a minute of quiet for the buffs to settle, not the full death window.
+    const dead = (_dispelState.quiet.get(cl) || 0) > at + DISPEL_REZ_QUIET_MS;
+    _dispelQuiet(cl, at, dead ? DISPEL_REZ_QUIET_MS : DISPEL_QUIET_MS);
+    return;
+  }
   if ((_dispelState.quiet.get(cl) || 0) > at) return;
   const keep = (map, v) => { const a = map.get(cl) || []; a.push(v); while (a.length && now - a[0].arrived > 10_000) a.shift(); map.set(cl, a); };
   if (DISPEL_YOU_TEXTS.has(body)) {
@@ -62177,6 +63474,12 @@ function _dispelNoteZealDiff(character, prev, next, nowMs) {
   const cl = String(character).toLowerCase();
   const now = nowMs == null ? Date.now() : nowMs;
   if ((_dispelState.quiet.get(cl) || 0) > now) return;
+  // A rez in the same zone may print no zone line: its "Resurrection Effects" buff arriving is the tell (§617).
+  if (nb.some(b => b && b.name && DISPEL_REZ_BUFF_RX.test(String(b.name).trim()))
+      && !pb.some(b => b && b.name && DISPEL_REZ_BUFF_RX.test(String(b.name).trim()))) {
+    _dispelQuiet(cl, now, DISPEL_REZ_QUIET_MS);
+    return;
+  }
   const nowNames = new Set(nb.filter(b => b && b.name).map(b => _dispelNorm(b.name)));
   const prevNames = new Set(pb.filter(b => b && b.name).map(b => _dispelNorm(b.name)));
   const added = nb.some(b => b && b.name && !prevNames.has(_dispelNorm(b.name)));
@@ -62635,6 +63938,235 @@ function _hailReplaceWindow(w) {
 // clock (nowMs is on it) and an absolute end on THIS machine's clock for the overlay's ticking clock.
 // raidNames (a lowercase Set) narrows every list to this Mimic's own raid while two raids run; a
 // window with nobody of yours in it is the other raid's and is left out.
+// Flagged vs not flagged, as counts and whole percentages (floored, so 84.9% never reads 85%). It also answers the
+// 85% entry rule for the elemental planes and Time (EQMacEmu c2cd2651 zone/zoning.cpp:41-73, zone/raids.cpp:617-638;
+// DECISIONS 596: flagged x 100 >= raid size x 85), which the hail card does not show (a kill's flag is not a zone's
+// entry flag). Pure; integer maths only.
+function planarFlagRule(size, flagged) {
+  const n = Math.max(0, Math.floor(Number(size) || 0));
+  const f = Math.min(n, Math.max(0, Math.floor(Number(flagged) || 0)));
+  const maxUnflagged = n - Math.floor((85 * n + 99) / 100);   // size - ceil(0.85 * size)
+  const notFlagged = n - f;
+  const passes = n > 0 && f * 100 >= n * 85;
+  return {
+    size: n, flagged: f, not_flagged: notFlagged,
+    pct_flagged: n ? Math.round((f * 100) / n) : 0, pct_not: n ? Math.round((notFlagged * 100) / n) : 0,
+    max_unflagged: maxUnflagged, passes,
+    spare: passes ? maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,
+  };
+}
+// ── Zone-flag note: who in the raid lacks the flag for the zone you are standing in (the guild lead, 2026-11-19) ──────
+// The zone id Zeal reports -> the PoP gate (web/lib/popFlags.ts POP_ZONES key) that guards it. Zones with no gate are
+// absent, so the card is never drawn there. Only ids 215-219 use the 85% raid-in door (popRaidEntry.ts).
+const _ZONE_GATE_KEY = { 200: 'cod', 207: 'torment', 208: 'valor', 209: 'bot', 210: 'storms', 211: 'hoh', 212: 'solro', 214: 'tactics',
+  215: 'air', 216: 'water', 217: 'fire', 218: 'earth', 219: 'time', 220: 'hohb', 221: 'ponb', 222: 'poeb' };
+const _ZONE_DOOR_IDS = new Set([215, 216, 217, 218, 219]);
+// members: raid names as Zeal shows them. byName: lowercase name -> 'flagged' | 'missing' | 'unknown', from the bot's
+// pop-zone-flags answer. Anyone the answer does not name is 'unknown' (never 'missing': an absent record proves nothing).
+// null when this zone has no gate, the raid is empty, or the bot has not answered. The door verdict counts only
+// known records: 'pass' holds whichever way the unknowns turn out, 'fail' holds even if every unknown were flagged.
+function zoneFlagCard(zoneId, zoneName, members, byName) {
+  const key = _ZONE_GATE_KEY[Number(zoneId)];
+  if (!key || !Array.isArray(members) || !members.length || !byName) return null;
+  const missing = [];
+  let flagged = 0, unknown = 0;
+  for (const name of members) {
+    const v = byName[String(name).toLowerCase()];
+    if (v === 'flagged') flagged++;
+    else if (v === 'missing') missing.push(String(name));
+    else unknown++;
+  }
+  missing.sort((a, b) => a.localeCompare(b));
+  const size = members.length;
+  const out = { key, zone: zoneName || key, size, flagged, missing, unknown, door: null };
+  if (_ZONE_DOOR_IDS.has(Number(zoneId))) {
+    const sure = planarFlagRule(size, flagged);
+    const best = planarFlagRule(size, flagged + unknown);
+    out.door = { pct: Math.floor((flagged * 100) / size), verdict: sure.passes ? 'pass' : (best.passes ? 'depends' : 'fail'),
+      need: sure.passes ? 0 : (best.passes ? sure.short : best.short) };
+  }
+  return out;
+}
+// The bot's answer for the current zone's gate, cached per gate + names. A read, 20 s apart at most, 60 s fresh; an
+// older bot (404) is left alone for ten minutes and the card simply stays away.
+const _zoneFlags = { key: '', gate: '', at: 0, tried: 0, byName: null, inflight: false, offUntil: 0 };
+function _zoneFlagsFetch(gate, names) {
+  const opts = _uploadOpts;
+  if (!opts || !opts.botUrl || !opts.token || _zoneFlags.inflight) return;
+  const now = Date.now();
+  // Names go as Zeal shows them: the bot matches its tables by exact name. The answer comes back keyed lower-case.
+  const seen = new Set();
+  const list = names.map(n => String(n)).filter(n => !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()))
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).slice(0, 80);
+  const key = gate + '|' + list.join(',').toLowerCase();
+  if (now < _zoneFlags.offUntil || now - _zoneFlags.tried < 20_000) return;
+  if (key === _zoneFlags.key && now - _zoneFlags.at < 60_000) return;
+  let down = false;
+  try { down = _controlStandDown().down; } catch { void 0; }
+  if (down) return;
+  _zoneFlags.inflight = true;
+  _zoneFlags.tried = now;
+  const done = () => { _zoneFlags.inflight = false; };
+  try {
+    const u = new URL(opts.botUrl.replace(/\/encounter(\?.*)?$/, '/pop-zone-flags') + '?zone=' + encodeURIComponent(gate) + '&names=' + encodeURIComponent(list.join(',')));
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request({ method: 'GET', hostname: u.hostname, port: u.port, path: u.pathname + u.search, timeout: 8000,
+      headers: { 'Authorization': `Bearer ${opts.token}`, 'Accept': 'application/json', 'User-Agent': `wolfpack-logsync/${AGENT_VERSION}` } }, (res) => {
+      let body = '';
+      res.on('data', c => { body += c; });
+      res.on('end', () => {
+        done();
+        if (res.statusCode === 404) { _zoneFlags.offUntil = Date.now() + 10 * 60_000; _zoneFlags.byName = null; return; }
+        if (res.statusCode !== 200) return;
+        try {
+          const j = JSON.parse(body);
+          const by = {};
+          for (const k of Object.keys((j && j.members) || {}).slice(0, 100)) {
+            const v = j.members[k];
+            if (v === 'flagged' || v === 'missing' || v === 'unknown') by[String(k).toLowerCase()] = v;
+          }
+          _zoneFlags.key = key; _zoneFlags.gate = gate; _zoneFlags.at = Date.now(); _zoneFlags.byName = by;
+        } catch { void 0; }
+      });
+    });
+    req.on('error', done);
+    req.on('timeout', () => { req.destroy(); });
+    req.end();
+  } catch { done(); }
+}
+// The card for the Command Center: the played character's zone and the live Zeal raid roster. Never for a guest's
+// session, and only while the roster sample is fresh.
+function _zoneFlagsSnapshot(character, nowMs) {
+  if (!character || _isGuestChar(character)) return null;
+  const st = _zealState[Object.keys(_zealState || {}).find(k => k.toLowerCase() === String(character).toLowerCase())];
+  const zoneId = st && Number(st.zone) > 0 ? Number(st.zone) : null;
+  const gate = zoneId ? _ZONE_GATE_KEY[zoneId] : null;
+  if (!gate || !_lastRaidPipe || !Array.isArray(_lastRaidPipe.members) || nowMs - (_lastRaidPipe.at || 0) > 60_000) return null;
+  const names = _lastRaidPipe.members.map(m => m && m.name).filter(Boolean);
+  if (!names.length) return null;
+  _zoneFlagsFetch(gate, names);
+  return _zoneFlags.gate === gate ? zoneFlagCard(zoneId, _zoneName(zoneId), names, _zoneFlags.byName) : null;
+}
+// ── Rathe Council card, Plane of Earth B (the guild lead, 2026-11-20) ───────────────────────────────────────────────
+// 12 councilmen share one name, so each is tracked by SPAWN ID. Rules from RatheCouncil.lua (SecretsOTheP/quests f94be33):
+// no overall time limit; each death counts for 420 s (COUNCIL_RESPAWN), then that councilman respawns at full HP under a
+// NEW id and must die again; the Avatar comes when 12 deaths are current at once. So the window rolls: the 12th kill is
+// needed within 420 s of the OLDEST current death. Sources, all existing: the bot's extended-target rows (every Mimic's
+// target: spawn_id, hp_pct, debuffs with remaining_secs), this machine's own Zeal targets (_selfTargets), this log's slain
+// line. Root / slow come from the spell catalog's `cc` kinds, never from spell names. HP is null ("?") until seen.
+const COUNCIL_ZONE_ID = 222;
+const COUNCIL_SIZE = 12;
+const COUNCIL_RESPAWN_S = 420;
+const COUNCIL_LOW_HP = 20;              // a councilman at or under this ...
+const COUNCIL_OTHERS_MEDIAN_HP = 50;    // ... while the median of the others known is at or over this: hold dps
+const COUNCIL_MIN_OTHERS = 3;           // fewest other councilmen with a known HP before "ahead of the rest" means anything
+const COUNCIL_KEEP_S = 120;             // a live id unseen this long drops off the card
+const COUNCIL_KILL_HP_MAX = 25;         // a slain line is credited to the lowest-HP live id, if it was at or under this
+const COUNCIL_GONE_HP_MAX = 8;          // an id last seen at or under this ...
+const COUNCIL_GONE_S = 6;               // ... and unseen this long is dead
+const COUNCIL_LOCAL_WIN_S = 10;         // a local Zeal sample this fresh is not overwritten by the bot's older aggregate
+const COUNCIL_SLAIN_DEDUP_MS = 800;     // two logins on one machine print the same slain line
+const _councilNameRx = /^(?:an?\s+)?rathe councilman$/i;
+const _council = { mobs: new Map(), lastSlainAt: 0 };
+const _isCouncilName = (n) => _councilNameRx.test(String(n || '').replace(/^#/, '').replace(/_/g, ' ').trim());
+// sample: { id, hp (0-100 | null), at (ms), src: 'local' | 'ext', root_end?, slow_end? } (ends are absolute ms).
+// Latest sample wins; a root / slow keeps the later end. A dead id ignores samples until its countdown removes it.
+function councilNote(state, s, nowMs) {
+  const id = Number(s && s.id);
+  if (!(id > 0)) return;
+  let m = state.mobs.get(id);
+  if (!m) { m = { id, hp: null, hp_at: 0, src: null, seen_at: 0, dead_at: null, root_end: 0, slow_end: 0 }; state.mobs.set(id, m); }
+  if (m.dead_at != null) return;
+  const at = Number(s.at) || nowMs;
+  m.seen_at = Math.max(m.seen_at, at);
+  const hp = s.hp == null || !Number.isFinite(Number(s.hp)) ? null : Math.max(0, Math.min(100, Number(s.hp)));
+  const localFresh = m.src === 'local' && s.src === 'ext' && nowMs - m.hp_at < COUNCIL_LOCAL_WIN_S * 1000;
+  if (hp != null && at >= m.hp_at && !localFresh) { m.hp = hp; m.hp_at = at; m.src = s.src || 'ext'; }
+  if (s.root_end > m.root_end) m.root_end = s.root_end;
+  if (s.slow_end > m.slow_end) m.slow_end = s.slow_end;
+  if (hp === 0) m.dead_at = at;
+}
+// The slain line: credit it to the live id with the lowest known HP, when that was low enough to be a kill.
+function councilSlain(state, nowMs) {
+  if (nowMs - state.lastSlainAt < COUNCIL_SLAIN_DEDUP_MS) return false;
+  let best = null;
+  for (const m of state.mobs.values()) if (m.dead_at == null && m.hp != null && m.hp <= COUNCIL_KILL_HP_MAX && (!best || m.hp < best.hp)) best = m;
+  if (!best) return false;
+  state.lastSlainAt = nowMs;
+  best.dead_at = nowMs;
+  return true;
+}
+// Gone-while-low ids die, countdowns that ran out remove the corpse (its respawn is a new id), long-unseen ids drop.
+function councilSweep(state, nowMs) {
+  for (const [id, m] of state.mobs) {
+    if (m.dead_at == null) {
+      if (m.hp != null && m.hp <= COUNCIL_GONE_HP_MAX && nowMs - m.seen_at > COUNCIL_GONE_S * 1000) m.dead_at = m.seen_at;
+      else if (nowMs - m.seen_at > COUNCIL_KEEP_S * 1000) state.mobs.delete(id);
+    }
+    if (m.dead_at != null && nowMs - m.dead_at >= COUNCIL_RESPAWN_S * 1000) state.mobs.delete(id);
+  }
+}
+// The card the Command Center draws, or null before any councilman is known. Times are absolute ms so the payload does
+// not change between polls when nothing did; the overlay counts down against its own clock.
+function councilCard(state, nowMs) {
+  const all = [...state.mobs.values()];
+  if (!all.length) return null;
+  const live = all.filter(m => m.dead_at == null).sort((a, b) => a.id - b.id);
+  const dead = all.filter(m => m.dead_at != null).sort((a, b) => a.dead_at - b.dead_at);
+  const known = live.filter(m => m.hp != null);
+  let low = null;
+  for (const m of known) {
+    if (m.hp > COUNCIL_LOW_HP) continue;
+    const others = known.filter(o => o !== m).map(o => o.hp).sort((a, b) => a - b);
+    if (others.length < COUNCIL_MIN_OTHERS) continue;
+    const mid = others.length % 2 ? others[(others.length - 1) / 2] : (others[others.length / 2 - 1] + others[others.length / 2]) / 2;
+    if (mid >= COUNCIL_OTHERS_MEDIAN_HP && (!low || m.hp < low.hp)) low = { id: m.id, hp: Math.round(m.hp) };
+  }
+  const t = (ms) => (ms > nowMs ? ms : null);
+  const rows = live.map(m => ({ id: m.id, hp: m.hp == null ? null : Math.round(m.hp), root_end: t(m.root_end), slow_end: t(m.slow_end) }))
+    .concat(dead.map(m => ({ id: m.id, dead_at: m.dead_at, back_at: m.dead_at + COUNCIL_RESPAWN_S * 1000 })));
+  const seen = all.length;
+  return {
+    seen, down: dead.length,
+    back_at: dead.length ? dead[0].dead_at + COUNCIL_RESPAWN_S * 1000 : null,
+    warn: (!dead.length && seen < COUNCIL_SIZE) ? seen : null,   // "only N of 12 seen": our view is partial, so a count, not a fact
+    low, rows,
+  };
+}
+function _councilSnapshot(character, nowMs) {
+  if (!character || _isGuestChar(character)) return null;
+  const k = Object.keys(_zealState || {}).find(c => c.toLowerCase() === String(character).toLowerCase());
+  const st = k ? _zealState[k] : null;
+  if (!st || Number(st.zone) !== COUNCIL_ZONE_ID) { if (_council.mobs.size) _council.mobs.clear(); return null; }
+  fetchExtendedTarget(character);
+  const cached = _extTargetCache.get(String(character).toLowerCase());
+  if (cached && cached.payload && Array.isArray(cached.payload.targets)) {
+    for (const r of cached.payload.targets) {
+      if (!r || r.stale || !(Number(r.spawn_id) > 0) || !_isCouncilName(r.name)) continue;
+      const s = { id: r.spawn_id, hp: r.hp_pct, at: cached.at, src: 'ext' };
+      for (const d of (r.debuffs || [])) {
+        if (!d || d.attributed === false || !(d.remaining_secs > 0)) continue;
+        const e = _spellByNameLower.get(String(d.name || '').toLowerCase());
+        const cc = e && Array.isArray(e.cc) ? e.cc : [];
+        const end = cached.at + d.remaining_secs * 1000;
+        if (cc.includes('root') && !(end < s.root_end)) s.root_end = end;
+        if (cc.includes('slow') && !(end < s.slow_end)) s.slow_end = end;
+      }
+      councilNote(_council, s, nowMs);
+    }
+  }
+  for (const m of _selfTargets.values()) for (const e of m.values()) {
+    if (e.spawn_id > 0 && _isCouncilName(e.name) && nowMs - e.seen_at < COUNCIL_KEEP_S * 1000) councilNote(_council, { id: e.spawn_id, hp: e.hp_pct, at: e.seen_at, src: 'local' }, nowMs);
+  }
+  councilSweep(_council, nowMs);
+  return councilCard(_council, nowMs);
+}
+// The slain line from this machine's own log; only counts while the card is live (a councilman is tracked).
+function _councilNoteSlainLine(line, nowMs) {
+  if (!_council.mobs.size || line.indexOf('Councilman') === -1 || line.indexOf('slain') === -1) return;
+  const m = line.match(_SLAIN_BY_RX) || line.match(_SLAIN_YOU_RX);
+  if (m && _isCouncilName(m[1])) councilSlain(_council, nowMs);
+}
 function _hailBoardSnapshot(nowMs, raidNames) {
   const out = [];
   for (const w of _hailBoard.windows) {
@@ -62644,8 +64176,14 @@ function _hailBoardSnapshot(nowMs, raidNames) {
     const still = w.still.filter(s => mine(s.name));
     const hailed = w.hailed.filter(h => mine(h.name));
     if (raidNames && !still.length && !hailed.length) continue;
-    out.push({ ...w, still, hailed, already_flagged: w.already_flagged.filter(mine),
-      ms_left: left, ends_at_ms: Math.round((Date.now() + left) / 1000) * 1000 });
+    const already = w.already_flagged.filter(mine);
+    const row = { ...w, still, hailed, already_flagged: already,
+      ms_left: left, ends_at_ms: Math.round((Date.now() + left) / 1000) * 1000 };
+    // Flagged vs not flagged for THIS kill's credit, on every window (the guild lead, 2026-11-16: "show flagged vs
+    // not flagged on command center, counts and percentages"). Counted over the people this window tracks (the raid at
+    // the kill). The 85% entry rule is a different flag (zone access) and lives on the PoP raid page, not here.
+    row.rule = planarFlagRule(still.length + hailed.length + already.length, hailed.length + already.length);
+    out.push(row);
   }
   return out;
 }
@@ -63106,7 +64644,7 @@ function _synthesizeMatchingLine(t, captures) {
   // by prepending a synthetic timestamp below, so REHEARSE chews on the same
   // raw-line shape the live tail produces. The old blanket anchor delete made
   // a ^-anchored pattern rehearse green while being dead on live (the
-  // false-green half of the pq-companion 01 findings).
+  // false-green half of the earlier comparison's findings).
   src = src.replace(/[?*+]/g, '');
   src = src.replace(/\$$/, '');
   if (src.startsWith('^')) src = src.slice(1);
@@ -63712,7 +65250,7 @@ function _fireTriggerActions(t, captures, tsMs, test, isRelay) {
   // which callouts went off. Skip test/rehearsal fires. Windowed into the
   // encounter at flush time; hard-capped so it can't grow unbounded.
   if (!test) {
-    _fireLog.push({ at: tsMs || Date.now(), name: t.name || t.key || 'trigger' });
+    _fireLog.push({ at: tsMs || Date.now(), name: t.name || t.key || 'trigger', guild: t._scope !== 'personal' });
     if (_fireLog.length > 600) _fireLog.splice(0, _fireLog.length - 600);
   }
   for (const a of (t.actions || [])) {
@@ -64263,12 +65801,98 @@ function uploadLockouts(entries, { botUrl, token, dryRun, character }) {
 // incl. the at-cap forms) and 'con' (a /consider standing TRANSITION for a
 // mob). Bot-side unique constraints make backfill replays idempotent, so
 // crawling a complete log history is safe to re-run.
+// ── PoP flags kept on THIS PC for the local "PoP flags" page (the guild lead, 2026-11-16: "We should have Popflags in
+// the local mimic as well"). A copy of utils/popFlagStages.js RECITAL_STAGES (test/local-pop-flags.test.js holds it
+// equal): the agent sends the Seer's sentence and the bot names the step, so the page needs the same table here. Only
+// the step keys and times are stored (kind pop_flags); web/lib/popRecital.ts STAGE_IMPLIES expands them in the page.
+const _LOCAL_RECITAL_STAGES = [
+  ['Your soul has formed a bond with the Plane of Time', 'time_1'],
+  ['The History translated for you reveals the fate of Zebuxoruk', 'zebuxoruk_1'],
+  ["Learning of Zebuxoruk's fate, the only way to save him", 'zebuxoruk_2'],
+  ['The information obtained from Mithaniel is written', 'mmarr_book_1'],
+  ['You have shown your prowess in battle to Askr', 'karana_1'],
+  ['You have obtained the Talisman of Thunderous Foyer from Askr', 'karana_2'],
+  ['The information obtained from Karana is written', 'karana_4'],
+  ['The Cipher of the Divine Language appears on your arms', 'cipher_1'],
+  ['Saryrn been destroyed.', 'saryrn_1'],
+  ['Mithaniel has been bested.', 'mmarr_1'],
+  ["You have completed all of Honor's Trials.", 'hohtrials_111'],
+  ["You have beaten Rydda`Dar in the first of Honor's Trials.", 'hoh_trial_1'],
+  ["You have saved the villagers in the second of Honor's Trials.", 'hoh_trial_2'],
+  ["You have defeated the nomads in the third of Honor's Trials.", 'hoh_trial_3'],
+  ['You have bested Aerin`Dar and proven yourself honorable enough', 'aerindar_2'],
+  ['The evidence of Mavuin is the only thing that can save him now.', 'mavuin_1'],
+  ['Having endured the trials, the Tribunal has agreed to reconsider', 'mavuin_2'],
+  ['Mavuin is grateful to you for taking his case before the Tribunal.', 'mavuin_3'],
+  ['Tylis is being tortured by Saryrn.', 'tylis_1'],
+  ['Tylis has been removed from his agony.', 'tylis_2'],
+  ['Thelin being tormented by the imagery of Terris Thule', 'thelin_1'],
+  ['Thelin has completed his pact with Terris Thule', 'thelin_2'],
+  ["Terris Thule's grasp over Thelin has been released.", 'thelin_3'],
+  ['Saved from a world of eternal nightmares, Thelin is forever in your debt.', 'thelin_4'],
+  ['Alder Fuirstel wishes you to obtain the Ward', 'fuirstel_1'],
+  ['Grummus has been destroyed, about his corpse you found a small ward', 'fuirstel_2'],
+  ['Milyk has been saved from certain death, but is not recovering.', 'fuirstel_3'],
+  ['Bertoxxulous has been slain, the curse from Milyk now lifted.', 'fuirstel_4'],
+  ['Saved from certain doom, Milyk and Adler are forever in your debt.', 'fuirstel_5'],
+  ['Now that Grummus has been destroyed, the entrance to the Crypt of Bertoxxulous', 'grummus_1'],
+  ['The portal into the Plane of Fire has been altered.', 'pofire_1'],
+  ["Xuzl's arcane wisdom pulses in your mind.", 'sol_room_1'],
+  ["Arlyxir's wealth of knowledge flows through your mind.", 'sol_room_2'],
+  ['The power of Dresolik surges through you.', 'sol_room_3'],
+  ["Rizlona's song slips through your thoughts.", 'sol_room_4'],
+  ["Jiva's strength fills your body.", 'sol_room_5'],
+  ['The true route to the Plane of Fire is now clear in your mind.', 'pofire_2'],
+  ['Giwin would like you to find him in Drunder', 'zeks_2'],
+  ['The pack of notes from Vallon are scribbled', 'zeks_3'],
+  ['The pack of notes from Tallon are scribbled', 'zeks_4'],
+  ["The words of Maelin echo in your mind, 'The Zeks and Solusek", 'zeks_6'],
+  ['The parchments of Rallos are scribed in a language', 'zeks_7'],
+  ["You remember Nitram's words", 'poi_door_1'],
+];
+const _localRecitalNorm = (s) => String(s || '').replace(/[‘’ʼ`]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+const _LOCAL_RECITAL_NORMED = _LOCAL_RECITAL_STAGES.map(([prefix, stage]) => ({ prefix: _localRecitalNorm(prefix), stage }));
+/** pop_flag events → the rows the page keeps: { character, flag_key, earned_at, source }. A `#popflags` event
+ *  (source 'popflags') carries step keys; a Seer sentence is named by the table above; a grant or checklist event
+ *  names nothing here (the bot reads its previous line) and makes no row. */
+function _localPopFlagRows(events) {
+  const rows = [];
+  for (const e of Array.isArray(events) ? events : []) {
+    if (!e || !e.character || e.kind !== 'recital') continue;
+    const at = Date.parse(e.ts);
+    if (!Number.isFinite(at)) continue;
+    const earned_at = new Date(at).toISOString();
+    if (e.source === 'popflags') {
+      for (const k of Array.isArray(e.stages) ? e.stages : []) rows.push({ character: String(e.character), flag_key: String(k), earned_at, source: 'popflags' });
+    } else if (e.text) {
+      const t = _localRecitalNorm(e.text);
+      const hit = _LOCAL_RECITAL_NORMED.find(r => t.startsWith(r.prefix));
+      if (hit) rows.push({ character: String(e.character), flag_key: hit.stage, earned_at, source: 'recital' });
+    }
+  }
+  return rows;
+}
+const _localPopFlagsSeen = new Set();   // "character|flag_key|source" already kept this run: a second #popflags adds nothing
+/** Keep the rows of these events in the local store. Never uploads; a store that cannot write is no error. */
+function _localPopFlagsNote(events) {
+  try {
+    for (const r of _localPopFlagRows(events)) {
+      const seen = r.character.toLowerCase() + '|' + r.flag_key + '|' + r.source;
+      if (_localPopFlagsSeen.has(seen)) continue;
+      if (_localPopFlagsSeen.size > 5000) _localPopFlagsSeen.clear();
+      _localPopFlagsSeen.add(seen);
+      _localStore.put('pop_flags', r.character.toLowerCase() + '|' + r.flag_key + '|' + r.earned_at, r, { ts: Date.parse(r.earned_at) });
+    }
+  } catch { void 0; }
+}
+
 function uploadPopFlags(events, { dryRun } = {}) {
   if (!Array.isArray(events) || events.length === 0) return Promise.resolve();
   if (dryRun) {
     for (const e of events) console.log(`[pop-flag] ${e.character} · ${e.source || 'event'}${e.npc ? ' → ' + e.npc : ''} · ${e.zone || '?'} · ${e.boss || '?'} · ${e.ts}`);
     return Promise.resolve();
   }
+  _localPopFlagsNote(events);   // on this PC whether or not it is linked: enqueueUpload below sends nothing in local mode
   enqueueUpload('pop_flag', { agent_version: AGENT_VERSION, events });
   return Promise.resolve();
 }
@@ -65467,16 +67091,19 @@ async function main() {
     _loadSpellCatalogFromDisk();
     _loadItemClickiesFromDisk();
     loadItemCatalogFromDisk();
+    loadQuestScriptedFromDisk();
   }
   // Restore the Pet tracker's in-memory state (last /pet health, observed buff
   // landings, running combat stats) so a Mimic restart or LD reconnect brings
   // the existing pet timers + stats back instead of starting blank. TTLs in
   // the loader drop entries old enough to be stale.
   _loadPetStateFromDisk();
+  try { _partyBoot(); } catch (e) { void e; }   // a party remembered from before this restart rejoins (Raid Mimic party)
   if (!dryRun && token) {
     fetchSpellCatalog({ botUrl, token }).catch(() => {});
     fetchItemClickies({ botUrl, token }).catch(() => {});
     fetchItemCatalog({ botUrl, token }).catch(() => {});
+    fetchQuestScripted({ botUrl }).catch(() => {});
     startReporterHeartbeat();   // #72 — poll the bot for our upload roles (fail-open)
     setInterval(() => { try { uploadRollSets(); } catch {} }, 60_000).unref();   // #91 off-night roll capture
     setInterval(() => { try { uploadLooted(); } catch {} }, 60_000).unref();     // #91 looted-line capture
@@ -65487,6 +67114,7 @@ async function main() {
       fetchSpellCatalog({ botUrl, token }).catch(() => {});
       fetchItemClickies({ botUrl, token }).catch(() => {});
       fetchItemCatalog({ botUrl, token }).catch(() => {});
+      fetchQuestScripted({ botUrl }).catch(() => {});
     }, 24 * 60 * 60 * 1000).unref();
   }
   // Operator's declared main (if the launcher passed --character) — used to
@@ -66249,6 +67877,8 @@ async function main() {
           notePacifyMiss(line, b.character);
           // "Your target looks unaffected." after a lull cast: same timer, taken back.
           noteLullUnaffected(line, b.character);
+          // The MGB AA armed on this log (local timer + one queued POST); never throws.
+          { const _mts = parseEqTimestamp(line); noteMgbLine(line, b.character, _mts ? _mts.getTime() : Date.now(), Date.now(), !_sourceGuest); }
           // A CURE that fizzles/gets interrupted never landed — void the cure
           // the relay above just registered, so the bot doesn't retire a
           // debuff the raider is still carrying.
@@ -66435,6 +68065,7 @@ async function main() {
         // is correctly attributed for the killer-guard (we don't kill our own
         // pet — same-named different mob).
         checkCharmPetDeath(line, b.character);
+        try { _councilNoteSlainLine(line, Date.now()); } catch { void 0; }
 
         // #142 — a boss death clears that mob's countdown timers (tank-buster,
         // deathtouch) so no phantom "next in Xs" lingers on the corpse; and a
@@ -66677,6 +68308,7 @@ const _LSTORE_POLICY = {
   death_story:    { retainDays: 90, maxBytes: 50 * _LSTORE_MB },   // "How I died": the last 30 s before each of your deaths
   hub_encounter:  { retainDays: 120, maxBytes: 64 * _LSTORE_MB },   // the guild's merged encounters, for My parses' difference
   hub_state:      { retainDays: 30, maxBytes: 4 * _LSTORE_MB },
+  pop_flags:      { retainDays: 400, maxBytes: 5 * _LSTORE_MB },   // the PoP flags page on this PC (the guild lead, 2026-11-16): step keys only
 };
 const _LSTORE_POLICY_DEFAULT = { retainDays: 0, maxBytes: 256 * _LSTORE_MB };   // 0 days = no age limit, the byte cap still applies
 
@@ -67326,7 +68958,7 @@ function _deathNoteEvent(character, ev, o = {}) {
     _deathLast.set(cl, t);
     const st = _zealState[character] || _zealState[Object.keys(_zealState).find(n => n.toLowerCase() === cl)] || null;
     const story = _deathBuildStory({ character, at: t, killer: ev.attacker || null, hits: _deathHits.get(cl) || [],
-      frames: _deathFrames.filter(f => f.c === cl), zone: st ? _mapZoneShort(st.zone) : null, target: st && st.target_name ? String(st.target_name) : null });
+      frames: _deathFrames.filter(f => f.c === cl), zone: _deathZone(st, cl), target: st && st.target_name ? String(st.target_name) : null });
     // The id is the death time in ms; two of this PC's characters dying in the same second (one AE on a multibox) take the
     // next free millisecond instead of overwriting each other.
     try {
@@ -67339,6 +68971,12 @@ function _deathNoteEvent(character, ev, o = {}) {
     return story;
   }
   return null;
+}
+// The zone a death is filed under: the map's short name for Zeal's zone, else the zone's full name, else the last
+// "You have entered <zone>." line this character's log printed (a PC with no Zeal still has that line).
+function _deathZone(st, cl) {
+  const z = st ? _mapZoneShort(st.zone) || _zoneName(st.zone) : null;
+  return z || _relvLogZone.get(cl) || null;
 }
 function _deathStore() { return _localTrack.store || _localStoreDefault(); }
 // Pure: the story record from the buffers.
@@ -68364,7 +70002,7 @@ async function _rescanRun(req, prog) {
     flush() {
       if (!this.events.length) return;
       const evs = this.events.splice(0);
-      if (!mode.upload) return;
+      if (!mode.upload) { _localPopFlagsNote(evs); return; }   // local mode or paused: nothing leaves, the local page still fills (the guild lead, 2026-11-16)
       this.sent += evs.length;
       uploadPopFlags(evs, opts).catch(() => {});
     },
@@ -69689,8 +71327,663 @@ function _localIconRoute(req, res, o) {
   return true;
 }
 
+// ── Raid Mimic party (2026-11-15) ──────────────────────────────────────────────────────────────────────────
+// The client half of the party relay (apps/raidmimic-relay/, docs/DESIGN-raidmimic-relay.md). Raiders who join one party
+// code publish their own numbers about every 2 s and get back ONE merged view (per player, per stat the MAX across
+// submitters, never the sum) that the DPS HUD shows as its Party view. Live merging is free for everyone (DECISIONS §588):
+// nothing here gates on a tier; the view's tier is shown as a small tag only.
+//   * WebSocket: this agent runs under Electron's Node 20 (global WebSocket absent or behind a flag), under a member's own
+//     Node >= 18 for Parser.bat, and under Node 16 on the Windows 7 build. No dependency is allowed, so the small client
+//     below speaks RFC 6455 over tls/net itself (text frames, ping/pong, close, permessage-deflate with no context
+//     takeover). One path for every runtime, tested against the real relay.
+//   * Auth: the Mimic session token (wpms_...), the same one that rides to the bot as X-Wolfpack-Mimic-Session.
+//   * Stand-down: dry-run, no session, a hidden / guest / off-guild character (shouldUploadForCharacter) and the control
+//     plane (_controlStandDown) all close the socket and publish nothing; a party code stays wanted and resumes by itself.
+//   * Publishes only during a live (or just-ended) fight, or while the Zeal raid/group list is fresh.
+//   * Routes: GET/POST /api/party. State: `partyView` on /api/state (the DPS HUD reads it).
+//   * AUTO mode (the guild lead, 2026-11-15: "where we check session against zeal pipes party members"): with "Share with my
+//     in-game group and raid" on (default OFF), the client connects with hello {auto:true} and NO code whenever the Zeal pipe
+//     shows the character in a group or raid, publishes `members` (self + raid + group names, up to 72) on every frame, and
+//     leaves after more than 2 minutes alone or when the setting goes off. The relay shares a member's data only with
+//     members who list each other, and answers `not_your_character` when the hello character is not on the signed-in
+//     account. A code party is the explicit opt-in and wins while it lasts; the setting is kept in logsync.party.json.
+const PARTY_AUTO_SOLO_MS = 2 * 60_000, PARTY_MAX_MEMBERS = 72;
+const PARTY_RELAY_URL = 'wss://raidmimic-relay-production.up.railway.app/v1/party';   // WOLFPACK_PARTY_RELAY_URL overrides (dev, tests)
+const PARTY_FILE = path.join(__dirname, 'logsync.party.json');
+const PARTY_PUB_MS = 2000;
+const PARTY_REJOIN_MAX_AGE_MS = 4 * 3600_000;   // a code remembered across an agent restart is dropped after this
+const PARTY_RX_IDLE_MS = 15_000;                // the relay sends a view every 2 s; silence this long means a dead socket
+const PARTY_BACKOFF_MS = [1000, 2000, 5000, 10_000, 20_000, 30_000, 60_000];
+const PARTY_CODE_RX = /^[2-9A-HJKMNP-Z]{6}$/;
+const PARTY_NAME_RX = /^[A-Za-z']{1,24}$/;
+// Shared timers (relay 1.1.0, apps/raidmimic-relay/lib.js): the same kinds, caps and target pattern the relay validates with.
+const PARTY_TIMER_KINDS = ['buff', 'debuff', 'charm'], PARTY_MAX_TIMERS = 100, PARTY_MAX_SPELL = 60;
+const PARTY_TIMER_MAX_MS = { buff: 20 * 60_000, debuff: 20 * 60_000, charm: 3 * 3600_000 };
+const PARTY_TARGET_RX = /^[A-Za-z0-9 '`-]{1,64}$/;
+const PARTY_MAX_ROWS = 80, PARTY_MAX_TEXT = 120, PARTY_MAX_FIRES = 20, PARTY_MAX_NUM = 1e12, PARTY_MAX_FRAME = 32 * 1024;
+// Closing codes after which reconnecting is pointless: the relay said no, and saying it again changes nothing.
+const PARTY_FATAL = {
+  replaced:        'This party was joined from another Mimic with the same character, which took your place. Join again to take it back.',
+  party_full:      'This party is full (72 members).',
+  unknown_session: 'The relay does not know this sign-in. Sign in with Discord again in Mimic, then join again.',
+  bad_token:       'The relay did not accept this sign-in. Sign in with Discord again in Mimic.',
+  bad_character:   'This character name cannot be shared (letters only).',
+  bad_party:       'That is not a party code.',
+  no_party:        'That party is gone (it ended 15 minutes after its last member left, or the relay restarted). Create a new one or ask for a fresh code.',
+  not_your_character: "This character isn't linked to your account — link it on raidmimic.com/characters or wolfpack.quest.",
+};
+const PARTY_BLOCK_TEXT = {
+  signed_out:   'Sign in with Discord in Mimic to use a party.',
+  dry_run:      'Dry-run mode sends nothing, so a party cannot connect.',
+  control:      'Paused by the guild control plane; it resumes by itself.',
+  hidden:       'This character does not share live data (hidden from stats, a guest, or on another server).',
+  no_character: 'Waiting for EverQuest: no character is being watched yet.',
+};
+
+// ── the WebSocket client ──
+class MiniWebSocket {
+  // opts: { headers, handshakeMs, maxMessage }. Callbacks: onopen(), onmessage(text), onclose({code, reason}), onerror(err).
+  constructor(url, opts = {}) {
+    const u = new URL(url);
+    this.readyState = 0;          // 0 connecting · 1 open · 2 closing · 3 closed
+    this.onopen = this.onmessage = this.onclose = this.onerror = null;
+    this._maxMessage = opts.maxMessage || 1024 * 1024;
+    this._buf = Buffer.alloc(0);
+    this._frags = null;           // { compressed, parts, size } while a fragmented message is in flight
+    this._deflate = false;
+    this._closed = false;
+    const secure = u.protocol === 'wss:';
+    const port = Number(u.port) || (secure ? 443 : 80);
+    const key = crypto.randomBytes(16).toString('base64');
+    const sock = secure ? tlsSock.connect({ host: u.hostname, port, servername: u.hostname }) : netSock.connect({ host: u.hostname, port });
+    this._sock = sock;
+    this._shaken = false;
+    const fail = (err) => { try { if (this.onerror) this.onerror(err); } catch (e) { void e; } this._finish(1006, 'error'); };
+    const timer = setTimeout(() => fail(new Error('handshake timed out')), opts.handshakeMs || 10_000);
+    if (timer.unref) timer.unref();
+    this._hsTimer = timer;
+    sock.setNoDelay(true);
+    sock.on(secure ? 'secureConnect' : 'connect', () => {
+      const h = [
+        `GET ${u.pathname || '/'}${u.search || ''} HTTP/1.1`,
+        `Host: ${u.host}`,
+        'Upgrade: websocket', 'Connection: Upgrade',
+        `Sec-WebSocket-Key: ${key}`, 'Sec-WebSocket-Version: 13',
+        'Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_no_context_takeover',
+      ];
+      for (const [k, v] of Object.entries(opts.headers || {})) h.push(`${k}: ${v}`);
+      sock.write(h.join('\r\n') + '\r\n\r\n');
+    });
+    sock.on('data', (chunk) => {
+      try {
+        this._buf = this._buf.length ? Buffer.concat([this._buf, chunk]) : chunk;
+        if (!this._shaken) {
+          const end = this._buf.indexOf('\r\n\r\n');
+          if (end < 0) { if (this._buf.length > 8192) fail(new Error('handshake too long')); return; }
+          const head = this._buf.subarray(0, end).toString('latin1').split('\r\n');
+          this._buf = this._buf.subarray(end + 4);
+          const hdr = {};
+          for (const line of head.slice(1)) { const i = line.indexOf(':'); if (i > 0) hdr[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim(); }
+          const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+          if (!/^HTTP\/1\.1 101\b/.test(head[0] || '') || hdr['sec-websocket-accept'] !== accept) return fail(new Error('upgrade refused: ' + String(head[0] || '').slice(0, 60)));
+          const ext = String(hdr['sec-websocket-extensions'] || '');
+          if (ext) {
+            if (!/permessage-deflate/.test(ext) || !/server_no_context_takeover/.test(ext)) return fail(new Error('unsupported extension'));
+            this._deflate = true;
+          }
+          this._shaken = true;
+          clearTimeout(this._hsTimer);
+          this.readyState = 1;
+          if (this.onopen) this.onopen();
+        }
+        this._parse();
+      } catch (e) { fail(e); }
+    });
+    sock.on('error', (e) => fail(e));
+    sock.on('close', () => this._finish(1006, 'closed'));
+  }
+  _parse() {
+    for (;;) {
+      if (this._dead) return;
+      const b = this._buf;
+      if (b.length < 2) return;
+      const fin = (b[0] & 0x80) !== 0, rsv1 = (b[0] & 0x40) !== 0, op = b[0] & 0x0f, masked = (b[1] & 0x80) !== 0;
+      let len = b[1] & 0x7f, off = 2;
+      if (len === 126) { if (b.length < 4) return; len = b.readUInt16BE(2); off = 4; }
+      else if (len === 127) {
+        if (b.length < 10) return;
+        if (b.readUInt32BE(2) > 0) return this._protocolError(1009);
+        len = b.readUInt32BE(6); off = 10;
+      }
+      if (masked || (b[0] & 0x30)) return this._protocolError(1002);     // a server never masks; rsv2/3 are unused
+      if (len > this._maxMessage) return this._protocolError(1009);
+      if (b.length < off + len) return;
+      const payload = b.subarray(off, off + len);
+      this._buf = b.subarray(off + len);
+      if (op >= 8) {
+        if (!fin || len > 125) return this._protocolError(1002);
+        if (op === 8) {
+          const code = len >= 2 ? payload.readUInt16BE(0) : 1005;
+          if (this.readyState === 1) this._send(8, payload.subarray(0, Math.min(len, 2)));   // echo the code, as the RFC asks
+          return this._finish(code, len > 2 ? payload.subarray(2).toString('utf8') : '');
+        }
+        if (op === 9) this._send(10, payload);
+        continue;                                                          // pong: nothing to do
+      }
+      if (op === 0) {
+        if (!this._frags) return this._protocolError(1002);
+      } else {
+        if (this._frags) return this._protocolError(1002);
+        if (op !== 1 && op !== 2) return this._protocolError(1002);
+        if (rsv1 && !this._deflate) return this._protocolError(1002);
+        this._frags = { binary: op === 2, compressed: rsv1, parts: [], size: 0 };
+      }
+      const f = this._frags;
+      f.parts.push(Buffer.from(payload)); f.size += len;
+      if (f.size > this._maxMessage) return this._protocolError(1009);
+      if (!fin) continue;
+      this._frags = null;
+      let data = f.parts.length === 1 ? f.parts[0] : Buffer.concat(f.parts);
+      if (f.compressed) {
+        // A permessage-deflate message ends in a sync flush, not a final block: without Z_SYNC_FLUSH zlib calls it truncated.
+        try { data = zlib.inflateRawSync(Buffer.concat([data, Buffer.from([0, 0, 0xff, 0xff])]), { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: this._maxMessage }); }
+        catch { return this._protocolError(1007); }
+      }
+      if (!f.binary && this.onmessage) { try { this.onmessage(data.toString('utf8')); } catch (e) { void e; } }
+    }
+  }
+  _send(op, payload) {
+    if (this._closed || !this._sock || !this._sock.writable) return false;
+    const p = payload || Buffer.alloc(0), n = p.length;
+    const mask = crypto.randomBytes(4);
+    const head = n < 126 ? Buffer.from([0x80 | op, 0x80 | n]) : n < 65536 ? Buffer.from([0x80 | op, 0x80 | 126, n >> 8, n & 255])
+      : (() => { const h = Buffer.alloc(10); h[0] = 0x80 | op; h[1] = 0x80 | 127; h.writeUInt32BE(n, 6); return h; })();
+    const body = Buffer.allocUnsafe(n);
+    for (let i = 0; i < n; i++) body[i] = p[i] ^ mask[i & 3];
+    this._sock.write(Buffer.concat([head, mask, body]));
+    return true;
+  }
+  sendText(text) { if (this.readyState !== 1) return false; return this._send(1, Buffer.from(String(text), 'utf8')); }
+  close(code = 1000) {
+    if (this.readyState >= 2) return;
+    if (this.readyState === 0) return this.terminate();
+    this.readyState = 2;
+    const c = Buffer.alloc(2); c.writeUInt16BE(code, 0);
+    this._send(8, c);
+    const t = setTimeout(() => this.terminate(), 1500);    // a peer that never answers the close is cut off
+    if (t.unref) t.unref();
+  }
+  terminate() { try { if (this._sock) this._sock.destroy(); } catch (e) { void e; } this._finish(1006, 'terminated'); }
+  _protocolError(code) { this._dead = true; this.close(code); this._buf = Buffer.alloc(0); }
+  _finish(code, reason) {
+    if (this._closed) return;
+    this._closed = true;
+    this.readyState = 3;
+    clearTimeout(this._hsTimer);
+    try { if (this._sock) this._sock.destroy(); } catch (e) { void e; }
+    if (this.onclose) { try { this.onclose({ code, reason }); } catch (e) { void e; } }
+  }
+}
+
+// ── pure parts: frames, backoff ──
+// The names an auto-mode frame lists: `self` first (when given and valid), then every list in order, names that fail the relay's
+// rule (a pet's "a skeleton", a digit, over 24 letters) dropped, repeats dropped case-insensitively, at most 72.
+function partyMembersList(self, ...lists) {
+  const out = [], seen = new Set();
+  const add = (n) => {
+    const s = n == null ? '' : String(n).trim();
+    if (!PARTY_NAME_RX.test(s) || seen.has(s.toLowerCase()) || out.length >= PARTY_MAX_MEMBERS) return;
+    seen.add(s.toLowerCase()); out.push(s);
+  };
+  add(self);
+  for (const l of lists) if (Array.isArray(l)) for (const n of l) add(n && typeof n === 'object' ? n.name : n);
+  return out;
+}
+const _partyClean = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, PARTY_MAX_TEXT);
+const _partyNum = (n) => { n = Math.round(Number(n)); return Number.isFinite(n) && n >= 0 ? Math.min(n, PARTY_MAX_NUM) : 0; };
+// The relay drops a WHOLE frame for one bad name, number or over-long string, so every value is made valid here instead:
+// a name it would refuse (a pet's "a skeleton", a possessive with a backtick) leaves the frame, a number is clamped, a text
+// is cut. src = { perPlayer: {name: threat-snapshot row}, target, casting, roster: [{name, hp_pct}], fires: [{at, name}] }.
+// Returns the frame, or null when there is nothing to send.
+function partyBuildPub(src, now = Date.now()) {
+  const out = { type: 'pub' };
+  const rows = [];
+  for (const [name, r] of Object.entries((src && src.perPlayer) || {})) {
+    if (!PARTY_NAME_RX.test(name) || !r || typeof r !== 'object') continue;
+    rows.push([name, { dmg: _partyNum(r.dmg), heal: _partyNum(r.healRaw != null ? r.healRaw : r.heal), took: _partyNum(r.took), threat: _partyNum(r.total != null ? r.total : r.threat) }]);
+  }
+  if (rows.length) {
+    rows.sort((a, b) => b[1].dmg - a[1].dmg);
+    out.perPlayer = Object.fromEntries(rows.slice(0, PARTY_MAX_ROWS));
+  }
+  const t = _partyClean(String((src && src.target) || '').replace(/^#/, '')), c = _partyClean(src && src.casting);
+  if (t) out.target = t;
+  if (c) out.casting = c;
+  const roster = [];
+  for (const m of ((src && src.roster) || [])) {
+    const hp = Number(m && (m.hp_pct != null ? m.hp_pct : m.hp));
+    if (m && PARTY_NAME_RX.test(String(m.name)) && Number.isFinite(hp)) roster.push({ name: String(m.name), hp: Math.max(0, Math.min(100, Math.round(hp))) });
+  }
+  if (roster.length) out.roster = roster.slice(0, PARTY_MAX_ROWS);
+  const fires = [];
+  for (const f of ((src && src.fires) || [])) {
+    const text = _partyClean(f && f.name != null ? f.name : f && f.text), at = Number(f && f.at);
+    if (text && Number.isFinite(at) && at > 0) fires.push({ text, at: Math.round(Math.min(at, now)) });
+  }
+  if (fires.length) out.fires = fires.slice(-PARTY_MAX_FIRES);
+  // Shared timers (relay 1.1.0, apps/raidmimic-relay/lib.js validatePub): a SNAPSHOT of what this member cast itself. The relay drops a
+  // timer whose caster is not the hello character, so `src.character` (when given) filters here too; an array, even empty, is a
+  // snapshot ([] clears what the relay holds), and a frame with no `timers` key leaves the member's previous set alone.
+  if (src && Array.isArray(src.timers)) {
+    const tm = [];
+    for (const t of src.timers) {
+      const spell = _partyClean(t && t.spell), target = String((t && t.target) || ''), caster = String((t && t.caster) || ''), endsAt = Number(t && t.endsAt);
+      if (!t || !PARTY_TIMER_KINDS.includes(t.kind) || !spell || spell.length > PARTY_MAX_SPELL || !PARTY_TARGET_RX.test(target) || !PARTY_NAME_RX.test(caster)) continue;
+      if (src.character && caster !== src.character) continue;
+      if (!Number.isFinite(endsAt) || endsAt <= now) continue;
+      tm.push({ kind: t.kind, spell, target, caster, endsAt: Math.round(Math.min(endsAt, now + PARTY_TIMER_MAX_MS[t.kind])), may_break: t.may_break === true });
+    }
+    tm.sort((a, b) => a.endsAt - b.endsAt || (a.spell < b.spell ? -1 : 1));
+    out.timers = tm.slice(0, PARTY_MAX_TIMERS);
+  }
+  // Auto mode: who this character is grouped or raided with (the relay shares only between members who list each other).
+  if (src && Array.isArray(src.members)) {
+    const mem = partyMembersList(null, src.members);
+    if (mem.length) out.members = mem;
+  }
+  if (Object.keys(out).length === 1) return null;
+  // 80 rows of four numbers are about 7 KB, far under the cap; this only guards a pathological name-and-text mix.
+  while (JSON.stringify(out).length > PARTY_MAX_FRAME - 512 && out.perPlayer && Object.keys(out.perPlayer).length > 1) {
+    const keys = Object.keys(out.perPlayer);
+    out.perPlayer = Object.fromEntries(keys.slice(0, Math.ceil(keys.length / 2)).map((k) => [k, out.perPlayer[k]]));
+  }
+  while (JSON.stringify(out).length > PARTY_MAX_FRAME - 512 && out.timers && out.timers.length > 1) out.timers = out.timers.slice(0, Math.ceil(out.timers.length / 2));
+  return out;
+}
+// Reconnect delay for the nth failed attempt (0-based): 1, 2, 5, 10, 20, 30, 60 s, then 60 s, with up to 20% jitter so a
+// relay restart does not bring the whole fleet back in the same second. A relay that said `slow_down` waits at least 30 s.
+function partyBackoffMs(attempt, rand = Math.random, minMs = 0) {
+  const base = PARTY_BACKOFF_MS[Math.min(Math.max(0, attempt | 0), PARTY_BACKOFF_MS.length - 1)];
+  return Math.max(minMs, Math.round(base * (1 + 0.2 * rand())));
+}
+
+// ── the client (a factory so a test can run two in one process) ──
+// d: { url(), WS, getToken(), getCharacter(), blocked() -> reason|null, collect() -> src|null, version, now, pubMs,
+//      members() -> [names] (self + raid + group, from the Zeal pipe; auto mode), store: { load() -> {code, at, share}|null,
+//      save({code, at, share}|null) }, log(msg), rand }
+function createPartyClient(d) {
+  const now = d.now || Date.now;
+  const WS = d.WS || MiniWebSocket;
+  const pubMs = d.pubMs || PARTY_PUB_MS;
+  const S = {
+    share: false,          // the setting "Share with my in-game group and raid" (default off), kept in the store
+    soloSince: 0,          // auto mode: when the character was first seen alone (0 = not alone)
+    autoBlock: null,       // auto mode: "character|token" whose connection the relay refused for good; not retried until that changes
+    want: null,            // null | { create: true } | { code } | { auto: true }
+    status: 'off',         // off | connecting | joined | reconnecting | paused | ended
+    code: null, tier: null, trialEndsAt: null, members: 0, character: null,
+    view: null, viewAt: 0, error: null, pausedFor: null, retryAt: 0, attempts: 0, lastRx: 0,
+  };
+  let ws = null, timer = null, retry = null, gen = 0;
+  const log = d.log || (() => {});
+
+  const setError = (code, message) => { S.error = code ? { code, message } : null; };
+  function drop(close) {
+    gen++;                                  // events from the old socket are ignored from here on
+    const w = ws; ws = null;
+    if (w) { w.onopen = w.onmessage = w.onclose = w.onerror = null; try { close ? w.close(1000) : w.terminate(); } catch (e) { void e; } }
+    clearTimeout(retry); retry = null;
+  }
+  function persist() {
+    try {
+      if (!d.store) return;
+      const o = {};
+      if (S.want && S.want.code) { o.code = S.want.code; o.at = now(); }
+      if (S.share) o.share = true;
+      d.store.save(Object.keys(o).length ? o : null);
+    } catch (e) { void e; }
+  }
+  const autoKey = () => String(d.getCharacter() || '') + '|' + String(d.getToken() || '');
+  function scheduleRetry(minMs) {
+    drop(false);
+    const wait = partyBackoffMs(S.attempts++, d.rand || Math.random, minMs || 0);
+    S.status = 'reconnecting'; S.retryAt = now() + wait;
+    retry = setTimeout(() => { retry = null; connect(); }, wait);
+    if (retry.unref) retry.unref();
+  }
+  function end(code) {
+    drop(false);
+    S.status = 'ended'; S.retryAt = 0;
+    setError(code, PARTY_FATAL[code] || 'The party relay closed the connection.');
+    if (S.want && S.want.auto) S.autoBlock = autoKey();   // the relay said no for good: do not knock again until the character, the sign-in or the setting changes
+    S.want = null; persist();
+    log('[party] ended: ' + code);
+  }
+  function connect() {
+    if (!S.want) return;
+    const reason = d.blocked();
+    if (reason) { drop(true); S.status = 'paused'; S.pausedFor = reason; return; }
+    const character = d.getCharacter(), token = d.getToken();
+    if (!character || !token) { drop(true); S.status = 'paused'; S.pausedFor = token ? 'no_character' : 'signed_out'; return; }
+    S.pausedFor = null; S.character = character;
+    drop(false);
+    S.status = 'connecting';
+    const my = ++gen;
+    let sock;
+    try { sock = new WS(d.url(), { headers: { 'User-Agent': 'wolfpack-logsync/' + (d.version || '') } }); }
+    catch { return scheduleRetry(); }
+    ws = sock;
+    const live = () => my === gen;
+    sock.onopen = () => {
+      if (!live()) return;
+      S.lastRx = now();
+      const hello = { type: 'hello', token, character, agent_version: String(d.version || '').slice(0, 24) };
+      if (S.want.auto) hello.auto = true; else if (S.want.code) hello.party = S.want.code; else hello.create = true;
+      sock.sendText(JSON.stringify(hello));
+    };
+    sock.onmessage = (text) => {
+      if (!live()) return;
+      S.lastRx = now();
+      let m; try { m = JSON.parse(text); } catch { return; }
+      if (!m || typeof m !== 'object') return;
+      if (m.type === 'welcome') {
+        S.tier = m.tier || null; S.status = 'joined'; S.attempts = 0; S.retryAt = 0; setError(null);
+        if (S.want.auto) { S.code = null; return; }   // auto mode has no code: a reconnect says hello {auto} again
+        S.code = String(m.party || '');
+        S.want = { code: S.code };            // from here on a reconnect JOINS this party, never mints another
+        persist();
+      } else if (m.type === 'view') {
+        S.view = m; S.viewAt = now(); S.tier = m.tier || S.tier; S.members = Number(m.members) || 0; S.trialEndsAt = m.trial_ends_at || null;
+      } else if (m.type === 'error') {
+        const code = String(m.code || '');
+        if (PARTY_FATAL[code]) end(code);
+        else { setError(code, 'The relay said ' + code + '; trying again.'); scheduleRetry(code === 'slow_down' ? 30_000 : 0); }
+      }
+    };
+    sock.onclose = () => { if (live() && S.want && S.status !== 'ended') scheduleRetry(); };
+    sock.onerror = (e) => { if (live()) setError('network', 'Could not reach the party relay (' + String((e && e.message) || e).slice(0, 80) + ').'); };
+  }
+  function publish() {
+    if (!ws || S.status !== 'joined' || ws.readyState !== 1) return;
+    let src = null;
+    try { src = d.collect(); } catch { src = null; }
+    if (S.want && S.want.auto) {            // who we are grouped with rides every frame: the relay pairs members who list each other
+      let mem = null; try { mem = d.members ? d.members() : null; } catch { mem = null; }
+      if (Array.isArray(mem) && mem.length > 1) src = Object.assign({}, src, { members: mem });
+    }
+    const frame = src ? partyBuildPub(src, now()) : null;
+    if (frame) ws.sendText(JSON.stringify(frame));
+  }
+  // Auto mode: connect while the Zeal pipe puts the character in a group or raid, leave after more than 2 minutes alone or
+  // when the setting goes off. A code party (explicit opt-in) is never touched.
+  function stopAuto() {
+    if (ws && ws.readyState === 1) { try { ws.sendText(JSON.stringify({ type: 'bye' })); } catch (e) { void e; } }
+    drop(true);
+    Object.assign(S, { want: null, status: 'off', code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, pausedFor: null, retryAt: 0, attempts: 0, soloSince: 0 });
+  }
+  function autoTick() {
+    if (S.want && !S.want.auto) { S.soloSince = 0; return; }
+    const auto = !!(S.want && S.want.auto);
+    if (!S.share) { if (auto) stopAuto(); return; }
+    let mem = null; try { mem = d.members ? d.members() : null; } catch { mem = null; }
+    if (Array.isArray(mem) && mem.length > 1) {
+      S.soloSince = 0;
+      if (!auto && !d.blocked() && S.autoBlock !== autoKey()) {
+        Object.assign(S, { want: { auto: true }, code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, attempts: 0, retryAt: 0, pausedFor: null });
+        connect();
+      }
+    } else if (auto) {
+      if (!S.soloSince) S.soloSince = now();
+      else if (now() - S.soloSince > PARTY_AUTO_SOLO_MS) stopAuto();
+    }
+  }
+  function tick() {
+    autoTick();
+    if (!S.want) return;
+    const reason = d.blocked();
+    if (reason) {                          // stand down: close the socket, keep the code wanted
+      if (S.status !== 'paused' || S.pausedFor !== reason) { drop(true); S.status = 'paused'; S.pausedFor = reason; }
+      return;
+    }
+    if (S.status === 'paused') return connect();   // no longer blocked: resume
+    if (S.status === 'joined') {
+      if (now() - S.lastRx > PARTY_RX_IDLE_MS) { scheduleRetry(); return; }
+      publish();
+    }
+  }
+  function start() { if (!timer) { timer = setInterval(tick, pubMs); if (timer.unref) timer.unref(); } }
+
+  function request(want) {
+    const reason = d.blocked();
+    if (reason) return { ok: false, error: PARTY_BLOCK_TEXT[reason] || 'A party is not available right now.', reason };
+    drop(true);
+    Object.assign(S, { want, code: want.code || null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, attempts: 0, retryAt: 0, pausedFor: null });
+    start(); connect(); persist();
+    return { ok: true };
+  }
+  const api = {
+    create: () => request({ create: true }),
+    join(raw) {
+      const code = String(raw == null ? '' : raw).trim().toUpperCase().replace(/[\s-]+/g, '');
+      if (!PARTY_CODE_RX.test(code)) return { ok: false, error: 'A party code is 6 letters or numbers, like K7M2QX.' };
+      return request({ code });
+    },
+    // The setting. Kept even while blocked (signed out, dry-run): it connects by itself once the block lifts and the character is grouped.
+    setShare(on) {
+      S.share = on === true;
+      S.autoBlock = null; S.soloSince = 0;
+      if (S.share) start(); else if (S.want && S.want.auto) stopAuto();
+      persist();
+      if (S.share) tick();
+      return { ok: true };
+    },
+    leave() {
+      if (S.want && S.want.auto) { S.share = false; S.autoBlock = null; }   // leaving an auto connection turns the sharing off, or it would reconnect at the next tick
+      if (ws && ws.readyState === 1) { try { ws.sendText(JSON.stringify({ type: 'bye' })); } catch (e) { void e; } }
+      drop(true);
+      Object.assign(S, { want: null, status: 'off', code: null, view: null, viewAt: 0, members: 0, tier: null, trialEndsAt: null, error: null, pausedFor: null, retryAt: 0, attempts: 0 });
+      persist();
+      return { ok: true };
+    },
+    // Resume a party remembered across an agent restart.
+    resume() {
+      let saved = null; try { saved = d.store && d.store.load(); } catch { saved = null; }
+      if (saved && saved.share === true) { S.share = true; start(); }
+      if (!saved || !PARTY_CODE_RX.test(String(saved.code)) || !(now() - Number(saved.at) < PARTY_REJOIN_MAX_AGE_MS)) return S.share;
+      Object.assign(S, { want: { code: saved.code }, code: saved.code, status: 'connecting' });
+      start(); connect();
+      return true;
+    },
+    // The small, public state (the dashboard, the tray, the DPS HUD).
+    status() {
+      const t = now();
+      return {
+        share: S.share, mode: S.want ? (S.want.auto ? 'auto' : 'code') : null,
+        auto_stopped: !!(S.share && !S.want && S.autoBlock && S.autoBlock === autoKey()),
+        status: S.status, code: S.code, tier: S.tier, trial_ends_at: S.trialEndsAt, members: S.members, character: S.character,
+        stale: !!(S.view && (S.view.stale || t - S.viewAt > 10_000)), view_age_ms: S.viewAt ? t - S.viewAt : null,
+        error: S.error, paused_for: S.pausedFor, paused_text: S.pausedFor ? (PARTY_BLOCK_TEXT[S.pausedFor] || null) : null,
+        retry_in_ms: S.status === 'reconnecting' ? Math.max(0, S.retryAt - t) : null,
+      };
+    },
+    // The merged view, shaped for the HUD.
+    view() {
+      const v = S.view;
+      if (!v) return null;
+      return { players: v.players || [], roster: v.roster || [], fires: v.fires || [], target: v.target || null, casting: v.casting || null, timers: Array.isArray(v.timers) ? v.timers : [], at: S.viewAt };
+    },
+    tick, destroy() { clearInterval(timer); timer = null; drop(false); S.want = null; },
+    _state: S,
+  };
+  return api;
+}
+
+// ── agent wiring ──
+let _partyClientInst = null;
+let _partyFile = PARTY_FILE;
+let _partyCharacterOverride = null;   // tests only
+function _partyCharacter() {
+  if (_partyCharacterOverride) return _partyCharacterOverride;
+  let best = null, bestTs = 0;
+  for (const ch of Object.keys(_zealState || {})) {
+    const ts = (_zealState[ch] && _zealState[ch].updatedAt) || 0;
+    if (ts > bestTs && Date.now() - ts < 60_000 && PARTY_NAME_RX.test(ch)) { bestTs = ts; best = ch; }
+  }
+  if (best) return best;
+  const p = _primaryCharacter();
+  return p && PARTY_NAME_RX.test(p) ? p : null;
+}
+function _partyBlocked() {
+  if (_uploadOpts && _uploadOpts.dryRun) return 'dry_run';
+  if (!_mimicSessionToken) return 'signed_out';
+  if (_controlStandDown().down) return 'control';
+  const c = _partyCharacter();
+  if (!c) return 'no_character';
+  if (!shouldUploadForCharacter(c)) return 'hidden';
+  return null;
+}
+// The timers THIS character cast and still has running, for the party view (relay 1.1.0). Ends come from the duration chain
+// (_durationWithExtensions: our AAs and worn foci), already in each entry's dur_ticks:
+//   * buffs / debuffs: _buffLandingsByTarget entries we cast (`cast_by`, or `owner` for the synthesized pacify), kind by the spell's
+//     good flag; a permanent spell (formula 50) is left out, it has no end to share.
+//   * charms: the charm tracker's active, non-Dire sessions. The server rolls a break check every tick (EQMacEmu c2cd265
+//     zone/spell_effects.cpp:3054-3095), so a charm only runs to its end if it holds: `may_break` is always true. A Dire Charm (AA)
+//     has no timed end and is not shared.
+let _partyTimersSent = false;
+function _partyOwnTimers(ch, now) {
+  const cl = String(ch || '').toLowerCase(), out = [];
+  if (!cl) return out;
+  for (const [tk, mp] of _buffLandingsByTarget) {
+    for (const b of mp.values()) {
+      if (!b || b.is_charm_spell || !(b.dur_ticks > 0) || !(b.landed_at > 0)) continue;
+      const by = String(b.cast_by || b.owner || '').toLowerCase();
+      if (by !== cl) continue;
+      const e = _spellByNameLower.get(String(b.name || '').toLowerCase());
+      if (e && (Number(e.durf) === 50 || Number(e.durf) === 51)) continue;
+      const endsAt = b.landed_at + b.dur_ticks * 6000;
+      if (endsAt <= now) continue;
+      out.push({ kind: _spellGood(b.name) === 1 ? 'buff' : 'debuff', spell: b.name, target: b.target_name || tk, caster: ch, endsAt, may_break: false });
+    }
+  }
+  for (const c of _charmTickTracker.values()) {
+    if (!c || !c.is_active || c.is_dire_charm || String(c.owner || '').toLowerCase() !== cl) continue;
+    if (!(c.duration_sec > 0) || !(c.started_at > 0)) continue;
+    const endsAt = c.started_at + c.duration_sec * 1000;
+    if (endsAt <= now) continue;
+    out.push({ kind: 'charm', spell: c.charm_spell || 'Charm', target: c.pet, caster: ch, endsAt, may_break: true });
+  }
+  return out;
+}
+// What this agent publishes now. Null = nothing to say (not fighting, not in a raid or group).
+function _partyCollect() {
+  const ch = _partyCharacter();
+  if (!ch) return null;
+  const cl = ch.toLowerCase(), now = Date.now();
+  const et = _freshEncounterThreat((stats.currentEncounterThreatByChar || {})[cl] || stats.currentEncounterThreat);
+  const src = { perPlayer: et && et.perPlayer ? et.perPlayer : null, target: null, casting: null, roster: null, fires: null };
+  if (_lastRaidPipe && now - _lastRaidPipe.at < 15_000 && Array.isArray(_lastRaidPipe.members)) {
+    src.roster = _lastRaidPipe.members.filter((m) => m && typeof m.hp_pct === 'number');
+  } else {
+    // Not in a raid: the group window's bars (slots 11..15) from this character's own Zeal state.
+    const st = _zealState[ch] || _zealState[Object.keys(_zealState).find((k) => k.toLowerCase() === cl)];
+    if (st && now - (st.updatedAt || 0) < 15_000 && Array.isArray(st.gauges)) {
+      src.roster = st.gauges.filter((g) => g && g.text && g.slot >= 11 && g.slot <= 15 && typeof g.hp_pct === 'number').map((g) => ({ name: g.text, hp_pct: g.hp_pct }));
+    }
+  }
+  // Our own timers ride every frame, fight or not: a charm outlives the fight, and a frame that lists none clears the last one.
+  const own = _partyOwnTimers(ch, now);
+  if (own.length || _partyTimersSent) { src.timers = own; src.character = ch; _partyTimersSent = own.length > 0; }
+  if (!src.perPlayer && !(src.roster && src.roster.length)) return src.timers ? src : null;
+  src.target = _zealTargetForChar(cl);
+  const cast = _lastCastRelay.get(cl);
+  if (cast && cast.spell && now - cast.at < ((Number(cast.castSecs) || 3) + 1.5) * 1000) src.casting = cast.target ? `${cast.spell} on ${cast.target}` : cast.spell;
+  // Guild trigger fires only: a personal trigger's name stays on this PC, like its relay to the bot.
+  src.fires = _fireLog.filter((f) => f.guild && now - f.at < 60_000).slice(-PARTY_MAX_FIRES);
+  return src;
+}
+// Who this character is grouped or raided with, off the Zeal pipe (types 6 and 5): self first, then the raid, then the group,
+// each name checked against the relay's rule, repeats dropped, at most 72. Fresh data only (raid list 30 s, group state 60 s);
+// the raid list counts only when it contains this character (a multiboxer's other PC may have sent it). null = no character.
+function _partyMembers() {
+  const ch = _partyCharacter();
+  if (!ch) return null;
+  const cl = ch.toLowerCase(), now = Date.now();
+  let raid = [];
+  if (_lastRaidPipe && now - _lastRaidPipe.at < 30_000 && Array.isArray(_lastRaidPipe.members)) {
+    const names = _lastRaidPipe.members.map((m) => m && m.name).filter(Boolean);
+    if (names.some((n) => String(n).toLowerCase() === cl)) raid = names;
+  }
+  const key = Object.keys(_zealState || {}).find((k) => k.toLowerCase() === cl);
+  const group = _zealGroupNames(key ? _zealState[key] : null, now) || [];
+  return partyMembersList(ch, raid, group);
+}
+function _partyStoreFile(file) {
+  return {
+    load() { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } },
+    save(o) {
+      try {
+        if (!o) { try { fs.unlinkSync(file); } catch (e) { if (!e || e.code !== 'ENOENT') throw e; } return; }
+        fs.writeFileSync(file + '.tmp', JSON.stringify({ v: 2, code: o.code, at: o.at, share: o.share === true })); fs.renameSync(file + '.tmp', file);
+      } catch (e) { void e; }
+    },
+  };
+}
+function _partyClient() {
+  if (!_partyClientInst) {
+    _partyClientInst = createPartyClient({
+      url: () => process.env.WOLFPACK_PARTY_RELAY_URL || PARTY_RELAY_URL,
+      getToken: () => _mimicSessionToken || '', getCharacter: _partyCharacter, blocked: _partyBlocked, collect: _partyCollect, members: _partyMembers,
+      version: AGENT_VERSION, store: _partyStoreFile(_partyFile), log: (m) => console.log(m),
+    });
+  }
+  return _partyClientInst;
+}
+// The boot hook (main): a party remembered from before an agent restart rejoins by itself; otherwise the client does not exist.
+function _partyBoot() { if (_partyStoreFile(_partyFile).load()) _partyClient().resume(); }
+// null when there is no party, else the status plus the merged view for the DPS HUD (/api/state, GET /api/party).
+function _partyStateForDashboard() {
+  if (!_partyClientInst) return null;
+  const st = _partyClientInst.status();
+  if (st.status === 'off' && !st.error) return null;
+  return { ...st, ..._partyClientInst.view() };
+}
+// The setting alone, for the dashboard card (partyView is null while idle). `waiting`: on, and no group or raid to share with yet.
+function _partyShareState() {
+  const on = !!(_partyClientInst && _partyClientInst.status().share);
+  return { on, waiting: on && _partyClientInst.status().status === 'off' };
+}
+// Returns true when it answered. Called from the dashboard router, after the local guard.
+async function _partyRoute(req, res) {
+  const url = req && req.url;
+  if (!url || url.split('?')[0] !== '/api/party') return false;
+  const send = (status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); return true; };
+  if (req.method === 'GET') return send(200, { ok: true, ...(_partyClientInst ? _partyClientInst.status() : { status: 'off' }), ...(_partyClientInst ? _partyClientInst.view() : null) });
+  if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return send(405, { error: 'method not allowed' }); }
+  let body = {};
+  try { const raw = await _readBody(req, 2 * 1024); if (raw && raw.trim()) body = JSON.parse(raw); } catch { return send(400, { error: 'invalid json' }); }
+  const act = body && body.action;
+  if (act !== 'create' && act !== 'join' && act !== 'leave' && act !== 'share') return send(400, { error: 'action must be create, join, leave or share' });
+  if (act === 'share' && typeof body.on !== 'boolean') return send(400, { error: 'share needs on: true or false' });
+  const c = _partyClient();
+  const r = act === 'share' ? c.setShare(body.on) : act === 'leave' ? c.leave() : act === 'create' ? c.create() : c.join(body.code);
+  if (!r.ok) return send(400, { ok: false, error: r.error, reason: r.reason || null });
+  _stateJsonCache = { at: 0, body: null };      // the dashboard's next poll sees the new state, not the 400 ms copy
+  return send(200, { ok: true, ...c.status(), ...c.view() });
+}
+
 // Export internals for tests; only run main() when invoked directly as CLI.
 module.exports = {
+  // Quest-scripted spawns and loot (2026-11-19): see the block above searchItemCatalog.
+  loadQuestScriptedFromDisk, fetchQuestScripted, _localQuestScriptedRoute, _questScriptedForTest: () => _questScripted,
+  _questScriptedResetForTest: () => { _questScripted = null; _questScriptedBody = ''; },
+  // Raid Mimic party (2026-11-15): see the block above module.exports.
+  _buffQueueTtl, _buffQueueFast, _maybeUploadRaidRoster, _resetBuffQueueFastForTest: () => { _buffQueueFastUntil = 0; },
+  MiniWebSocket, createPartyClient, partyBuildPub, partyMembersList, _partyMembers, _partyShareState, _setRaidPipeForTest: (v) => { _lastRaidPipe = v; }, PARTY_AUTO_SOLO_MS, PARTY_MAX_MEMBERS, _partyOwnTimers, partyBackoffMs, _partyRoute, _partyStateForDashboard, _partyCollect, _partyBlocked, _partyBoot,
+  _partyResetForTest: () => { if (_partyClientInst) _partyClientInst.destroy(); _partyClientInst = null; },
+  _partySetFileForTest: (f) => { _partyFile = f || PARTY_FILE; },
+  _partyCharacterForTest: (c) => { _partyCharacterOverride = c || null; },
+  _setMimicSessionForTest: (t) => { _mimicSessionToken = t || ''; },
+  PARTY_FATAL, PARTY_BACKOFF_MS, PARTY_MAX_ROWS,
   // Rebuild from my logs (2026-10-21): see the block above module.exports.
   _rebuildStart, _rebuildStop, _rebuildStatus, _rebuildRaids, _rebuildScheduleMatch, _rebuildDkpPass, _rebuildDkpMode, _localBackfillRoute,
   _rebuildStartRequest, _rebuildSetCandidatesForTest, _rebuildResetForTest, _rebuildWait: () => _rb.promise,
@@ -69698,7 +71991,7 @@ module.exports = {
   AGENT_VERSION,
   // Local store + own position recorder (2026-10-21): see the block above module.exports.
   _trackBackfillRun, _trackBackfillSeen, _applyTuningResponse, _localStore, _localStoreOpen, _localTrackFrame, _localTrackMinuteRow, _localTrackNightKey, _localTrackTick, _localTrackClose, _localTrackPush,
-  _localTrackNights, _localTrackWindow, _localTrackBosses, _localTrackMap, _mapPaths, _localTrackRoute, _localTrackSetStoreForTest, _deathNoteEvent, _deathNoteFrame, _deathBuildStory, _localDeathsRoute, _deathHits, _deathLast, _deathPrefsForTest: (p) => { stats.characterPrefs = p; }, _localRecorderStart, _localRecorderStop,
+  _localTrackNights, _localTrackWindow, _localTrackBosses, _localTrackMap, _mapPaths, _localTrackRoute, _localTrackSetStoreForTest, _deathNoteEvent, _deathNoteFrame, _deathBuildStory, _relvLogZone, _localDeathsRoute, _deathHits, _deathLast, _deathPrefsForTest: (p) => { stats.characterPrefs = p; }, _localRecorderStart, _localRecorderStop,
   // My parses on the local site + the guild's record kept beside it (2026-10-21): see the block above module.exports.
   _localParsesAnswer, _localParsesRoute, _localFights, _localFoldPlayers, _localParseDiff, _localHubMatch, _localHubClean, _localHubApply, _localHubEncounters, _localHubSync,
   _localHubStatus, _localHubResetForTest, LOCAL_HUB_KIND, LOCAL_HUB_STATE_KIND, LOCAL_HUB_MATCH_MS,
@@ -69710,7 +72003,7 @@ module.exports = {
   _isGuestChar, setGuestCharacter, _guestCharList, shouldUploadForCharacter,
   // Local item icons (2026-10-21): cut from the player's own dragitem sheets. See the block above module.exports.
   _iconCellOf, _iconDecodeTga, _iconDecodeDds, _iconPng, _iconCut, _localIconPng, _localIconRoute,
-  parseEvent, shouldKeep, parseEqTimestamp,
+  parseEvent, shouldKeep, parseEqTimestamp, histQuantile, funEventBuffer,
   DEFAULT_DROP_PATTERNS, KEEP_PATTERNS,
   buildFeedbackLogSlice, _feedbackLineAllowed,
   // Mimic's Chat overlay feed (2026-10-14). The buffers are exposed so a test can prove nothing here lands in an upload queue.
@@ -69733,6 +72026,7 @@ module.exports = {
   CHAT_CACHE_FILE, CHAT_CACHE_MAX_AGE_MS, CHAT_CACHE_PER_RING_MAX, CHAT_CACHE_MAX_BYTES, CHAT_CACHE_WRITE_MS,
   _noteBuffDurationsFromState, buffDurationStats, buffDurationTable, _noteBuffDurationSample,
   buffDurationFactorFor,
+  _durationWithExtensions, _reinforcementPct, _setDurationFociCatalog, _castingKit, _ownDurTicks, _statsForTest: () => stats,
   SOURCELESS_SPELLS, BARD_SONGS,
   EncounterBuilder, characterFromFilename, isBackupLogFile, _splitBackupSuffix,
   trackChChainLine, chChainSnapshot, removeChChainSlot,
@@ -69752,7 +72046,7 @@ module.exports = {
   classifyMovement, observedSpeed, rootActiveOn, withSpellIds, _tgtMoveNote, _tgtMoveResetForTest: () => { _tgtMove.id = null; _tgtMove.pts = []; },
   TGT_HIST_MAX, TGT_HIST_KEEP_MS, _tgtHistNoteFromState, _tgtHistNoteSlain, _targetHistoryPayload, _pastMobInfo,
   _saveTargetHistory, _loadTargetHistory, _trimTargetHistory,
-  _zealDeathsFromState, _charmPetDiedById, _tgtHistNoteZealDeath, _zealDeathSeen,
+  _zealDeathsFromState, _charmPetDiedById, _tgtHistNoteZealDeath, _zealDeathSeen, checkCharmPetDeath, _lastCharmPetByOwner,
   _tgtHistForTest: () => _tgtHist, _tgtHistResetForTest: () => { _tgtHist = []; _tgtCur.clear(); },
   // Kite loops (2026-10-15): the Map's summary gate + queue, the guild's loops in, and the queue the summary lands in.
   _kiteLoopSubmit, _kiteLoopBody, _kiteLoopsClean, _kiteLoopsFor, _kiteLoopCache, _handleKiteLoopPost, _handleKiteLoopsGet,
@@ -69892,7 +72186,7 @@ module.exports = {
   _applyPetOwnersResponse, _isGeneratedPetName, _guildPetOwners, whoData,
   _liveThreatForTest: () => stats.currentEncounterThreat,
   // +pet spawn ids on the DPS HUD — exported for their test.
-  _petSpawnIdFor, _ownPetSpawnId, _guildPetIds, _zealTagsForTest: _zealTags,
+  _petSpawnIdFor, _ownPetSpawnId, _guildPetIds, _zealTagsForTest: _zealTags, _applyZealTagMessage, _killTagNow,
   _uploadQueueLenForTest: () => _uploadQueue.length,
   // "What you hear" (2026-10-12) — exported for test/trigger-rules.test.js.
   _triggerRules, _resolveRule, _computeRuleGroups, _triggerRulesPayload, _setTriggerRule, _cleanRules,
@@ -69914,7 +72208,7 @@ module.exports = {
   _setPronunciationsForTest: (synced, local) => { _pronSynced = new Map(_pronPairs(synced)); _pronLocal = { ...(local || {}) }; _pronMerged = null; },
   _noteOwnMelee, _afterMyMeleeOk, _ownMeleeAt,
   _importSoundFile, _parseTriggerXml, _parseTriggerTgfJson,
-  // PQ Companion pack import (2026-10-20) — exported for test/pqc-import.test.js.
+  // JSON trigger pack import (2026-10-20) — exported for test/pqc-import.test.js.
   _parsePqCompanionPack, _parseTriggerImport, _PQC_ROW_FIELDS, compileTriggerPattern,
   _setVoiceStateDirForTest: (d) => { _voiceStateDir = d || null; },
   _setGuildTriggersForTest: (arr) => { stats.guildTriggers = arr; stats.guildTriggersVersion = null; },

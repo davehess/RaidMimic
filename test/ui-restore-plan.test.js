@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const {
-  PARTS, parseSections, classify, fitLayout, compare, buildRestore, windowRects,
+  PARTS, parseSections, classify, fitLayout, compare, buildRestore, windowRects, keysInfo,
 } = require('../apps/mimic/uiRestorePlan.js');
 
 const C = 'Aldenmar';
@@ -306,6 +306,27 @@ describe('buildRestore', () => {
       const r2 = buildRestore({ backupFiles: bk2, localFiles: local(), character: C, parts: ['zealchar'] });
       expect(r2.writes['eqclient.ini']).toContain('[KeyMaps_Aldenmar]\r\nKEYMAP_FORWARD=e\r\n[KeyMaps_Brackwyn]');
       expect(r2.writes['eqclient.ini']).not.toContain('SHARED');
+    });
+
+    // Review of the release, 2026-11-14. The other direction: the backup's PC keeps keys per character, this PC
+    // shares one set. With the switch no longer copied, the game here reads [KeyMaps], so the tick must bring the
+    // character's own keys there, not the other PC's [KeyMaps] that no character reads.
+    it('a per-character backup brought to a PC that shares keys: the tick brings the character\'s OWN keys as the shared set', () => {
+      const bk = { ...PER, 'eqclient.ini': '[KeyMaps]\r\nKEYMAP_FORWARD=UNREAD\r\n[KeyMaps_Aldenmar]\r\nKEYMAP_FORWARD=e\r\nKEYMAP_DUCK=x\r\n' };
+      const lo = { 'zeal.ini': '[Zeal]\r\nPerCharKeybinds=FALSE\r\n', 'eqclient.ini': '[KeyMaps]\r\nKEYMAP_FORWARD=UP\r\nMINE=1\r\n' };
+      const r = buildRestore({ backupFiles: bk, localFiles: lo, character: C, parts: ['keybinds', 'zealchar', 'zeal'] });
+      expect(r.writes['eqclient.ini']).toContain('[KeyMaps]\r\nKEYMAP_FORWARD=e\r\nKEYMAP_DUCK=x\r\n');
+      expect(r.writes['eqclient.ini']).not.toMatch(/UNREAD|MINE=1/);
+      expect(r.writes['zeal.ini']).toBeUndefined();                 // the switch is not copied: this PC keeps sharing keys
+      // without the tick the shared set is left alone
+      const r2 = buildRestore({ backupFiles: bk, localFiles: lo, character: C, parts: ['zealchar'] });
+      expect(r2.writes['eqclient.ini']).toContain('[KeyMaps]\r\nKEYMAP_FORWARD=UP\r\nMINE=1\r\n');
+      // both PCs per character: the shared set comes as it is (no character reads it on either)
+      const r3 = buildRestore({ backupFiles: bk, localFiles: local(), character: C, parts: ['keybinds'] });
+      expect(r3.writes['eqclient.ini']).toContain('[KeyMaps]\r\nKEYMAP_FORWARD=UNREAD\r\n');
+      // a backup that cannot say which way its PC keeps keys (no zeal.ini) is not second-guessed
+      const r4 = buildRestore({ backupFiles: { 'eqclient.ini': bk['eqclient.ini'] }, localFiles: lo, character: C, parts: ['keybinds'] });
+      expect(r4.writes['eqclient.ini']).toContain('[KeyMaps]\r\nKEYMAP_FORWARD=UNREAD\r\n');
     });
 
     it('bringing shared Zeal settings never flips this PC\'s per-character switch', () => {
@@ -615,10 +636,272 @@ describe('a layout that is already this screen\'s is not re-fitted', () => {
     expect(compare('layout', bk, { ...lo, [NAME]: ui }, C, { target }).same).toBe(false);
   });
 
+  // Review of the release, 2026-11-14: "same computer" was first built as "read everything at this screen's size",
+  // which threw away the size the backup was played at. A window with no place at this size was then fitted from
+  // whichever block came first in its section.
+  it('a backup made on this computer: a window with NO place at this size is fitted from the size it was played at', () => {
+    // BuffWindow: an old 1280x1024 place listed first, the played-at 2560x1440 place, none for 1920x1080
+    const ui2 = ui + '[BuffWindow]\r\nXPos1280x1024=0\r\nYPos1280x1024=0\r\nXPos2560x1440=2400\r\nYPos2560x1440=1300\r\nWidth=100\r\nHeight=100\r\n';
+    const r = buildRestore({ backupFiles: { ...bk, [NAME]: ui2 }, localFiles: lo, character: C, parts: ['layout'], target, sameMachine: true });
+    const secs = parseSections(r.writes[NAME]);
+    const val = (sec, key) => secs.find((s) => s.name === sec).keys.find((k) => k.key === key).value;
+    // the window that HAS a place here keeps it, size and all
+    expect([val('MainChat', 'XPos1920x1080'), val('MainChat', 'YPos1920x1080'), val('MainChat', 'Width')]).toEqual(['100', '200', '400']);
+    // the one that has none: docked bottom right at 2560x1440, so bottom right here (not 0,0 from the 1280x1024 block)
+    expect([val('BuffWindow', 'XPos1920x1080'), val('BuffWindow', 'YPos1920x1080')]).toEqual(['1776', '951']);
+  });
+
   it('with no screen size recorded for the backup, a tie between blocks goes to this screen\'s block', () => {
     const r = fitLayout(ui, 1920, 1080, {});
     expect(r.sourceRes).toBe('1920x1080');
     expect(r.text).toBe(ui);
     expect(fitLayout(ui, 2560, 1440, {}).sourceRes).toBe('2560x1440');
+  });
+});
+
+// Review of 3.0.11 (2026-11-14): a backup of this PC's own files, restored onto itself, reported 13-34 windows
+// "moved" and rewrote them. Invented names only.
+describe('same-PC restore of an unchanged backup (keep)', () => {
+  const T = { w: 1920, h: 1080 };
+  // Chat 2 is parked almost wholly off the bottom right on purpose; Bag has NO 1920x1080 place (only a stale
+  // 2560x1440 one); Map is a normal window; Zone is parked far off screen by the game.
+  const ui = [
+    '[Chat 2]', 'XPos1920x1080=1881', 'YPos1920x1080=1070', 'Width=282', 'Height=224', 'XPos2560x1440=2200', 'YPos2560x1440=1300',
+    '[Map]', 'XPos1920x1080=1179', 'YPos1920x1080=291', 'XPos2560x1440=1500', 'YPos2560x1440=400',
+    '[Zone]', 'XPos1920x1080=-32000', 'YPos1920x1080=-32000',
+    '[Bag]', 'XPos2560x1440=1654', 'YPos2560x1440=424', '',
+  ].join('\r\n');
+  const eqc = '[VideoMode]\r\nWidth=1920\r\nHeight=1080\r\n';
+  const files = { 'UI_Aldenmar_pq.proj.ini': ui, 'eqclient.ini': eqc };
+  const secOf = (text) => Object.fromEntries(parseSections(text).map((s) => [s.name, Object.fromEntries(s.keys.map((k) => [k.key, k.value]))]));
+
+  it('moves nothing and writes nothing: 0 windows moved, none invented', () => {
+    const r = fitLayout(ui, 1920, 1080, { keep: true, source: T });
+    expect(r.text).toBe(ui);
+    expect([r.added, r.clamped, r.refit, r.resized]).toEqual([0, 0, 0, 0]);
+    const cmp = compare('layout', files, files, C, { target: T, sameMachine: true });
+    expect(cmp.same).toBe(true);
+    expect(cmp.summary).toBe('identical');
+    expect(buildRestore({ backupFiles: files, localFiles: files, character: C, parts: ['layout'], target: T, sameMachine: true }).writes).toEqual({});
+  });
+
+  it('without keep (another PC) the same file IS fitted, so the guard above is the keep rule and not an accident', () => {
+    const r = fitLayout(ui, 1920, 1080, { source: T });
+    expect(r.clamped).toBeGreaterThan(0);
+    expect(secOf(r.text)['Chat 2']['XPos1920x1080']).not.toBe('1881');
+  });
+
+  it('keep: a place at this size whose corner lies off the screen is brought back; on-screen and parked ones stay exact', () => {
+    const lostUi = ['[Lost]', 'XPos1920x1080=-300', 'YPos1920x1080=50', 'Width=200', 'Height=200', 'XPos2560x1440=100', 'YPos2560x1440=100',
+      '[Far]', 'XPos1920x1080=3000', 'YPos1920x1080=40', 'XPos2560x1440=200', 'YPos2560x1440=40',
+      '[Tucked]', 'XPos1920x1080=-5', 'YPos1920x1080=10', 'XPos2560x1440=0', 'YPos2560x1440=0',
+      // a chat window the player pushed 60 px past the left edge: most of it is on screen, so it is theirs to keep
+      '[Chat 1]', 'XPos1920x1080=-60', 'YPos1920x1080=700', 'Width=400', 'Height=300', 'XPos2560x1440=0', 'YPos2560x1440=900',
+      '[Zone]', 'XPos1920x1080=-32000', 'YPos1920x1080=-32000', 'XPos2560x1440=10', 'YPos2560x1440=10', ''].join('\r\n');
+    for (const source of [{ w: 2560, h: 1440 }, T]) {
+      const r = fitLayout(lostUi, 1920, 1080, { keep: true, source });
+      const s = secOf(r.text);
+      expect(Number(s.Lost['XPos1920x1080'])).toBeGreaterThanOrEqual(0);
+      expect(Number(s.Far['XPos1920x1080'])).toBeLessThanOrEqual(1920 - 80);
+      expect([s.Tucked['XPos1920x1080'], s.Tucked['YPos1920x1080']]).toEqual(['-5', '10']);
+      expect([s['Chat 1']['XPos1920x1080'], s['Chat 1'].Width]).toEqual(['-60', '400']);
+      expect(s.Zone['XPos1920x1080']).toBe('-32000');
+      expect(r.clamped).toBe(2);
+    }
+  });
+
+  it('a window with a place at the target size keeps it exactly while one with none is fitted from the played-at size', () => {
+    // played at 2560x1440, now on 1920x1080: Map has a 1080 place (kept), Bag has none (fitted from 1440)
+    const r = fitLayout(ui, 1920, 1080, { keep: true, source: { w: 2560, h: 1440 } });
+    const s = secOf(r.text);
+    expect([s.Map['XPos1920x1080'], s.Map['YPos1920x1080']]).toEqual(['1179', '291']);
+    expect([s['Chat 2']['XPos1920x1080'], s['Chat 2']['YPos1920x1080'], s['Chat 2'].Width, s['Chat 2'].Height]).toEqual(['1881', '1070', '282', '224']);
+    expect(s.Zone['XPos1920x1080']).toBe('-32000');
+    expect(r.added).toBe(1);
+    expect(Number(s.Bag['XPos1920x1080'])).toBeLessThanOrEqual(1920 - 200);
+  });
+});
+
+describe('Zeal raid bars are fitted with the window rule', () => {
+  const zeal = '[RaidBars]\r\nEnabled=TRUE\r\nLeft=1970\r\nTop=750\r\nRight=2530\r\nBottom=1080\r\nShowAll=TRUE\r\n[AssistBar]\r\nEnabled=TRUE\r\nLeft=1200\r\nTop=1000\r\n';
+  const eq1440 = '[VideoMode]\r\nWidth=2560\r\nHeight=1440\r\n';
+  const bars = (text) => {
+    const o = {};
+    for (const s of parseSections(text)) if (/^(RaidBars|AssistBar)$/i.test(s.name)) for (const k of s.keys) o[s.name + '.' + k.key] = k.value;
+    return o;
+  };
+  const bk = { 'eqclient.ini': eq1440, 'zeal.ini': zeal };
+  const lo = { 'zeal.ini': '[RaidBars]\r\nLeft=1358\r\nTop=504\r\nRight=1918\r\nBottom=834\r\n' };
+  const restore = (target, sameMachine, backup = bk) =>
+    bars(buildRestore({ backupFiles: backup, localFiles: lo, character: C, parts: ['zeal'], target, sameMachine }).writes['zeal.ini'] || '');
+
+  it('1440 -> 1080: the bars end wholly on the 1920x1080 screen, at the same size', () => {
+    const b = restore({ w: 1920, h: 1080 }, false);
+    const L = +b['RaidBars.Left'], T = +b['RaidBars.Top'], R = +b['RaidBars.Right'], B = +b['RaidBars.Bottom'];
+    expect(L).toBeGreaterThanOrEqual(0); expect(T).toBeGreaterThanOrEqual(0);
+    expect(R).toBeLessThanOrEqual(1920); expect(B).toBeLessThanOrEqual(1080);
+    expect([R - L, B - T]).toEqual([560, 330]);               // a bar keeps its size
+    expect(+b['AssistBar.Left']).toBeLessThan(1920 - 100); expect(+b['AssistBar.Top']).toBeLessThan(1080);
+  });
+
+  it('the same screen size leaves them untouched', () => {
+    const same = { 'eqclient.ini': '[VideoMode]\r\nWidth=1920\r\nHeight=1080\r\n', 'zeal.ini': zeal.replace('1970', '1358').replace('2530', '1918').replace('Top=750', 'Top=504').replace('Bottom=1080', 'Bottom=834') };
+    const b = restore({ w: 1920, h: 1080 }, false, same);
+    expect([b['RaidBars.Left'], b['RaidBars.Right'], b['RaidBars.Top'], b['RaidBars.Bottom']]).toEqual(['1358', '1918', '504', '834']);
+  });
+
+  it('a backup from this PC (keep) leaves them alone even when the sizes differ', () => {
+    expect(restore({ w: 1920, h: 1080 }, true)['RaidBars.Left']).toBe('1970');
+  });
+
+  it('a bar wider or taller than the new screen is cut to it: Left >= 0 and Right <= the screen', () => {
+    const wide = { ...bk, 'zeal.ini': '[RaidBars]\r\nLeft=5\r\nTop=100\r\nRight=2555\r\nBottom=1400\r\n' };
+    const b = restore({ w: 1920, h: 1080 }, false, wide);
+    expect([b['RaidBars.Left'], b['RaidBars.Right']]).toEqual(['0', '1920']);
+    expect([b['RaidBars.Top'], b['RaidBars.Bottom']]).toEqual(['0', '1080']);
+  });
+
+  it('a side that runs to the screen edge (0) stays 0', () => {
+    const edge = { ...bk, 'zeal.ini': '[RaidBars]\r\nLeft=1000\r\nTop=500\r\nRight=0\r\nBottom=0\r\n' };
+    const b = restore({ w: 1920, h: 1080 }, false, edge);
+    expect([b['RaidBars.Right'], b['RaidBars.Bottom']]).toEqual(['0', '0']);
+    expect(b['RaidBars.Left']).toBe('750');
+  });
+});
+
+describe('a backup with no eqclient.ini picks its block the same way every time', () => {
+  // one window section per window, each holding BOTH blocks, so the two counts tie (as in the real files)
+  const small = Array.from({ length: 3 }, (_, i) => ['[W' + i + ']', 'XPos2559x1440=' + (i * 10), 'YPos2559x1440=5', 'XPos2560x1440=' + (i * 20 + 7), 'YPos2560x1440=9'].join('\r\n')).join('\r\n') + '\r\n';
+  const big = '';
+  it('equal blocks: the larger screen wins whichever is listed first', () => {
+    const swapped = small.replace(/XPos2559x1440/g, 'XPosTMP').replace(/YPos2559x1440/g, 'YPosTMP')
+      .replace(/XPos2560x1440/g, 'XPos2559x1440').replace(/YPos2560x1440/g, 'YPos2559x1440')
+      .replace(/XPosTMP/g, 'XPos2560x1440').replace(/YPosTMP/g, 'YPos2560x1440');
+    expect(fitLayout(small + big, 1920, 1080).sourceRes).toBe('2560x1440');
+    expect(fitLayout(swapped, 1920, 1080).sourceRes).toBe('2560x1440');
+  });
+  it('the snapshot\'s own source size wins when it names a block the file has', () => {
+    const files = { 'UI_Aldenmar_pq.proj.ini': small + big };
+    const a = buildRestore({ backupFiles: files, localFiles: {}, character: C, parts: ['layout'], target: { w: 1920, h: 1080 }, sourceRes: { w: 2559, h: 1440 } });
+    const b = buildRestore({ backupFiles: files, localFiles: {}, character: C, parts: ['layout'], target: { w: 1920, h: 1080 } });
+    expect(a.writes['UI_Aldenmar_pq.proj.ini']).toBeTruthy();
+    expect(a.writes['UI_Aldenmar_pq.proj.ini']).not.toBe(b.writes['UI_Aldenmar_pq.proj.ini']);
+  });
+});
+
+// Bringing per-character-keys backups onto a PC that shares one set (review of 3.0.11, 2026-11-14): the last character
+// brought in used to decide every character's keys. Invented names throughout.
+describe('per-character keys backups on a shared-keys PC', () => {
+  const PER = '[Zeal]\r\nPerCharKeybinds=TRUE\r\n';
+  const backupOf = (name, keys, extra = '') => ({ 'zeal.ini': PER, 'eqclient.ini':
+    '[KeyMaps]\r\nKEYMAP_FORWARD=UNREAD\r\n[KeyMaps_' + name + ']\r\n' + keys + extra });
+  const sharedPc = () => ({
+    'zeal.ini': '[Zeal]\r\nPerCharKeybinds=FALSE\r\nCamera=1\r\n',
+    'eqclient.ini': '[VideoMode]\r\nWidth=1920\r\n[KeyMaps]\r\nKEYMAP_FORWARD=UP\r\nKEYMAP_DUCK=c\r\n',
+    'Corvale_pq.proj.ini': '[Options]\r\nT=1\r\n',
+  });
+  const apply = (local, r) => ({ ...local, ...r.writes });
+  const sect = (text, name) => { const x = parseSections(text).find((q) => q.name.toLowerCase() === name.toLowerCase()); return x ? x.keys.map((k) => k.key + '=' + k.value) : null; };
+  const A = backupOf('Aldenmar', 'KEYMAP_FORWARD=a1\r\n'), B = backupOf('Brackwyn', 'KEYMAP_FORWARD=b1\r\nKEYMAP_BACK=b2\r\n');
+
+  const run = (order) => {
+    let l = sharedPc();
+    l = apply(l, buildRestore({ backupFiles: A, localFiles: l, character: 'Aldenmar', parts: ['keysplit'], splitChars: ['Corvale', 'Aldenmar'] }));
+    for (const who of order) {
+      l = apply(l, buildRestore({ backupFiles: who === 'A' ? A : B, localFiles: l, character: who === 'A' ? 'Aldenmar' : 'Brackwyn', parts: ['zealchar', 'zeal'] }));
+    }
+    return l;
+  };
+
+  it('own keys: each character gets its own section, characters already here keep today\'s set, the switch is on, [KeyMaps] is unchanged, any order', () => {
+    const ab = run(['A', 'B']), ba = run(['B', 'A']);
+    for (const l of [ab, ba]) {
+      expect(sect(l['eqclient.ini'], 'KeyMaps_Aldenmar')).toEqual(['KEYMAP_FORWARD=a1']);
+      expect(sect(l['eqclient.ini'], 'KeyMaps_Brackwyn')).toEqual(['KEYMAP_FORWARD=b1', 'KEYMAP_BACK=b2']);
+      expect(sect(l['eqclient.ini'], 'KeyMaps_Corvale')).toEqual(['KEYMAP_FORWARD=UP', 'KEYMAP_DUCK=c']);
+      expect(sect(l['eqclient.ini'], 'KeyMaps')).toEqual(['KEYMAP_FORWARD=UP', 'KEYMAP_DUCK=c']);
+      expect(sect(l['zeal.ini'], 'Zeal')).toEqual(expect.arrayContaining(['PerCharKeybinds=TRUE', 'Camera=1']));
+      expect(l['eqclient.ini']).toContain('[VideoMode]\r\nWidth=1920');
+    }
+    expect(sect(ab['eqclient.ini'], 'KeyMaps_Brackwyn')).toEqual(sect(ba['eqclient.ini'], 'KeyMaps_Brackwyn'));
+  });
+  it('the shared step is one write of eqclient.ini and zeal.ini, labelled keysplit, and compare says what it does', () => {
+    const r = buildRestore({ backupFiles: A, localFiles: sharedPc(), character: 'Aldenmar', parts: ['keysplit'], splitChars: ['Corvale'] });
+    expect(Object.keys(r.writes).sort()).toEqual(['eqclient.ini', 'zeal.ini']);
+    expect(r.fileParts['zeal.ini']).toEqual(['keysplit']);
+    const c = compare('keysplit', A, sharedPc(), 'Aldenmar', { splitChars: ['Corvale'] });
+    expect(c).toMatchObject({ added: 1, changed: 1, same: false });
+    expect(c.summary).toMatch(/1 character keeps .*Zeal's per-character keys turned on/);
+    // a PC that already reads per-character keys has nothing to do
+    const done = apply(sharedPc(), r);
+    expect(compare('keysplit', A, done, 'Aldenmar', { splitChars: ['Corvale'] })).toMatchObject({ same: true, summary: 'already per character' });
+  });
+  it('an old section left by an earlier try of per-character keys is overwritten with today\'s keys (H1), others are left alone', () => {
+    const l = sharedPc();
+    l['eqclient.ini'] += '[KeyMaps_Corvale]\r\nKEYMAP_FORWARD=old\r\n[KeyMaps_Stranger]\r\nKEYMAP_FORWARD=theirs\r\n';
+    const r = buildRestore({ backupFiles: A, localFiles: l, character: 'Aldenmar', parts: ['keysplit'], splitChars: ['Corvale', 'Aldenmar'] });
+    const t = r.writes['eqclient.ini'];
+    expect(sect(t, 'KeyMaps_Corvale')).toEqual(['KEYMAP_FORWARD=UP', 'KEYMAP_DUCK=c']);
+    expect(sect(t, 'KeyMaps_Aldenmar')).toEqual(['KEYMAP_FORWARD=UP', 'KEYMAP_DUCK=c']);
+    expect(sect(t, 'KeyMaps_Stranger')).toEqual(['KEYMAP_FORWARD=theirs']);      // not a known character: untouched
+    expect(sect(t, 'KeyMaps')).toEqual(['KEYMAP_FORWARD=UP', 'KEYMAP_DUCK=c']);
+    // the compare line counts the overwritten one
+    expect(compare('keysplit', A, l, 'Aldenmar', { splitChars: ['Corvale'] }).summary).toMatch(/1 character keeps/);
+    // a PC whose switch is already on reads those sections now: nothing is rewritten
+    const live = { ...l, 'zeal.ini': PER };
+    expect(buildRestore({ backupFiles: A, localFiles: live, character: 'Aldenmar', parts: ['keysplit'], splitChars: ['Corvale'] }).writes['eqclient.ini']).toBeUndefined();
+  });
+  it('no zeal.ini on this PC: the shared step writes nothing at all (M2)', () => {
+    const l = sharedPc(); delete l['zeal.ini'];
+    expect(buildRestore({ backupFiles: A, localFiles: l, character: 'Aldenmar', parts: ['keysplit'], splitChars: ['Corvale'] }).writes).toEqual({});
+  });
+  it('an empty shared set creates no sections', () => {
+    const e = { ...sharedPc(), 'eqclient.ini': '[VideoMode]\r\nWidth=1920\r\n' };
+    expect(buildRestore({ backupFiles: A, localFiles: e, character: 'Aldenmar', parts: ['keysplit'], splitChars: ['Corvale'] }).writes['eqclient.ini']).toBeUndefined();
+  });
+  it('picker: only the picked character\'s keys land in the shared [KeyMaps] (the card runs keybinds for that one character)', () => {
+    const l = apply(sharedPc(), buildRestore({ backupFiles: B, localFiles: sharedPc(), character: 'Brackwyn', parts: ['keybinds'] }));
+    expect(sect(l['eqclient.ini'], 'KeyMaps')).toEqual(['KEYMAP_FORWARD=b1', 'KEYMAP_BACK=b2']);
+    expect(sect(l['eqclient.ini'], 'KeyMaps_Brackwyn')).toBeNull();
+    expect(compare('keybinds', B, sharedPc(), 'Brackwyn')).toMatchObject({ inBackup: 2, added: 1, changed: 1, removed: 1 });
+  });
+  it('keysInfo says how both PCs keep keys (main.js uses it to keep quiet sync off the shared set)', () => {
+    expect(keysInfo(A, sharedPc(), 'Aldenmar')).toEqual({ backupPerChar: true, hasOwn: true, pcPerChar: false });
+    expect(keysInfo(A, sharedPc(), 'Brackwyn')).toMatchObject({ backupPerChar: true, hasOwn: false });
+    expect(keysInfo({ 'eqclient.ini': '[KeyMaps]\r\nA=1\r\n' }, sharedPc(), 'Aldenmar').backupPerChar).toBe(false);
+  });
+  it('a per-character backup with no section for the character brings no keys, and compare says so', () => {
+    const bk = backupOf('Brackwyn', 'KEYMAP_FORWARD=b1\r\n');
+    const r = buildRestore({ backupFiles: bk, localFiles: sharedPc(), character: 'Aldenmar', parts: ['keybinds', 'zealchar'] });
+    expect(r.writes['eqclient.ini']).toBeUndefined();                       // the backup's unread [KeyMaps] is not written
+    expect(compare('keybinds', bk, sharedPc(), 'Aldenmar')).toMatchObject({ inBackup: 0, summary: 'not in this backup' });
+  });
+  it('an empty own section writes nothing, for a shared PC and for a per-character one', () => {
+    const bk = backupOf('Aldenmar', '');
+    const r = buildRestore({ backupFiles: bk, localFiles: sharedPc(), character: 'Aldenmar', parts: ['keybinds', 'zealchar'] });
+    expect(r.writes['eqclient.ini']).toBeUndefined();
+    const perPc = { ...sharedPc(), 'zeal.ini': PER, 'eqclient.ini': sharedPc()['eqclient.ini'] + '[KeyMaps_Aldenmar]\r\nKEYMAP_FORWARD=mine\r\n' };
+    expect(buildRestore({ backupFiles: bk, localFiles: perPc, character: 'Aldenmar', parts: ['zealchar'] }).writes['eqclient.ini']).toBeUndefined();
+    expect(compare('keybinds', bk, sharedPc(), 'Aldenmar').inBackup).toBe(0);
+  });
+  it('PerCharAutojoin (any PerChar switch) is never copied from a backup, by either Zeal part', () => {
+    const bk = { 'zeal.ini': '[Zeal]\r\nPerCharAutojoin=TRUE\r\nPerCharKeybinds=TRUE\r\nCamera=2\r\n[Aldenmar]\r\nPerCharFoo=1\r\nTellWindows=1\r\n',
+      'eqclient.ini': '[Zeal]\r\nPerCharAutojoin=TRUE\r\nCamera=2\r\n' };
+    const lo = { 'zeal.ini': '[Zeal]\r\nPerCharAutojoin=FALSE\r\nCamera=1\r\n', 'eqclient.ini': '[Zeal]\r\nCamera=1\r\n' };
+    const r = buildRestore({ backupFiles: bk, localFiles: lo, character: 'Aldenmar', parts: ['zeal', 'zealchar'] });
+    const all = Object.values(r.writes).join('\n');
+    expect(r.writes['zeal.ini']).toContain('Camera=2');
+    expect(all).not.toMatch(/PerCharAutojoin=TRUE|PerCharKeybinds=TRUE|PerCharFoo/);
+    expect(r.writes['zeal.ini']).toContain('PerCharAutojoin=FALSE');
+    expect(compare('zeal', bk, lo, 'Aldenmar').summary).not.toMatch(/2 changed/);
+  });
+  it('a character named Zeal never copies the global [Zeal] section through its own part', () => {
+    const bk = { 'zeal.ini': '[Zeal]\r\nPerCharKeybinds=TRUE\r\nFoo=1\r\n', 'eqclient.ini': '[Zeal]\r\nPerCharKeybinds=TRUE\r\nBar=1\r\n' };
+    const lo = { 'zeal.ini': '[Zeal]\r\nPerCharKeybinds=FALSE\r\nFoo=0\r\n', 'eqclient.ini': '[Zeal]\r\nBar=0\r\n' };
+    const own = buildRestore({ backupFiles: bk, localFiles: lo, character: 'Zeal', parts: ['zealchar'] });
+    expect(own.writes).toEqual({});
+    const both = buildRestore({ backupFiles: bk, localFiles: lo, character: 'Zeal', parts: ['zealchar', 'zeal', 'keybinds'] });
+    expect(Object.values(both.writes).join('\n')).not.toMatch(/PerCharKeybinds=TRUE/);
+    expect(both.writes['zeal.ini']).toContain('Foo=1');                      // the shared part still brings the other [Zeal] keys
   });
 });

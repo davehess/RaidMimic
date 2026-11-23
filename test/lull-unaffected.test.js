@@ -40,6 +40,7 @@ function loadAgent() {
     function _provableTargetId(){ return null; }
     function _assumedCasterLevel(){ return 60; }
     function _durTicksForLevel(f, cap){ return cap; }
+    function _durationWithExtensions(e, lvl){ return { ticks: _durTicksForLevel(e.durf, e.dur, lvl) }; }   // the AA / focus chain is not under test here
     let _spellByNameLower = new Map([
       ['pacify',  { id: 45,  name: 'Pacify',  cast_ms: 2500, dur: 60, durf: 8, good: 1 }],
       ['harmony', { id: 250, name: 'Harmony', cast_ms: 4500, dur: 20, durf: 2, good: 1 }],

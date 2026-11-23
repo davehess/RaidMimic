@@ -30,7 +30,8 @@
     }
     return colors;
   }
-  function liveOf(st, now) { return !!(st && st.active && st.core && now - st.rx <= STALE_MS); }
+  // A held lane (out of range, no line of sight, auto attack off) is not live: it stops scrolling and says why (2026-11-18).
+  function liveOf(st, now) { return !!(st && st.active && !st.held && st.core && now - st.rx <= STALE_MS); }
   function canvases() { return root.document ? root.document.querySelectorAll('canvas[data-wp-weave]') : []; }
   // The canvas's own character first. If that one is not live but another character off the pipe IS fighting, draw that one:
   // the HUD names the character from the log file and Zeal from the game, and a lane that waits on a name the pipe never
@@ -82,11 +83,22 @@
   var FLASH_MS = 900;
   // The highway and the Thin bar show four 2H swings ahead (were two): Basketweaver shows about four and a half, and ours
   // scrolled twice as fast (the guild lead, 2026-11-09: "our weaving overlay is going faster than theirs").
-  var LOOK_SWINGS = 4;
+  var LOOK_SWINGS = 4.5;   // 2026-11-18: 4.5 swings with now 13% in, measured off a side-by-side screenshot, so the two bars can be compared
   function weaveFlash(c, ctx, st, now, stroke) {
     var o = st && st.outcome;
     if (!o || o.kind !== 'landed' || now - o.at >= FLASH_MS) return;
     ctx.save(); ctx.globalAlpha = 1 - (now - o.at) / FLASH_MS; ctx.strokeStyle = c.green; ctx.lineWidth = 2; stroke(); ctx.restore();
+  }
+  // Time to press (the guild lead, 2026-11-18: "This should be more animated like the hud, flashing when its time to hit"):
+  // while the window is open the lane's edge pulses green, with a bright green wash for its first GO_WASH_MS.
+  var GO_WASH_MS = 250;
+  function goFlash(c, ctx, d, now, x, y, w, h) {
+    if (!d || d.phase !== 'go') return;
+    var since = now - d.open;
+    ctx.save();
+    if (since >= 0 && since < GO_WASH_MS) { ctx.globalAlpha = 0.4 * (1 - since / GO_WASH_MS); ctx.fillStyle = c.green; ctx.fillRect(x, y, w, h); }
+    ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(now / 110)); ctx.strokeStyle = c.green; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.restore();
   }
   // The engine's latest re-sync (SYNC +180 ms, SPEED 1.65 → 3.65 s, /mystats …), for NOTE_MS after it happened.
   var NOTE_MS = 2000;
@@ -94,6 +106,7 @@
   // The ring's short idle reason, or '' (nothing to say: waiting for a fight is the normal rest state).
   function idleReason(st) {
     if (!st) return '';
+    if (st.held) return st.held.reason + ' · paused';
     if (st.source === 'needs-zeal') return 'weave: needs Zeal';
     var dg = st.diag;
     if (dg && dg.seen > 0 && dg.matched === 0 && dg.lastVerb) return 'weave: swings say "' + String(dg.lastVerb).slice(0, 12) + '" (HUD ⚙)';
@@ -121,6 +134,7 @@
     ctx.globalAlpha = live ? 0.3 : 0.16; ctx.fillStyle = c.dim; ctx.fillRect(0, laneTop, w, laneBot - laneTop); ctx.globalAlpha = 1;
     if (!live) {
       if (st && st.source === 'needs-zeal') note(c, ctx, 'needs Zeal', w, h);
+      else if (st && st.held) note(c, ctx, st.held.reason, w, h);
       glyph(c, ctx, st, now, w / 2, glyphY, gh);
       return;
     }
@@ -210,7 +224,7 @@
   // The highway with nothing but the windows: they scroll right to left into the gold "now" mark, orange ticks are the
   // next 2H swings, and a fresh clip flashes the bar's edge red. No text (an idle reason, if any, is the one exception).
   function drawBar(c, f, st, live, now) {
-    var ctx = f.ctx, w = f.w, h = f.h, hz = Math.round(w * 0.2);
+    var ctx = f.ctx, w = f.w, h = f.h, hz = Math.round(w * 0.13);
     if (!live) {
       var why = idleReason(st);
       if (why) { font(ctx, Math.max(8, Math.min(10, h * 0.8))); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.dim; ctx.fillText(why, 2, h / 2); }
@@ -228,6 +242,7 @@
     ctx.globalAlpha = 1; ctx.fillStyle = c.orange;
     z.swings.forEach(function (s) { ctx.fillRect(xOf(s.at) - 0.75, 0, 1.5, h); });
     ctx.fillStyle = c.text; ctx.fillRect(hz - 1.5, 0, 3, h);   // "now": white, so it never reads as one of the orange swing ticks
+    goFlash(c, ctx, z.derived, now, 0, 0, w, h);
     var o = st.outcome;
     if (o && o.kind === 'clip' && now - o.at < 1500) {
       ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(now / 120)); ctx.strokeStyle = c.red; ctx.lineWidth = 2;
@@ -242,13 +257,14 @@
   function drawHighway(c, f, st, live, now) {
     var ctx = f.ctx, w = f.w, h = f.h, px = Math.max(9, Math.min(13, h * 0.2));
     var head = Math.round(px + 3), barH = Math.max(5, Math.round(h * 0.1)), foot = barH + 4;
-    var laneTop = head, laneH = Math.max(8, h - head - foot), laneBot = laneTop + laneH, hz = Math.round(w * 0.2);
+    var laneTop = head, laneH = Math.max(8, h - head - foot), laneBot = laneTop + laneH, hz = Math.round(w * 0.13);
     ctx.globalAlpha = live ? 0.3 : 0.16; ctx.fillStyle = c.dim; ctx.fillRect(0, laneTop, w, laneH); ctx.globalAlpha = 1;
     if (!live) {
       font(ctx, px); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = c.dim;
       // Idle with melee seen but none matched: name the word, so a 2H or fist verb we do not know is one setting away.
       var dg = st && st.diag;
-      var idle = st && st.source === 'needs-zeal' ? 'Weaving timer: needs Zeal'
+      var idle = st && st.held ? 'Weaving timer: ' + st.held.reason + ' · paused until your next swing'
+        : st && st.source === 'needs-zeal' ? 'Weaving timer: needs Zeal'
         : dg && dg.seen > 0 && dg.matched === 0 && dg.lastVerb
           ? 'Weaving timer: your swings say "' + String(dg.lastVerb).slice(0, 16) + '" (add it in the HUD ⚙)'
           : 'Weaving timer: waiting for a fight';
@@ -275,11 +291,14 @@
     var fiv = st.core.fistInterval, lf = st.core.lastFist, fr = lf == null ? 1 : Math.max(0, Math.min(1, (now - lf) / fiv));
     ctx.globalAlpha = 0.3; ctx.fillStyle = c.dim; ctx.fillRect(0, laneBot + 3, w, barH); ctx.globalAlpha = 1;
     ctx.fillStyle = fr >= 1 ? c.green : c.blue; ctx.fillRect(0, laneBot + 3, w * fr, barH);
-    // the head row: the phase, the clip flash, the tally
+    goFlash(c, ctx, z.derived, now, 0, laneTop, w, laneH);
+    // the head row: the phase (PRESS pulses with the lane), the clip flash, the tally
     var phase = z.derived.phase;
     font(ctx, px, true); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillStyle = phase === 'go' ? c.green : phase === 'late' ? c.red : phase === 'wait' ? c.blue : c.orange;
+    if (phase === 'go') ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(now / 110));
     ctx.fillText(phase === 'go' ? 'PRESS' : phase === 'late' ? 'LATE' : phase === 'wait' ? 'WAIT' : 'SWING', 2, head / 2);
+    ctx.globalAlpha = 1;
     var o = st.outcome;
     if (o && o.kind === 'clip' && now - o.at < 1500) {
       ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(now / 120)); ctx.fillStyle = c.red; ctx.textAlign = 'center';

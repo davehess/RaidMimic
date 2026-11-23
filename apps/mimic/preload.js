@@ -1432,6 +1432,11 @@ contextBridge.exposeInMainWorld('mimic', {
   // Resource use in its own window — the dashboard's "what does Mimic cost?"
   // link calls this, same as the tray entry.
   openResources:       ()         => ipcRenderer.invoke('open-resources'),
+  // 🐺 Raid Mimic party: Settings' way in to the dashboard's party card (the tray's "Raid Mimic party…" does the same).
+  openPartyCard:       ()         => ipcRenderer.invoke('open-party-card'),
+  // "Share with my in-game group and raid": the setting (default off) lives in the agent; Settings, the tray and the card all drive it.
+  getPartyShare:       ()         => ipcRenderer.invoke('party-share-get'),
+  setPartyShare:       (on)       => ipcRenderer.invoke('party-share-set', !!on),
   // Feedback in its own window — the dashboard's 💬 Feedback button and the tray item.
   // Resolves false when the agent has no port yet (the page then opens its in-page card).
   openFeedback:        ()         => ipcRenderer.invoke('open-feedback'),
@@ -1546,7 +1551,8 @@ contextBridge.exposeInMainWorld('mimic', {
   zealStatus:        ()   => ipcRenderer.invoke('zeal-status'),
   zealCheckUpdate:   ()   => ipcRenderer.invoke('zeal-check-update'),
   zealInstallUpdate: ()   => ipcRenderer.invoke('zeal-install-update'),
-  zealSetSource:     (s)  => ipcRenderer.invoke('zeal-set-source', s),   // 'official' | 'test'
+  zealSetSource:     (s)  => ipcRenderer.invoke('zeal-set-source', s),   // 'official' | 'test' | 'w:<watch id>'
+  zealWatchSave:     (l)  => ipcRenderer.invoke('zeal-watch-save', l),   // the whole saved watch list
   // Custom UI packs (Nillipuss etc.): list is local; check hits GitHub;
   // install downloads the pack into uifiles/<name>/; setOptions makes the
   // ticked Options/ layouts the ones on (prepare fetches the pack's default
@@ -1556,6 +1562,9 @@ contextBridge.exposeInMainWorld('mimic', {
   uiPackInstall:     (id)        => ipcRenderer.invoke('ui-pack-install', id),
   uiPackPrepare:     (id)        => ipcRenderer.invoke('ui-pack-prepare', id),
   uiPackSetOptions:  (id, ids)   => ipcRenderer.invoke('ui-pack-set-options', id, ids),
+  // Item-icon sheets the active custom UI is missing (uiDragItems.js): check is read-only, fix keeps a dated copy first.
+  uiIconSheetsCheck: ()          => ipcRenderer.invoke('ui-icon-sheets-check'),
+  uiIconSheetsFix:   ()          => ipcRenderer.invoke('ui-icon-sheets-fix'),
 
   // Overlay lock state — main pushes this to overlay renderers so they can
   // show/hide their drag handle.
@@ -1776,6 +1785,7 @@ contextBridge.exposeInMainWorld('mimic', {
   // Compare-first restore, Keep in sync and This PC (main.js "compare-first restore" block).
   uiRestorePlan:          (params)  => ipcRenderer.invoke('ui-restore-plan', params),
   uiRestoreParts:         (params)  => ipcRenderer.invoke('ui-restore-parts', params),
+  uiLocalBackupNow:       (params)  => ipcRenderer.invoke('ui-local-backup-now', params),
   uiLocalVersions:        (character) => ipcRenderer.invoke('ui-local-versions', character),
   // UI Studio's Changes panel: the kept versions, and the key-by-key diff of one against the files now.
   uiStudioVersions:       (character, eqDir) => ipcRenderer.invoke('ui-studio-versions', character, eqDir),
@@ -1799,6 +1809,8 @@ contextBridge.exposeInMainWorld('mimic', {
   // `goto` ({ character, eqDir, chat: true }) opens it on that character's chat routing (bring-in card, FB-125).
   openUiStudio:           (goto)             => ipcRenderer.invoke('open-ui-studio', goto),
   onUiStudioGoto:         (cb)               => ipcRenderer.on('ui-studio-goto', (_e, goto) => cb(goto)),
+  // A restore (bring-in) was written for { character, eqDir, files: [names] } — now, or after a camp / EverQuest closing.
+  onUiStudioRestored:     (cb)               => ipcRenderer.on('ui-studio-restored', (_e, info) => cb(info)),
   // Bundled PvP rotation templates (Dirge Team 6™ etc.) — list by class,
   // load full content, and import = write a markdown summary alongside
   // the EQ folder so the user can build their hotkey pages by reference

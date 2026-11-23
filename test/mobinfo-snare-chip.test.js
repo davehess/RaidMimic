@@ -38,7 +38,7 @@ describe('Target Info special-ability chips', () => {
   it('both chip rows (Stats tab and the summary) go through specChip', () => {
     const s = stripJs(html);
     expect(s).toMatch(/specChips \+= specChip\(slab\);/);
-    expect(s).toMatch(/chips \+= specChip\(lab\);/);
+    expect(s).toMatch(/chips \+= lab === 'Area Rampage' \? aeChip\(mob\) : specChip\(lab\);/);   // the one chip with a reach in it (2026-11-15)
     expect(s).not.toMatch(/'<span class="'\+specClass\((slab|lab)\)\+'">'/);
   });
 });

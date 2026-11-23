@@ -286,7 +286,7 @@ describe('fights', () => {
     expect(e.snapshot(9500).active).toBe(true);
     expect(e.tick(9500)).toBe(false);
     const last = e.lastSwingAt;
-    expect(e.snapshot(last + 11900).active).toBe(true);
+    expect(e.active(last + 11900)).toBe(true);           // the fight lasts 12 s; its lane hides sooner (not swinging)
     expect(e.snapshot(last + 12100).active).toBe(false);
     expect(e.tick(last + 12100)).toBe(true);
     expect(e.tally).toMatchObject({ presses: 0, landed: 0, clips: 0, misses: 0, voided: 0 });
@@ -311,6 +311,74 @@ describe('the hub: pipe objects in, states out', () => {
     const h = W.createWeaveHub({ send: (s) => sent.push(s), now: () => now });
     return { h, sent, at: (t) => { now = t; }, advance: (d) => { now += d; } };
   }
+
+  // The guild lead, 2026-11-18: "when we're out of range or LOS we need to know it on our bar and pause, same for not attacking".
+  it('pauses on out of range, no line of sight and auto attack off, and the next 2H swing re-syncs it', () => {
+    const { h, sent, advance } = hub();
+    h.setEnabled(true);
+    expect(h.note(chat('Aldenmar', 13, 'Your target is too far away, get closer!'))).toBe(false);   // no fight yet: nothing to pause
+    h.note(chat('Aldenmar', 265, TWO()));
+    advance(IV);
+    h.note(chat('Aldenmar', 265, TWO()));
+    for (const [line, reason] of [['You cannot see your target.', 'No line of sight'], ['Auto attack is off.', 'Auto attack off']]) {
+      advance(200);
+      expect(h.note(chat('Aldenmar', 13, line)), line).toBe(true);
+      const st = sent[sent.length - 1];
+      expect(st.held && st.held.reason).toBe(reason);
+      expect(st.phase).toBe('held');
+    }
+    advance(200);
+    h.note(chat('Aldenmar', 266, 'Brackwyn crushes a gnoll for 5 points of damage.'));   // someone else's hit: still held
+    expect(sent[sent.length - 1].held).toBeTruthy();
+    advance(IV);
+    expect(h.note(chat('Aldenmar', 265, TWO()))).toBe(true);
+    expect(sent[sent.length - 1].held).toBe(null);
+    expect(sent[sent.length - 1].phase).not.toBe('held');
+  });
+  // The guild lead, 2026-11-18: "Keep running the attacks on weaving for 4 seconds after being out of range, the timer still ticks".
+  it('out of range keeps the lane running for 4 s from the FIRST range line, then pauses; a swing in time clears it', () => {
+    const { h, sent, advance } = hub();
+    h.setEnabled(true);
+    h.note(chat('Aldenmar', 265, TWO()));
+    advance(IV);
+    h.note(chat('Aldenmar', 265, TWO()));
+    const e = h.engines.get('aldenmar').eng;
+    advance(100);
+    expect(h.note(chat('Aldenmar', 13, 'Your target is too far away, get closer!'))).toBe(true);
+    const t0 = e.held.at;
+    expect(sent[sent.length - 1].held).toBe(null);                                   // still running
+    advance(1500);
+    h.note(chat('Aldenmar', 13, 'Your target is too far away, get closer!'));        // repeated each attempt
+    expect(e.held.at).toBe(t0);                                                       // the grace counts from the first
+    expect(e.snapshot(t0 + 3900).held).toBe(null);
+    expect(e.snapshot(t0 + 4100).held.reason).toBe('Out of range');
+    advance(500);
+    expect(h.note(chat('Aldenmar', 265, TWO()))).toBe(true);                          // back in range, swinging
+    expect(e.held).toBe(null);
+  });
+  it('goes idle (hides) when the next 2H swing is well overdue, keeping the fight, and pauses on "No target"', () => {
+    const { h, sent, advance } = hub();
+    h.setEnabled(true);
+    h.note(chat('Aldenmar', 265, TWO()));
+    advance(IV);
+    h.note(chat('Aldenmar', 265, TWO()));
+    const e = h.engines.get('aldenmar').eng;
+    const iv = e.core().interval2H;
+    expect(e.snapshot(e.last2H + iv + 200).active).toBe(true);                    // a swing a little late: still live
+    const late = e.snapshot(e.last2H + iv + Math.max(1000, 0.6 * iv) + 50);
+    expect(late.active).toBe(false);                                              // not swinging: the lane hides
+    expect(late.phase).toBe('idle');
+    expect(e.active(e.last2H + iv + Math.max(1000, 0.6 * iv) + 50)).toBe(true);   // the fight (and its tally) is kept
+    advance(300);
+    expect(h.note(chat('Aldenmar', 13, 'You must first click on the being you wish to attack!'))).toBe(true);
+    expect(sent[sent.length - 1].held.reason).toBe('No target');
+  });
+  it('the painter treats a held lane as not live and names the reason', () => {
+    const d = stripJs(readSource(path.join(MIMIC, 'weaveDraw.js')));
+    expect(d).toContain('return !!(st && st.active && !st.held && st.core');
+    expect(d).toContain("if (st.held) return st.held.reason + ' · paused';");
+    expect(d).toContain("var idle = st && st.held ? 'Weaving timer: ' + st.held.reason");
+  });
 
   it('does nothing until something is listening', () => {
     const { h, sent } = hub();
@@ -474,7 +542,7 @@ describe('wiring', () => {
       core: { last2H: now - 300, lastFist: null, interval2H: IV, haste: 1.7, fistInterval: 2600 / 1.7, marginMs: 150 } });
     await new Promise(r => setTimeout(r, 80));
     expect(rects.length).toBeGreaterThan(3);
-    expect(rects.some(r => Math.abs(r.x - (Math.round(260 * 0.2) - 1.5)) < 0.01 && r.w === 3)).toBe(true);   // the "now" mark
+    expect(rects.some(r => Math.abs(r.x - (Math.round(260 * 0.13) - 1.5)) < 0.01 && r.w === 3)).toBe(true);   // the "now" mark
     expect(texts).toEqual([]);
   });
   it('me.html: the lane is a canvas, off for other classes, on for a Monk and a Beastlord, placed by layoutWeave, and the settings ride to main', () => {
@@ -883,7 +951,7 @@ describe('scoring like Basketweaver: bare misses placed, unseen rounds not clips
   });
   it('the painter: four swings ahead, WEAVE +damage and a green flash on a landed weave, and the up direction', () => {
     const d = stripJs(readSource(path.join(MIMIC, 'weaveDraw.js')));
-    expect(d).toContain('var LOOK_SWINGS = 4;');
+    expect(d).toContain('var LOOK_SWINGS = 4.5;');
     expect(d).toContain('var look = LOOK_SWINGS * st.core.interval2H');
     expect(d).toContain("ctx.fillText('WEAVE' + (o.dmg ? ' +' + o.dmg : ''), w / 2, head / 2);");
     expect(d).toContain("+ (t.addedDps ? '  +' + t.addedDps + ' dps' : '')");

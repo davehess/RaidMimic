@@ -312,6 +312,39 @@ describe('your buffs, dispelled by a mob', () => {
     expect(fires()).toHaveLength(0);
   });
 
+  // The guild lead, 2026-11-17: "When you die we shouldn't announce the the user (X/Y/Z Dispelled, rebuff) because they
+  // already know that. The same when they accept a rez." (§617)
+  it('dead for minutes: buffs going while you lie there are not dispels (the old 10 s window had ended)', () => {
+    feed(0, 'You died.');
+    diff(240, zeal([buff('Aegolism'), buff('Clarity'), buff('Spirit of Wolf')]), zeal([buff('Spirit of Wolf')]));
+    flush(250);
+    expect(fires()).toHaveLength(0);
+  });
+
+  it('a rez: the rez line starts a quiet minute', () => {
+    feed(0, 'You regain some experience from resurrection.');
+    diff(30, zeal([buff('Aegolism'), buff('Clarity'), buff('Spirit of Wolf')]), zeal([buff('Spirit of Wolf')]));
+    flush(40);
+    expect(fires()).toHaveLength(0);
+  });
+
+  it('a rez with no line we saw: the Resurrection Effects buff arriving starts the quiet minute', () => {
+    diff(0, zeal([buff('Aegolism'), buff('Clarity'), buff('Spirit of Wolf')]),
+      zeal([buff('Aegolism'), buff('Clarity'), buff('Spirit of Wolf'), buff('Resurrection Effects', 50)]));
+    diff(5, zeal([buff('Aegolism'), buff('Clarity'), buff('Spirit of Wolf'), buff('Resurrection Effects', 50)]),
+      zeal([buff('Spirit of Wolf'), buff('Resurrection Effects', 50)]));
+    flush(15);
+    expect(fires()).toHaveLength(0);
+  });
+
+  it('after a death, zoning in (rez or respawn) shortens the quiet to a minute, so a later real dispel still calls out', () => {
+    feed(0, 'You died.');
+    feed(30, 'LOADING, PLEASE WAIT...');
+    diff(120, zeal([buff('Aegolism'), buff('Clarity'), buff('Spirit of Wolf')]), zeal([buff('Spirit of Wolf')]));
+    flush(130);
+    expect(fires().map(o => o.text)).toEqual(['Buffs dispelled: Aegolism, Clarity — rebuff']);
+  });
+
   it('a stronger buff landing in the same poll that pushed two out is a replacement, not a dispel', () => {
     diff(0, zeal([buff('Aegolism'), buff('Clarity')]), zeal([buff('Virtue')]));
     flush(5);

@@ -99,6 +99,11 @@
   .maxhit{font-size:9px;color:#f87171;font-weight:500;margin-left:4px}
   /* Tank History: the damage shield this tank dealt back, beside the biggest hit (blue: it is dealt, not taken). */
   .dsret{font-size:9px;color:#79c0ff;font-weight:500;margin-left:4px}
+  /* Party view: a dot before each name says how fresh that player's number is (the merged view keeps the age of the
+     report that held the winning value). Three buckets, not seconds, so the row HTML stays byte-stable between polls. */
+  .adot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:4px;vertical-align:middle;background:var(--wp-dim)}
+  .adot.a1{background:var(--wp-green)}
+  .adot.a2{background:var(--wp-gold)}
   .colhdr{display:grid;grid-template-columns:24px minmax(0,1fr) 38px 50px 42px 32px;
      gap:6px;font-size:9px;color:#6b7280;letter-spacing:0.05em;
      text-transform:uppercase;padding:2px 0 1px;border-bottom:1px solid rgba(110,118,129,0.18);margin-bottom:2px}
@@ -296,6 +301,10 @@
           <button id="rowsDown" class="tab" type="button" title="Show fewer rows">−</button>
           <span id="rowsN" class="rowsn">10</span>
           <button id="rowsUp" class="tab" type="button" title="Show more rows">+</button>
+          <!-- Party: shown only while you are in a Raid Mimic party. On, DPS and Tank list the party's merged numbers
+               (the highest each player was seen at by anyone in the party, never a sum) instead of only your own log's. -->
+          <button id="tabParty" class="tab" type="button" style="display:none;margin-left:3px"
+                  title="Show the whole party's merged numbers instead of only what your log saw. The dot before a name is how fresh that number is.">Party</button>
         </span>
         <!-- History and Trend share the row under the stepper. Trend is YOUR damage per fight as a
              line (the guild lead, 2026-10-06), read from the same fight ring History lists. -->
@@ -545,6 +554,25 @@
   // The fight list is one element with a delegated click, so the handshake
   // covers every row it will ever hold — rows are rebuilt as fights end.
   var histListEl = document.getElementById('histList');
+  // Party view (Raid Mimic party): a switch over DPS and Tank, not a tab of its own. Only offered while a party exists
+  // (tick shows the button); kept across a restart. The rows it shows come from /api/state `partyView`.
+  var PARTY_KEY = 'wp.damagePartyView';
+  var PARTY_ON = false;
+  try { PARTY_ON = localStorage.getItem(PARTY_KEY) === '1'; } catch (e) {}
+  var tabPartyBtn = document.getElementById('tabParty');
+  function _paintPartyBtn() { if (tabPartyBtn) tabPartyBtn.classList.toggle('on', PARTY_ON); }
+  _paintPartyBtn();
+  if (tabPartyBtn) tabPartyBtn.addEventListener('click', function(){
+    PARTY_ON = !PARTY_ON;
+    try { localStorage.setItem(PARTY_KEY, PARTY_ON ? '1' : '0'); } catch (e) {}
+    _paintPartyBtn();
+    tick().catch(function(){});
+  });
+  // The Party switch is a locked-overlay button too: same handshake as the tabs, so a click lands instead of falling through to EQ.
+  if (tabPartyBtn) {
+    tabPartyBtn.addEventListener('mouseenter', function(){ try { window.mimic.overlayHoverInteractive(true); } catch (e) {} });
+    tabPartyBtn.addEventListener('mouseleave', function(){ try { window.mimic.overlayHoverInteractive(false); } catch (e) {} });
+  }
   [tabDpsBtn, tabTankBtn, tabHistBtn, histListEl].forEach(function(btn){
     if (!btn) return;
     btn.addEventListener('mouseenter', function(){ try { window.mimic.overlayHoverInteractive(true); } catch (e) {} });
@@ -682,6 +710,13 @@
     return fightSecs > 0 ? Math.min(s, fightSecs) : s;
   }
   // The Sec and DPS a row shows. Tank tab rows keep the fight's seconds: the span stamps damage DEALT.
+  // Party view: the dot before a name. Three buckets (fresh / a few seconds / stale), so a row's HTML does not change
+  // between polls just because a report got two seconds older.
+  function _ageDot(ms) {
+    if (typeof ms !== 'number') return '';
+    var c = ms < 6000 ? 'a1' : ms < 16000 ? 'a2' : 'a3';
+    return '<i class="adot ' + c + '" title="' + (c === 'a1' ? 'fresh' : c === 'a2' ? 'a few seconds old' : 'stale: that player has stopped reporting') + '"></i>';
+  }
   function _rowTiming(row, fightSecs, tank, endMs) {
     var secs = tank ? fightSecs : _rowSecs(row, fightSecs, endMs);
     return { secs: secs, dps: secs > 0 ? Math.round((row[1] || 0) / secs) : 0 };
@@ -1144,6 +1179,22 @@
         }
       } catch (e) { GUILD = null; }
 
+      // ── Party view (Raid Mimic party) ──────────────────────────────────────
+      // On the live DPS / Tank board, with the Party switch on and a party present, the rows are the party's merged
+      // view: per player the HIGHEST value any member saw (the relay never sums), each with the age of the report that
+      // held it (index 14, drawn as a dot). Damage and Tank read dmg / took. Without a party the switch is ignored
+      // and the board stays this machine's own, so leaving a party never blanks the meter.
+      var PV = s.partyView || null;
+      var _partyRows = !!(PARTY_ON && PV && !HIST && (TAB_MODE === 'dps' || TAB_MODE === 'tank'));
+      if (tabPartyBtn) tabPartyBtn.style.display = PV ? '' : 'none';
+      if (_partyRows) {
+        var _pf = isTank ? 'took' : 'dmg';
+        allRows = (Array.isArray(PV.players) ? PV.players : [])
+          .map(function(p){ return [p.name, p[_pf] || 0, 0, null, 0, false, false, undefined, false, null, undefined, null, null, undefined, (p.age_ms || {})[_pf]]; })
+          .filter(function(x){ return x[0] && x[1] > 0; })
+          .sort(function(a, b){ return (b[1] || 0) - (a[1] || 0); });
+      }
+
       const totalDmg = allRows.reduce((s, r) => s + r[1], 0);
       allRows.forEach(function(r, i){ r[4] = i + 1; });            // true rank
       // Who "you" are. /api/state names you as activeCharacter, and the live
@@ -1262,7 +1313,7 @@
         }).join('') : '';
         return '<li class="' + cls + '">'
              + '<span class="r">' + (typeof rank === 'number' ? rank + '.' : rank) + '</span>'
-             + '<span class="n">' + esc(n) + petHtml + ownerHtml + maxHitHtml + '</span>'
+             + '<span class="n">' + (_partyRows ? _ageDot(row[14]) : '') + esc(n) + petHtml + ownerHtml + maxHitHtml + '</span>'
              + '<span class="p">' + fmtPct(pct) + '</span>'
              + '<span class="d">' + fmt(d)
                // Narrow layout only — the same value moves to the Obs column at
@@ -1340,6 +1391,11 @@
           : ' · settling…');
         // A Raid fight is the guild's merged view alone: nothing of this machine's is in it, so never "this machine".
         if (HIST.raid) hdrEl.textContent = HIST.boss + (GUILD ? ' · ' + (HIST.uploaders || 0) + ' clients' : '');
+      }
+      // Party view: say whose numbers these are, and whether anyone is still reporting.
+      if (_partyRows) {
+        if (hdrEl) hdrEl.textContent = (boss || 'Party') + ' · party of ' + (PV.members || 1) + (PV.stale ? ' · stale' : '');
+        if (emptyHint) emptyHint.textContent = PV.status === 'joined' ? 'waiting for the party’s numbers…' : (PV.paused_text || 'connecting to the party…');
       }
     }catch(e){
       const c=document.getElementById('conn'); c.className='conn bad'; c.textContent='○';

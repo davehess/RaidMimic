@@ -73,8 +73,10 @@ describe('the nav rail and the panes agree', () => {
   it('every section has a button that reaches it', () => {
     // A miss here is invisible: the pane and its cards exist in the DOM and
     // render every poll, but nothing can ever make them active.
-    const unreachable = sectionIds.filter(id => !navTabs.includes(id));
+    // #localpage is the "On this PC" frame: the rail's local-page buttons reach it through wpOpenLocalSite, not data-tab.
+    const unreachable = sectionIds.filter(id => !navTabs.includes(id) && id !== 'localpage');
     expect(unreachable, '.section divs with no nav button').toEqual([]);
+    expect(src).toMatch(/pane = document\.getElementById\(\\?'localpage\\?'\)/);
   });
 
   it('still carries the tabs the split produced', () => {

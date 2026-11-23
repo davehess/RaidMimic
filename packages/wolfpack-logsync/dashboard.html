@@ -29,7 +29,12 @@ tr:hover td { background:#1f242c }
    right-aligned numbers (so every value looked one column to the right of its header). */
 table.wp-abtbl { table-layout:fixed; }
 table.wp-abtbl th:first-child, table.wp-abtbl td:first-child { width:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-table.wp-abtbl th.wp-r, table.wp-abtbl td.wp-r { width:76px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.wp-abgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px 14px; margin-top:6px; align-items:start; }
+.wp-abgrid > div:not(.wp-abcard) { grid-column:1/-1; }
+.wp-abcard { border:1px solid var(--border); border-radius:6px; padding:6px 8px 4px; min-width:0; }
+.wp-abcard h3 { margin:0 0 4px; font-size:13px; text-transform:none; }
+.wp-abcard tr.dim td, .wp-abcard tr.dim td.num { color:var(--dim); }
+table.wp-abtbl th.wp-r, table.wp-abtbl td.wp-r { width:56px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 table.wp-abtbl th.wp-r { color:var(--dim); }
 /* wpMoreList: "▾ N more" row with a gentle pulsing underline; expands in place. */
 .wp-more-btn { display:block; width:100%; position:relative; background:transparent; border:0; color:var(--blue,#58a6ff); font:inherit; font-size:12px; text-align:left; padding:4px 8px 6px; cursor:pointer; }
@@ -98,6 +103,19 @@ table.wp-abtbl th.wp-r { color:var(--dim); }
    Set up / Machine. A heading is a plain div (no data-tab, not a button), so the tab switcher, the tour and every
    `.nav button[data-tab]` lookup never see it. */
 .nav .wp-rail-h { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.09em; margin:10px 2px 0; }
+/* Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live, Raid,
+   Recap, Diagnostics"). A heading is a div with role=button (not a .nav button, so the tab switcher and its styles never
+   see it); its open state is kept per section in localStorage, and the section holding the active tab opens itself. */
+.nav .wp-rail-sec { display:flex; flex-direction:column; gap:4px; }
+.nav .wp-rail-tog { cursor:pointer; user-select:none; display:flex; align-items:center; gap:5px; padding:2px 0; }
+.nav .wp-rail-tog:hover { color:var(--text); }
+.nav .wp-rail-tog::before { content:'▸'; display:inline-block; width:9px; transition:transform .12s; }
+.nav .wp-rail-sec.open > .wp-rail-tog::before { transform:rotate(90deg); }
+.nav .wp-rail-sec:not(.open) > .wp-rail-body { display:none; }
+.nav .wp-rail-body { display:flex; flex-direction:column; gap:4px; }
+/* An "On this PC" page, loaded into the middle pane (2026-11-17: it used to replace the whole window, rail and all). */
+#wpLocalFrame { display:block; width:100%; height:calc(100vh - var(--wp-topbar-h, 64px) - 24px); min-height:480px; border:0; border-radius:8px; background:transparent; }
+body.wp-overlay-mode #localpage, body.wp-feedback-mode #localpage { display:none !important; }
 .nav .wp-rail-h:first-child { margin-top:0; }
 /* The pinned section index: one row of chips under the top bar naming this tab's cards. Solid background (cards
    pass UNDER it); a single line that scrolls sideways rather than a second and third row. */
@@ -126,6 +144,7 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
   .shell { display:block; }
   .shell > .nav { position:static; height:auto; }
   .nav .wp-rail-h { display:none; }          /* the group headings have no room in the wrapping row */
+  .nav .wp-rail-sec, .nav .wp-rail-sec > .wp-rail-body { display:contents !important; }   /* no headings, so nothing stays folded */
   .nav .wp-rail-foot { display:contents; }   /* Tour + Feedback just join the wrapping row; .nav outranks the base rule declared below */
   .nav { flex-direction:row; flex-wrap:wrap; align-items:center; }
   .nav button { text-align:center; }
@@ -140,6 +159,11 @@ body.wp-overlay-mode .wp-index, body.wp-feedback-mode .wp-index { display:none !
    panes). Items are not data-tab buttons, so the tab switcher ignores them. */
 .wp-rail-grp { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
 .wp-rail-grp .wp-lbl { padding:0 2px 2px; }
+/* A page plus its ↗ "own window" button on one row (2026-11-16). */
+.wp-rail-row { display:flex; gap:4px; }
+.wp-rail-row > button:first-child { flex:1 1 auto; min-width:0; }
+.wp-rail-row > .wp-pop { flex:0 0 auto; padding-left:7px; padding-right:7px; color:var(--dim); }
+.wp-rail-row > .wp-pop:hover { color:var(--text); }
 .nav button:disabled { opacity:.45; cursor:default; }
 .nav button:disabled:hover { background:#21262d; }
 .wp-rail-grp .wp-soon { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin-left:4px; }
@@ -450,54 +474,70 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 </div>
 <div class="shell">
 <div class="nav">
-  <!-- The rail is grouped by WHEN you reach for a tab (Layout A, the guild lead, 2026-10-21). The headings are
-       plain divs: no data-tab, not buttons, so nothing that binds '.nav button[data-tab]' ever sees them. -->
-  <div class="wp-rail-h">Live &mdash; raid night</div>
-  <button class="active" data-tab="dash">Dashboard</button>
-  <button data-tab="raid">⚔ Raid</button>
-  <button data-tab="fights">⚔️ Fights</button>
-  <div class="wp-rail-h">After the raid</div>
-  <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
-       The tray's "📈 My parses" opens this tab through the #myparses hash. -->
-  <button data-tab="myparses">📈 My parses</button>
-  <button data-tab="stats">📊 Stats</button>
-  <button data-tab="loot">💰 Loot</button>
-  <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead
-       2026-08-13 — "having to scroll in our dashboard is somewhat annoying to
-       navigate"). Info had grown to 16 cards and Triggers to 12 by mixing three
-       unrelated jobs: what your log SAW (session stats), whether the machinery
-       WORKS (diagnostics), and the thing the tab is actually named for. The
-       sidebar rail is what made room for more destinations. -->
-  <div class="wp-rail-h">Set up</div>
-  <button data-tab="overlays">🪟 Overlays</button>
-  <button data-tab="triggers">⚡ Triggers</button>
-  <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
-  <button data-tab="voice">🗣 Voice</button>
-  <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
-  <button data-tab="buffs">✨ Buffs (and blocking)</button>
-  <div class="wp-rail-h">Machine</div>
-  <button data-tab="diag">🩺 Diagnostics</button>
-  <button data-tab="info">Info</button>
-  <button data-tab="optin">Logsync</button>
-  <!-- 🛡 Admin — officer-only. Hidden by default; renderAdmin flips it visible
-       ONLY when s.mimicIdentity.is_officer (the bot's authenticated reply). The
-       officer-gated card DATA is served only to officers, so this is a real
-       gate, not a CSS hide. -->
-  <button data-tab="admin" id="wpAdminTab" style="display:none" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
-  <!-- 🖥 On this PC (the guild lead, 2026-10-21, option B: the website's own pages bundled into Mimic and
-       served by this agent under /local/). Built from your own logs and inventory files; nothing leaves
-       the PC. Inventory and My replay open in their own Mimic window (the tray's "Inventory (on this PC)"
-       and "My replay (on this PC)" are the same window); in a plain browser they open a new tab. "My fights
-       (this PC)" is the local site's My parses page, named differently here so it is not mistaken for the
-       📈 My parses tab above it. No data-tab, so the tab switcher ignores them. -->
-  <div class="wp-rail-grp" id="wpLocalGrp">
-    <div class="wp-lbl">On this PC</div>
-    <button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory')" title="Every item across your characters, from the inventory files on this PC (opens in its own window). Nothing leaves the PC.">🎒 Inventory</button>
-    <button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses')" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member (opens in its own window). Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button>
-    <button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay')" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC (opens in its own window). Nothing leaves the PC.">🎬 My replay</button>
-    <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
-    <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+  <!-- Five folding sections (the guild lead, 2026-11-17: "reorder ... the side nav into collapsed sections. Setup, Live,
+       Raid, Recap, Diagnostics"), in that order. Headings are divs with role=button: no data-tab, not buttons, so nothing
+       that binds '.nav button[data-tab]' ever sees them. wpRailToggle keeps each section's open state; the section that
+       holds the active tab opens itself (wpRailReveal). The "On this PC" pages (built from this PC's own logs and files;
+       nothing leaves it) sit in the section they belong to and load into the middle pane (#localpage); ↗ (or Ctrl /
+       Shift / middle click) opens one in its own window. "My fights (this PC)" is the local site's My parses page, named
+       so it is not mistaken for the 📈 My parses tab. -->
+  <div class="wp-rail-sec" data-sec="setup">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Setup</div>
+    <div class="wp-rail-body">
+      <button data-tab="overlays">🪟 Overlays</button>
+      <button data-tab="triggers">⚡ Triggers</button>
+      <!-- 🗣 Voice (the guild lead, 2026-10-17): every card about how Mimic speaks, carved out of Triggers. -->
+      <button data-tab="voice">🗣 Voice</button>
+      <!-- The Buff blocks picker now lives at the foot of this tab (the guild lead, 2026-10-17). -->
+      <button data-tab="buffs">✨ Buffs (and blocking)</button>
+      <button data-tab="optin">Logsync</button>
+      <div class="wp-rail-row"><button id="wpLocalInv" type="button" onclick="wpOpenLocalSite('inventory', event)" onauxclick="wpOpenLocalSite('inventory', event)" title="Every item across your characters, from the inventory files on this PC. Nothing leaves the PC.">🎒 Inventory</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('inventory', 'window')" title="Open Inventory in its own window" aria-label="Open Inventory in its own window">↗</button></div>
+      <button id="wpLocalRebuild" type="button" onclick="wpRebuildOpen()" title="Build your fights, raids, deaths and loot from the log files on this PC. Nothing is uploaded.">🔁 Rebuild from my logs</button>
+    </div>
   </div>
+  <div class="wp-rail-sec open" data-sec="live">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Live</div>
+    <div class="wp-rail-body">
+      <button class="active" data-tab="dash">Dashboard</button>
+      <button data-tab="fights">⚔️ Fights</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec open" data-sec="raid">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Raid</div>
+    <div class="wp-rail-body">
+      <button data-tab="raid">⚔ Raid</button>
+      <button data-tab="loot">💰 Loot</button>
+      <div class="wp-rail-row"><button id="wpLocalFlags" type="button" onclick="wpOpenLocalSite('flags', event)" onauxclick="wpOpenLocalSite('flags', event)" title="Your Planes of Power flags and what each character needs next, from Zeal's PoPFlags files, #popflags replies and the Seer's recital on this PC. Nothing leaves the PC.">🗺️ PoP flags</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('flags', 'window')" title="Open PoP flags in its own window" aria-label="Open PoP flags in its own window">↗</button></div>
+      <button id="wpLocalRaid" type="button" onclick="wpRaidCodeOpen()" title="In someone else's raid? Enter their raid code: this PC keeps the raid's data to itself, tagged with the code, for six hours. The tray's Open menu has the same item.">🎟 Join a raid with a code</button>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="recap">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Recap</div>
+    <div class="wp-rail-body">
+      <!-- 📈 My parses (2026-10-06): your own fights from the guild's record, charted over a window you pick.
+           The tray's "📈 My parses" opens this tab through the #myparses hash. -->
+      <button data-tab="myparses">📈 My parses</button>
+      <button data-tab="stats">📊 Stats</button>
+      <!-- ⏪ Replay left Fights (Layout A - Triage, the guild lead, 2026-11-15): a rehearsal is something you do AFTER
+           the raid. The Rehearse tab (§401) will grow out of it. -->
+      <button data-tab="replay">⏪ Replay</button>
+      <div class="wp-rail-row"><button id="wpLocalFights" type="button" onclick="wpOpenLocalSite('parses', event)" onauxclick="wpOpenLocalSite('parses', event)" title="Your own fights as this PC recorded them, every player it saw, and how they differ from the guild's record when you are a member. Not the 📈 My parses tab above: that one graphs your numbers over time. Nothing leaves the PC.">📊 My fights (this PC)</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('parses', 'window')" title="Open My fights in its own window" aria-label="Open My fights in its own window">↗</button></div>
+      <div class="wp-rail-row"><button id="wpLocalReplay" type="button" onclick="wpOpenLocalSite('replay', event)" onauxclick="wpOpenLocalSite('replay', event)" title="Play back where you and your raid stood, from the recording Mimic keeps on this PC. Nothing leaves the PC.">🎬 My replay</button><button class="wp-pop" type="button" onclick="wpOpenLocalSite('replay', 'window')" title="Open My replay in its own window" aria-label="Open My replay in its own window">↗</button></div>
+    </div>
+  </div>
+  <div class="wp-rail-sec" data-sec="diag">
+    <div class="wp-rail-h wp-rail-tog" role="button" tabindex="0" onclick="wpRailToggle(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();wpRailToggle(this)}">Diagnostics</div>
+    <div class="wp-rail-body">
+      <!-- 📊 Stats + 🩺 Diagnostics were carved OUT of Info and Triggers (the guild lead 2026-08-13 — "having to scroll
+           in our dashboard is somewhat annoying to navigate"). -->
+      <button data-tab="diag">🩺 Diagnostics</button>
+      <button data-tab="info">Info</button>
+    </div>
+  </div>
+  <!-- 🛡 Admin — officer-only, outside the five sections. Hidden by default; renderAdmin flips it visible ONLY when
+       s.mimicIdentity.is_officer (the bot's authenticated reply). The officer-gated card DATA is served only to
+       officers, so this is a real gate, not a CSS hide. -->
+  <button data-tab="admin" id="wpAdminTab" style="display:none;margin-top:10px" title="Officer quick menu — DKP ticks, loot capture, admin links">🛡 Admin</button>
   <!-- ✨ Tour sits at the FOOT of the rail (the guild lead, 2026-09-23: "We're running out of horizontal real
        estate"); the rail is sticky, so a long page never means scrolling back for it. No data-tab, so the tab
        switcher ignores it. 💬 Feedback moved to the title row's top-right on 2026-10-29 (next to Reload). -->
@@ -533,15 +573,17 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <!-- Fights = Tanks/Healers + DPS combined. #tanks and #deeps are inner
      render-targets (renderTanks/renderDeeps still setSectionHTML into them),
      not independent .section tabs, so both show whenever Fights is active.
-     #fightsReplay holds the ⏪ Replay card (renderReplayCard), folded at the TOP; #fightsMore holds the three
-     cards that start folded below everything else (pets, damage shields, weapon loadouts: renderFightsMore).
-     Layout A order, most important first: Replay (folded) · threat · deaths · incoming · healers · DPS breakdown
-     · top abilities · the folded three. -->
+     #fightsMore holds the three cards that start folded below everything else (pets, damage shields, weapon
+     loadouts: renderFightsMore). Layout A order, most important first: threat · deaths · incoming · healers · DPS
+     breakdown · top abilities · the folded three. The ⏪ Replay card (renderReplayCard, host #fightsReplay) left
+     this tab for the ⏪ Replay tab below (Layout A - Triage, the guild lead, 2026-11-15). -->
 <div id="fights" class="section">
-  <div id="fightsReplay"></div>
   <div id="tanks"></div>
   <div id="deeps"></div>
   <div id="fightsMore"></div>
+</div>
+<div id="replay" class="section">
+  <div id="fightsReplay"></div>
 </div>
 <div id="myparses" class="section"></div>
 <div id="loot" class="section"></div>
@@ -552,6 +594,8 @@ body.wp-feedback-mode > *:not(#wpFeedback):not(#wpConnError):not(script):not(sty
 <div id="diag" class="section"></div>
 <div id="optin" class="section"></div>
 <div id="admin" class="section"></div>
+<!-- An "On this PC" page in the middle pane (2026-11-17); wpOpenLocalSite sets the frame's address. Never repainted by the poll. -->
+<div id="localpage" class="section"><iframe id="wpLocalFrame" title="On this PC" src="about:blank"></iframe></div>
 </div><!-- /.panes -->
 </div><!-- /.shell -->
 <script>
@@ -821,11 +865,61 @@ function wpFeedbackClick() {
   }
   wpOpenFeedback();
 }
-// The rail's "On this PC" items: a page of the local site (/local/<page>/, served by this agent). Mimic opens
-// it in its own window (the same one the tray item opens); with no Mimic bridge, or while the agent has no
-// port yet, a new browser tab does the job.
-function wpOpenLocalSite(page) {
+// The rail's "On this PC" items: a page of the local site (/local/<page>/, served by this agent). A plain click opens it
+// in THIS window (the guild lead, 2026-11-16: "should be able to load in the same window, not external unless people want
+// to launch in a new window"); the page then shows "← Dashboard" (LocalNav reads the session flag set here). The ↗
+// button ('window'), Ctrl / Shift / Cmd click and a middle click open it in its own window, the one the tray item opens;
+// with no Mimic bridge, or while the agent has no port yet, a new browser tab does that job.
+// The rail's five folding sections (2026-11-17). Open state per section in localStorage (a private window or blocked
+// storage just starts from the defaults in the markup: Live and Raid open).
+var WP_RAIL_KEY = 'wp.rail.open';
+function _wpRailSaved() { try { return JSON.parse(localStorage.getItem(WP_RAIL_KEY) || 'null'); } catch (e) { return null; } }
+function _wpRailSave() {
+  var o = {};
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) { o[s.getAttribute('data-sec')] = s.classList.contains('open'); });
+  try { localStorage.setItem(WP_RAIL_KEY, JSON.stringify(o)); } catch (e) { void e; }
+}
+function wpRailToggle(h) {
+  var s = h && h.parentElement;
+  if (!s) return;
+  s.classList.toggle('open');
+  _wpRailSave();
+}
+// Open the section holding `el` (the active tab), so a tab chosen another way (the tour, a hash, the tray) is never hidden.
+function wpRailReveal(el) {
+  var s = el && el.closest ? el.closest('.wp-rail-sec') : null;
+  if (s && !s.classList.contains('open')) { s.classList.add('open'); _wpRailSave(); }
+}
+(function wpRailRestore() {
+  var o = _wpRailSaved();
+  if (!o || typeof o !== 'object') return;
+  document.querySelectorAll('.nav .wp-rail-sec').forEach(function (s) {
+    var k = s.getAttribute('data-sec');
+    if (typeof o[k] === 'boolean') s.classList.toggle('open', o[k]);
+  });
+  try { wpRailReveal(document.querySelector('.nav button.active')); } catch (e) { void e; }
+})();
+function wpOpenLocalSite(page, how) {
   var url = '/local/' + page + '/';
+  var own = how === 'window' || (how && typeof how === 'object' && (how.ctrlKey || how.metaKey || how.shiftKey || how.button === 1));
+  if (how && typeof how === 'object' && how.type === 'auxclick' && how.button !== 1) return;   // right click: the menu, not a page
+  if (!own) {
+    // In the middle pane, rail and all kept (the guild lead, 2026-11-17: "launched a new tab instead of just the middle
+    // one"). The page hides its own top bar inside the frame (web/local/app/layout.tsx).
+    var frame = document.getElementById('wpLocalFrame'), pane = document.getElementById('localpage');
+    if (!frame || !pane) { try { sessionStorage.setItem('wpLocalFromDash', '1'); } catch (e) { void e; } location.href = url; return; }
+    var src = url + '?embed=1';
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
+    document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(function (x) { x.classList.remove('active'); });
+    pane.classList.add('active');
+    var btn = { inventory: 'wpLocalInv', flags: 'wpLocalFlags', parses: 'wpLocalFights', replay: 'wpLocalReplay' }[page];
+    var b = btn ? document.getElementById(btn) : null;
+    if (b) { b.classList.add('active'); try { wpRailReveal(b); } catch (e) { void e; } }
+    try { wpIndexSync(); } catch (e) { void e; }
+    return;
+  }
+  if (how && typeof how === 'object' && how.preventDefault) how.preventDefault();
   var fallback = function () { try { window.open(url, '_blank'); } catch (e) { void e; } };
   if (window.mimic && window.mimic.openLocalSite) {
     try {
@@ -3450,6 +3544,33 @@ function buildHealersHtml(s) {
   return h;
 }
 
+// Top Abilities: split one player's { name: {count,total} } into real abilities (named specials, spells,
+// procs), ONE folded plain-melee total, and damage-shield rows. Class skills (kick, bash, backstab, frenzy,
+// the monk/rogue multi-word ones) are NOT plain verbs, they stay abilities. `dsNames` are this player's known
+// damage-shield sources. Sorting breaks ties by name so the HTML is byte-stable across polls.
+const WP_PLAIN_MELEE = new Set(['hit','slash','crush','pierce','punch','strike','bite','claw','gore','maul','slam','smash',
+  'peck','gnaw','sting','trample','snap','stomp','chomp','swing','tear','rend','spit','swipe','buffet','thrash','mangle',
+  'pummel','whip','tail-whip','jab','chop','slice','hack','thrust','gouge','lash','sweep','stab','rap','smite','bludgeon',
+  'crunch','nick','tail-slap','tail-swipe','tail-thrash']);
+const WP_DS_NAME_RX = /^(thorns?|thistles?|brambles?|spikes?|barbs?|non-melee)\b|\b(shield of|coat|feedback|psalm)\b/i;
+function wpAbilityGroups(top, dsNames) {
+  const ds = {};
+  (dsNames || []).forEach(function (n) { ds[String(n).toLowerCase()] = true; });
+  const abilities = [], shields = [];
+  let melee = null;
+  Object.keys(top || {}).forEach(function (k) {
+    const st = top[k], low = k.toLowerCase();
+    if (WP_PLAIN_MELEE.has(low)) {
+      melee = melee || { count: 0, total: 0 };
+      melee.count += st.count; melee.total += st.total;
+    } else if (ds[low] || WP_DS_NAME_RX.test(k)) shields.push([k, st]);
+    else abilities.push([k, st]);
+  });
+  const byTotal = function (a, b) { return (b[1].total - a[1].total) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); };
+  abilities.sort(byTotal); shields.sort(byTotal);
+  return { abilities: abilities, melee: melee, shields: shields };
+}
+
 function renderDeeps(s) {
   let h = '<div class="grid"><div class="card wide" data-index="DPS"><h2>💥 DEEPS — Damage Breakdown (this session)</h2>';
   h += '<div class="subtle">Per-attacker melee / spell / proc / DoT damage and crit stats. Names with spaces (NPCs) are filtered out.</div>';
@@ -3499,22 +3620,30 @@ function renderDeeps(s) {
   if (withAbilities.length > 0) {
     h += '<div class="card wide" data-index="Abilities"><h2>🎯 Top Abilities per Player</h2>';
     h += '<div class="subtle">Aggregated by named ability across the session. Hits, total damage, average.</div>';
-    // Each player is one block (heading + a fixed-layout table, see table.wp-abtbl), so every player's
-    // columns line up; the first 3 players show, the rest sit behind "N more players", and inside a block
-    // the top 5 abilities show with the remaining ones behind "N more".
-    const playerBlocks = withAbilities.slice(0, 10).map(function ([name, d]) {
-      const abs = Object.entries(d.topAbilities).sort((a, b) => b[1].total - a[1].total).slice(0, 8);
-      const abRows = abs.map(function ([ab, st]) {
+    // One compact card per player in a responsive grid (.wp-abgrid): real abilities first, plain melee
+    // verbs folded into one "melee" line, damage shields labelled as such. The first 8 cards show, the
+    // rest sit behind "N more players"; inside a card the top 5 abilities show, the rest behind "N more".
+    const dsAll = s.damageShield || {};
+    const playerBlocks = withAbilities.slice(0, 30).map(function ([name, d]) {
+      const g = wpAbilityGroups(d.topAbilities, Object.keys(dsAll[name] || {}));
+      const row = function (label, st, cls) {
         const avg = st.count > 0 ? Math.round(st.total / st.count) : 0;
-        const label = ab === 'non-melee' ? ab + ' (DS / DoT / procs)' : ab;
-        return '<tr><td title="' + esc(label) + '">' + esc(label) + '</td><td class="num wp-r"><b>' + fmtK(st.total) + '</b></td>' +
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td title="' + esc(label) + '">' + esc(label) + '</td><td class="num wp-r"><b>' + fmtK(st.total) + '</b></td>' +
                '<td class="num wp-r">' + st.count + '</td><td class="num wp-r">' + fmtK(avg) + '</td></tr>';
-      });
-      return '<div><h3 style="color:var(--orange);margin-top:14px">' + esc(name) + '</h3>' +
+      };
+      const abRows = g.abilities.map(function (a) { return row(a[0], a[1]); });
+      if (g.melee) abRows.push(row('melee', g.melee, 'dim'));
+      g.shields.forEach(function (a) { abRows.push(row(a[0] === 'non-melee' ? 'DS / DoT / procs' : a[0] + ' (DS)', a[1], 'dim')); });
+      if (!g.abilities.length && !g.shields.length && g.melee) {
+        const mavg = g.melee.count > 0 ? Math.round(g.melee.total / g.melee.count) : 0;
+        return '<div class="wp-abcard"><h3 class="name">' + esc(name) + '</h3><div class="dim" style="font-size:13px">melee only: <span class="num">' + fmtK(g.melee.total) +
+               '</span> over ' + g.melee.count + ' hits, avg ' + fmtK(mavg) + '</div></div>';
+      }
+      return '<div class="wp-abcard"><h3 class="name">' + esc(name) + '</h3>' +
              '<table class="wp-abtbl"><tr><th>Ability</th><th class="wp-r">Total</th><th class="wp-r">Hits</th><th class="wp-r">Avg</th></tr>' +
              wpMoreList('deeps|abil|' + name, abRows, { show: 5, cols: 4 }) + '</table></div>';
     });
-    h += wpMoreList('deeps|players', playerBlocks, { show: 3, noun: 'more players' });
+    h += '<div class="wp-abgrid">' + wpMoreList('deeps|players', playerBlocks, { show: 8, noun: 'more players' }) + '</div>';
     h += '</div>';
   }
 
@@ -5092,6 +5221,138 @@ function wpRaidCodeOpen() {
   window.addEventListener('hashchange', go);
 })();
 
+// ── 🐺 Raid Mimic party (Logsync tab, above the raid code; the tray's "Raid Mimic party…" opens it) ──
+// Raiders who join one party code share their numbers live: every Mimic publishes its own and gets back ONE merged
+// view (per player the highest value anyone saw, never a sum), which the DPS HUD shows as its Party view. Free for
+// everyone (DECISIONS §588); the tier shows only as a small tag. The state lives in the agent (GET/POST /api/party,
+// and `s.partyView` on /api/state). The card paints from the poll and prints nothing that ticks (no "3s ago", no
+// countdown), so its HTML is byte-stable and the section does not rewrite every 2 s.
+var _wpPt = { note: '', tone: '' };
+function wpPtTag(p) {
+  if (!p) return '';
+  if (p.tier === 'pro') return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro</span>';
+  if (p.tier === 'trial') {
+    var d = p.trial_ends_at ? Math.max(0, Math.ceil((Date.parse(p.trial_ends_at) - Date.now()) / 86400000)) : null;
+    return '<span class="dim" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:1px 6px">Pro trial' + (d != null ? ' · ' + d + ' day' + (d === 1 ? '' : 's') + ' left' : '') + '</span>';
+  }
+  return '';
+}
+// The automatic way in: follows the real in-game group or raid (the Zeal pipe). Off by default; it prints nothing that ticks.
+function wpPtAutoHtml(s, p) {
+  var on = !!(s && s.partyShare && s.partyShare.on);
+  var auto = p && p.mode === 'auto';
+  var h = '<div id="wpPtAuto" style="margin:8px 0"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">'
+    + '<input type="checkbox" id="wpPtShare"' + (on ? ' checked' : '') + ' onchange="wpPtShare(this.checked)" style="margin-top:3px">'
+    + '<span><b>Share with my in-game group and raid</b><br><span class="dim" style="font-size:12px">'
+    + 'Shares only with people in your group or raid who also use Mimic. It follows your group by itself: it connects when you group up and leaves after two minutes on your own. Off by default.</span></span></label>';
+  if (on) {
+    var line;
+    if (p && p.auto_stopped && p.error && p.error.message) line = '<span style="color:var(--orange)">' + esc(p.error.message) + '</span>';
+    else if (auto && p.status === 'joined') line = '<b>' + (p.members || 1) + '</b> sharing from your group or raid' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live') + '. Open the DPS HUD and switch it to <b>Party</b>.';
+    else if (auto && p.status === 'paused') line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' It reconnects by itself.';
+    else if (auto) line = 'Connecting to the party relay…' + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    else line = '<span class="dim">Waiting until you are in a group or raid.' + (p && p.status === 'paused' && p.paused_text ? ' ' + esc(p.paused_text) : '') + '</span>';
+    h += '<div style="font-size:12px;margin:4px 0 0 24px">' + line + '</div>';
+  }
+  return h + '</div>';
+}
+function wpPtHtml(s) {
+  var p = s && s.partyView;
+  var h = wpPtAutoHtml(s, p) + '<div class="dim" style="font-size:12px;margin-top:10px">Or share by code</div>';
+  var inParty = p && p.mode !== 'auto' && (p.status === 'joined' || p.status === 'connecting' || p.status === 'reconnecting' || p.status === 'paused');
+  if (inParty) {
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0">';
+    if (p.code) {
+      h += '<span id="wpPtActive" style="font-size:20px;font-weight:700;letter-spacing:2px;border:1px solid var(--blue);border-radius:6px;padding:2px 12px">' + esc(p.code) + '</span>'
+        + '<button type="button" class="wp-btn" onclick="wpPtCopy()" title="Copy the code to paste into Discord or /rs">📋 Copy code</button>';
+    }
+    h += wpPtTag(p)
+      + '<button type="button" class="wp-btn" onclick="wpPtLeave()">✕ Leave party</button></div>';
+    var line;
+    if (p.status === 'joined') {
+      line = '<b>' + (p.members || 1) + '</b> in the party' + (p.stale ? ' · <span style="color:var(--orange)">numbers are stale (nobody is publishing right now)</span>' : ' · numbers are live')
+        + '. Open the DPS HUD and switch it to <b>Party</b> to see everyone, merged.';
+    } else if (p.status === 'paused') {
+      line = '<span style="color:var(--orange)">Paused.</span> ' + esc(p.paused_text || 'Waiting.') + ' The code is kept and it reconnects by itself.';
+    } else {
+      line = 'Connecting to the party relay' + (p.status === 'reconnecting' ? ' (it will keep trying)' : '') + '…'
+        + (p.error && p.error.message ? ' <span class="dim">' + esc(p.error.message) + '</span>' : '');
+    }
+    h += '<div style="font-size:12px;margin-bottom:6px">' + line + '</div>';
+  } else {
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">'
+       + '<input id="wpPtCode" type="text" maxlength="12" placeholder="K7M2QX" autocomplete="off" spellcheck="false" style="width:120px;text-transform:uppercase;font-size:14px;letter-spacing:2px" onkeydown="if (event.key === \'Enter\') wpPtJoin()">'
+       + '<button type="button" class="wp-btn pri" onclick="wpPtJoin()">🐺 Join</button>'
+       + '<span class="dim">or</span>'
+       + '<button type="button" class="wp-btn" onclick="wpPtCreate()" title="Makes a new party and shows its code, to give to your group or raid">＋ Create a party</button></div>';
+    if (p && !p.auto_stopped && p.error && p.error.message) h += '<div style="color:var(--orange);font-size:12px;margin-bottom:6px">' + esc(p.error.message) + '</div>';
+  }
+  if (_wpPt.note) h += '<div id="wpPtNote" style="color:' + (_wpPt.tone === 'ok' ? 'var(--green)' : 'var(--orange)') + ';font-size:12px;margin-bottom:6px">' + esc(_wpPt.note) + '</div>';
+  return h;
+}
+function wpPtRepaint(s) {
+  var el = document.getElementById('wpParty');
+  if (!el) return;
+  if (!document.getElementById('wpPtBody')) {
+    el.innerHTML = '<h2>🐺 Raid Mimic party</h2>'
+      + '<div class="subtle">Share your numbers live with the people you play with: automatically with your in-game group and raid, or by a party code that one of you creates and the rest join. '
+      + 'Each Mimic sends its own damage, healing, damage taken, threat, target and group health, and gets back one merged list, the highest value anyone saw for each player, never added together. '
+      + 'It sends only during a fight or while you are in a group or raid, and nothing else leaves your PC. Needs Mimic signed in with Discord.</div>'
+      + '<div id="wpPtBody"></div>';
+    el._wpLastHtml = null;
+  }
+  morphInto(document.getElementById('wpPtBody'), wpPtHtml(s));
+}
+function renderPartyCard(s) { wpPtRepaint(s); }
+function wpPtPost(body) {
+  return fetch('/api/party', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+}
+function wpPtRefresh() {
+  fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { wpPtRepaint(s); }, function () { });
+}
+function wpPtAct(body, okNote) {
+  wpPtPost(body).then(function (x) {
+    _wpPt.note = x.ok ? (okNote || '') : ((x.j && x.j.error) || 'Could not do that.'); _wpPt.tone = x.ok ? 'ok' : '';
+    wpPtRefresh();
+  }, function () { _wpPt.note = 'The agent did not answer.'; _wpPt.tone = ''; wpPtRefresh(); });
+}
+function wpPtShare(on) { wpPtAct({ action: 'share', on: !!on }, on ? 'Sharing with your group and raid is on.' : 'Sharing with your group and raid is off.'); }
+function wpPtCreate() { wpPtAct({ action: 'create' }, ''); }
+function wpPtJoin() { var inp = document.getElementById('wpPtCode'); wpPtAct({ action: 'join', code: inp ? inp.value : '' }, ''); }
+function wpPtLeave() { wpPtAct({ action: 'leave' }, 'Left the party.'); }
+function wpPtCopy() {
+  var a = document.getElementById('wpPtActive');
+  var code = a ? a.textContent : '';
+  var done = function (ok) { _wpPt.note = ok ? 'Copied ' + code + '.' : 'Could not copy; select the code and copy it.'; _wpPt.tone = ok ? 'ok' : ''; wpPtRefresh(); };
+  try { navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); }); } catch (e) { done(false); }
+}
+// The tray's "Raid Mimic party…": the Logsync tab, scrolled to the card.
+function wpPartyOpen() {
+  var tab = document.querySelector('.nav button[data-tab="optin"]');
+  if (tab && !tab.classList.contains('active')) tab.click();
+  var go = function (n) {
+    var card = document.getElementById('wpParty');
+    if (!card) { if (n < 12) setTimeout(function () { go(n + 1); }, 200); return; }
+    var bar = document.getElementById('wpTopBar');
+    var pad = (bar ? bar.getBoundingClientRect().height : 0) + 10;
+    window.scrollTo({ top: Math.max(0, card.getBoundingClientRect().top + window.scrollY - pad), behavior: 'smooth' });
+    var inp = document.getElementById('wpPtCode');
+    if (inp) { try { inp.focus(); } catch (e) { void e; } }
+  };
+  go(0);
+}
+// #party opens the card, the way #raidcode does.
+(function () {
+  function go() {
+    if ((location.hash || '').toLowerCase() !== '#party') return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { void e; }
+    wpPartyOpen();
+  }
+  go();
+  window.addEventListener('hashchange', go);
+})();
+
 // ── 📈 My parses ────────────────────────────────────────────────────────────
 // A member asked (2026-10-06) for "a page in Mimic that graphs my parses over a variable time window"; the
 // guild lead picked this tab plus a page on wolfpack.quest. The numbers are the guild's record of YOUR fights,
@@ -5579,10 +5840,9 @@ function wpReplayLinkSync() {
 }
 function renderReplayCard(s) {
   var h = '<div class="grid">';
-  // Layout A (the guild lead, 2026-10-21): a compact entry at the TOP of Fights, folded until opened. It leaves
-  // this tab for a Rehearse tab of its own later (a separate job); until then the form lives here. A #replay
-  // deep link opens it (see the hash handler).
-  h += '<div class="card wide wp-fold" data-index="Replay"><details ' + wpKeep('fights|replay') + '><summary><h2>⏪ Replay <span class="dim" style="font-size:11px;font-weight:normal">· walk part of a log back through the real trigger pipeline — hear the TTS, nothing uploads · Rehearse tab coming</span></h2></summary>';
+  // Layout A (the guild lead, 2026-11-15): Replay left Fights for the ⏪ Replay tab, the card's only occupant, so it
+  // starts open. The Rehearse tab (§401) grows out of it. A #replay deep link opens the tab (see the hash handler).
+  h += '<div class="card wide wp-fold" data-index="Replay"><details ' + wpKeep('replay|form', true) + '><summary><h2>⏪ Replay <span class="dim" style="font-size:11px;font-weight:normal">· walk part of a log back through the real trigger pipeline — hear the TTS, nothing uploads · Rehearse tab coming</span></h2></summary>';
   var _rls = (s.watchedLogs || []).filter(function(w){ return w && w.logPath; });
   // Characters known to be under 46, or hidden by their owner, sit behind the same toggle as the Me card's
   // list, and ones with no known level close up in a trailing "no known level" group (a <select> cannot hold
@@ -8723,15 +8983,16 @@ function renderInfo(s) {
   if (!_cv.length) {
     _cvH += '<div class="dim">Nothing captured yet. Type <b>/zeal version</b> in game and it appears here — Zeal, eqw.dll and eqgame.dll builds, per character. We never send the command for you.</div>';
   } else {
-    _cvH += '<table>';
-    for (const c of _cv) {
-      _cvH += '<tr><td colspan="2" style="padding-top:6px"><b>' + esc(c.character) + '</b></td></tr>';
-      if (c.zeal)   _cvH += '<tr><td>Zeal</td><td class="num">' + esc(c.zeal) + (c.zeal_hash ? ' <span class="dim">(' + esc(c.zeal_hash) + ')</span>' : '') + '</td></tr>';
-      if (c.eqw)    _cvH += '<tr><td>eqw.dll</td><td class="num">' + esc(c.eqw) + '</td></tr>';
-      if (c.eqgame) _cvH += '<tr><td>eqgame.dll</td><td class="num">' + esc(c.eqgame) + '</td></tr>';
-      if (c.at)     _cvH += '<tr><td class="dim">read</td><td class="dim num">' + esc(String(c.at).replace('T', ' ').slice(0, 19)) + '</td></tr>';
-    }
-    _cvH += '</table>';
+    // One row per character (Layout A - Triage), five shown and the rest behind "N more characters": a long
+    // roster used to run four lines per character down the page.
+    _cvH += '<table>' + wpMoreList('info|client-versions', _cv.map(function (c) {
+      return '<tr><td style="padding-top:6px"><b>' + esc(c.character) + '</b></td><td class="num" style="padding-top:6px">'
+        + (c.zeal ? 'Zeal ' + esc(c.zeal) + (c.zeal_hash ? ' <span class="dim">(' + esc(c.zeal_hash) + ')</span>' : '') : '')
+        + (c.eqw ? '<div>eqw.dll ' + esc(c.eqw) + '</div>' : '')
+        + (c.eqgame ? '<div>eqgame.dll ' + esc(c.eqgame) + '</div>' : '')
+        + (c.at ? '<div class="dim">read ' + esc(String(c.at).replace('T', ' ').slice(0, 19)) + '</div>' : '')
+        + '</td></tr>';
+    }), { show: 5, cols: 2, noun: 'more characters' }) + '</table>';
   }
   _cvH += '</div>';
   // 🏷 Zeal tag capture readiness (#194). Byte-stable: zeal.ini values change
@@ -8789,7 +9050,8 @@ function renderInfo(s) {
     h += '</div>';
   }
   h += _cvH;
-  h += '<div class="card"><h2>🏷 Zeal tag capture</h2>';
+  // Folded (Layout A - Triage): a setup walkthrough you open when tags misbehave, not something to read every visit.
+  h += '<div class="card wp-fold" data-index="Zeal tags"><details ' + wpKeep('info|zeal-tags') + '><summary><h2>🏷 Zeal tag capture</h2></summary>';
   if (s.zealTagRateLimit) {
     h += '<div style="margin-bottom:4px;color:#f2b632;font-size:11px">⚠️ The server rate limited your chat around <code>'
       + esc(new Date(s.zealTagRateLimit.at).toLocaleTimeString())
@@ -8837,7 +9099,7 @@ function renderInfo(s) {
       h += '<div class="dim" style="font-size:11px;margin-top:4px">Arrow in game but nothing here? The arrow only proves Zeal applied the tag locally. Three ways it never reaches the log: <code>/tag local</code> (never broadcasts at all), <code>/tag chat</code> with the channel not actually joined (Zeal prints “You must join a channel”), and <code>/tag suppress on</code> — that one hides the broadcast from your chat window AND your log while still drawing the arrow.</div>';
     }
   }
-  h += '</div>';
+  h += '</details></div>';
   h += '</div>';
   h += '<div id="wpBackupsCard" class="card wide" style="display:none"></div>';
   // GINA/EQLP scan placeholder card — populated by wpScanLocalTriggers() on
@@ -9046,6 +9308,29 @@ var _CLASS_CHECKLIST = {
 // never showed a crown (2026-10-01). Both spellings count.
 function _isRaidLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '2' || /^raid\s*leader$/i.test(r); }
 function _isGroupLeadRank(r) { r = String(r == null ? '' : r).trim(); return r === '1' || /^group\s*leader$/i.test(r); }
+// MGB ready/down dot on the badge, from the agent's board (q.mgb = { holders: [{ name, ready_ms }], own }). The HTML carries only
+// the end time (0 = ready now); wpPaintMgbDots() writes colour + tooltip each second, so the Raid card stays byte-stable.
+// null = the board has nothing on this raider: no dot, the badge stays as it was.
+function _mgbEndFor(q, name) {
+  var b = q && q.mgb;
+  if (!b || !name) return null;
+  var nl = String(name).toLowerCase(), end = null, i;
+  var hs = b.holders || [];
+  for (i = 0; i < hs.length; i++) if (hs[i] && String(hs[i].name).toLowerCase() === nl) end = hs[i].ready_ms ? Math.round(hs[i].ready_ms) : 0;
+  if (b.own && b.own.ready_ms && String(b.own.character).toLowerCase() === nl) end = Math.max(end || 0, Math.round(b.own.ready_ms));
+  return end;
+}
+function wpPaintMgbDots() {
+  var els = document.querySelectorAll('.wp-mgb-dot'), now = Date.now();
+  for (var i = 0; i < els.length; i++) {
+    var left = Math.ceil((Number(els[i].getAttribute('data-end')) - now) / 1000);
+    var up = !(left > 0);
+    var tip = up ? 'MGB ready' : 'MGB in ' + Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+    els[i].style.cssText = 'display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:3px;vertical-align:middle;background:' + (up ? 'var(--green)' : 'var(--dim)');
+    if (els[i].title !== tip) els[i].title = tip;
+  }
+}
+setInterval(wpPaintMgbDots, 1000);
 function renderRaidTab(q) {
   var root = document.getElementById('raid');
   if (!root) return;
@@ -9101,7 +9386,8 @@ function renderRaidTab(q) {
         h += '<div class="wp-raid-row" data-raider="' + esc(m.name) + '" style="position:relative;cursor:pointer;padding:3px 6px 4px;font-size:11px;border-left:3px solid ' + _raidTierColor(m.tier) + ';margin-bottom:2px;background:' + (selected ? 'rgba(88,166,255,0.12)' : 'rgba(8,5,16,0.35)') + ';border-radius:3px;overflow:hidden">'
           + '<div style="display:flex;align-items:baseline;gap:5px">'
           + '<span style="color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (_isRaidLeadRank(m.rank) ? '👑 ' : (_isGroupLeadRank(m.rank) ? '⭐ ' : '')) + esc(m.name)
-          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>' : '') + '</span>'
+          + (m.mgb ? ' <span title="Mass Group Buff AA trained (Quarmy export)" style="color:var(--wp-purple);font-size:8px;font-weight:600">MGB</span>'
+              + (_mgbEndFor(q, m.name) != null ? '<span class="wp-mgb-dot" data-end="' + _mgbEndFor(q, m.name) + '"></span>' : '') : '') + '</span>'
           + (hp != null ? '<span class="num" style="margin-left:auto;font-size:10px;color:' + hpColor + '">' + hp + '%</span>' : '')
           + '</div>'
           + '<div style="display:flex;align-items:baseline;gap:5px;font-size:9px" class="dim">'
@@ -9259,6 +9545,7 @@ function renderRaidTab(q) {
   h += '</div>';
   h += '</div>';
   morphInto(root, h);
+  wpPaintMgbDots();
   var sel2 = document.getElementById('wpRaidCls');
   if (sel2) _bindOnce(sel2, 'change', function(){
     _raidTabCls = sel2.value || '';
@@ -9434,6 +9721,7 @@ function renderOptin(o) {
   // 🔁 Rebuild from my logs (the guild lead, 2026-10-21): its own placeholder, filled by renderRebuildCard, so the
   // progress it shows does not rewrite this whole tab every poll.
   wpRebuildSetFiles(o);
+  h += '<div id="wpParty" class="card wide"></div>';   // 🐺 Raid Mimic party: filled by renderPartyCard
   h += '<div id="wpRaidCode" class="card wide"></div>';   // 🎟 Join a raid with a code: filled by renderRaidCodeCard
   h += '<div id="wpRebuild" class="card wide"></div>';
   h += '<div id="wpPopCapture" class="card wide"></div>';   // 📥 Capture latest PoP flags, Seer and Maelin messages: filled by renderPopCaptureCard
@@ -9810,6 +10098,7 @@ async function refresh() {
                      ['diag', renderDiag],
                      ['netmeter', renderNetMeter],
                      ['rebuild', renderRebuildCard], ['raidcode', renderRaidCodeCard], ['popcapture', renderPopCaptureCard],
+                     ['party', renderPartyCard],
                      ['zealcard', renderZealCard],
                      ['recentfires', renderRecentFires], ['mutedtimers', renderMutedTimers], ['replaystatus', renderReplayStatus],
                      ['charmdiag', renderCharmDiag], ['petbuffdiag', renderPetBuffDiag], ['triggerjournal', renderTriggerJournal],
@@ -10038,10 +10327,11 @@ setTimeout(function () {
 // state and then threw on getElementById(undefined). Net effect: dashboard
 // blanked. Scoping to [data-tab] keeps the popover button out of the loop.
 document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.nav button[data-tab]').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav button[data-tab], .nav .wp-rail-row > button').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
   b.classList.add('active');
   document.getElementById(b.dataset.tab).classList.add('active');
+  try { wpRailReveal(b); } catch (e) { void e; }
   if (b.dataset.tab === 'optin') refreshOptin();
   if (b.dataset.tab === 'raid') refreshRaidTab();
   if (b.dataset.tab === 'myparses') wpMpOpenTab();
@@ -10076,7 +10366,7 @@ document.querySelectorAll('.nav button[data-tab]').forEach(b => b.addEventListen
 })();
 // ⏪ Replay deep-link (#101) — a link like #replay&from=<iso>&to=<iso> (built
 // by wolfpack.quest/parses on the "Replay this fight locally" link) opens the
-// Fights tab (where the Replay card lives since 2026-10-17) with the form prefilled. It never auto-starts — the user
+// ⏪ Replay tab (it left Fights under Layout A - Triage) with the form prefilled. It never auto-starts — the user
 // still clicks Start. from/to arrive as ISO instants; we render them into the
 // datetime-local inputs as LOCAL wall-clock (the basis the agent parses EQ log
 // timestamps on this machine).
@@ -10108,8 +10398,8 @@ function _wpApplyReplayPrefill(attempt) {
     if (i > 0) { try { params[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { void e; } }
   });
   window._wpReplayPrefill = { from: params.from || '', to: params.to || '' };
-  _wpOpenDetails['fights|replay'] = true;   // the card starts folded; a link that prefills it wants it open
-  var btn = document.querySelector('.nav button[data-tab="fights"]');
+  _wpOpenDetails['replay|form'] = true;   // a link that prefills the form wants it open
+  var btn = document.querySelector('.nav button[data-tab="replay"]');
   if (btn) btn.click();
   _wpApplyReplayPrefill(0);
 })();
@@ -10686,7 +10976,7 @@ async function dismissTopDamage(key) {
     });
   }
   var obs = new MutationObserver(function(){ applyHidden(); });
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -10855,7 +11145,7 @@ async function dismissTopDamage(key) {
     try { if (window.mimic) window.mimic.createPanelOverlay(pk); } catch (err) {}
   }, true);
   var obs = new MutationObserver(decorateButtons);
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -10895,7 +11185,7 @@ async function dismissTopDamage(key) {
       return matched;
     }
     var obs2 = new MutationObserver(applyOverlayTarget);
-    ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+    ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
       var el = document.getElementById(id);
       if (el) obs2.observe(el, { childList: true, subtree: true });
     });
@@ -11060,7 +11350,7 @@ async function dismissTopDamage(key) {
     }
   }
   var obs = new MutationObserver(decorate);
-  ["dash","overlays","raid","fights","info","triggers","voice","optin"].forEach(function(id){
+  ["dash","overlays","raid","fights","replay","info","triggers","voice","optin"].forEach(function(id){
     var el = document.getElementById(id);
     if (el) obs.observe(el, { childList: true, subtree: true });
   });
@@ -13201,7 +13491,7 @@ function wpTrigApplyForm(base, f) {
       + '    <button id="trigCancelBtn" type="button" style="display:none;background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Cancel edit</button>'
       + '    <button id="trigPreviewBtn" type="button" style="background:#21262d;color:var(--green);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Fire the overlay with the current form text (no save, no DB)">▶ Preview</button>'
       + '    <button id="trigTestBtn" type="button" style="background:#21262d;color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px">Test pattern…</button>'
-      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or PQ Companion trigger file">⬇ Import GINA / EQLP / PQ Companion</button>'
+      + '    <button id="trigImportBtn" type="button" style="background:#21262d;color:var(--blue);border:1px solid var(--border);padding:6px 14px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:12px" title="Bulk-import a GINA, EQLogParser or JSON trigger pack file">⬇ Import GINA / EQLP / JSON pack</button>'
       + '    <span id="trigAddMsg" class="dim" style="font-size:11px"></span>'
       + '  </div>'
       + '  <div id="trigTestPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
@@ -13211,7 +13501,7 @@ function wpTrigApplyForm(base, f) {
       + '    <div id="trigTestResult" class="dim" style="font-size:11px;margin-top:6px"></div>'
       + '  </div>'
       + '  <div id="trigImportPanel" style="display:none;margin-top:10px;padding:8px;background:var(--wp-bg);border:1px solid var(--border);border-radius:6px">'
-+ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or <b>PQ Companion</b> (its exported .json trigger pack). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
++ '    <div class="dim" style="font-size:11px;margin-bottom:6px">Import from <b>EQLogParser</b> (.tgf / .tgf.gz — the .gz is read directly, no need to unzip) or <b>GINA</b> (.gtp / XML) or a <b>JSON trigger pack</b> (a .json export). Pick a file or paste the text. Every trigger in the file is added; duplicates by name are skipped and existing triggers are preserved. Display, Speak (TTS), countdown timer + the "N seconds before" warning, and capture placeholders ({s1}, {n1}) all carry over.</div>'
       + '    <input id="trigImportFile" type="file" accept=".tgf,.gz,.gtp,.xml,.json,application/gzip,application/json,text/xml" style="display:block;margin-bottom:6px;font-size:11px;color:var(--text)">'
       + '    <textarea id="trigImportXml" placeholder="…or paste the .tgf JSON / SharedTriggers XML here" style="width:100%;height:120px;background:var(--wp-panel);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;margin-bottom:6px"></textarea>'
       + '    <button id="trigImportRun" type="button" style="background:var(--wp-accent);color:#fff;border:0;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px">Import pasted text</button>'
@@ -13921,7 +14211,7 @@ function wpTrigApplyForm(base, f) {
         summary += '<br><span class="dim" style="font-size:11px">' + j.sound_notes.length + ' trigger' + (j.sound_notes.length === 1 ? '' : 's') + ' played a sound that could not come along, so ' + (j.sound_notes.length === 1 ? 'it keeps' : 'they keep') + ' the spoken callout: '
           + j.sound_notes.slice(0, 4).map(function(n){ return esc(n.name) + (n.file ? ' (' + esc(n.file) + ')' : '') + ' &mdash; ' + esc(n.why); }).join('; ') + (j.sound_notes.length > 4 ? '; and ' + (j.sound_notes.length - 4) + ' more' : '') + '. Drop the file in your sounds folder and pick it in the trigger.</span>';
       }
-      // PQ Companion packs: what a personal trigger has no place for.
+      // JSON trigger packs: what a personal trigger has no place for.
       if (Array.isArray(j.not_carried) && j.not_carried.length > 0) {
         summary += '<br><span class="dim" style="font-size:11px">Not carried over: '
           + j.not_carried.slice(0, 6).map(function(n){ return esc(n.name) + ' (' + n.what.map(esc).join('; ') + ')'; }).join('; ')
@@ -14035,8 +14325,8 @@ function wpTrigApplyForm(base, f) {
     // Clear-overlay buttons get re-rendered by renderTriggers every 2s poll,
     // so direct addEventListener would die on the first refresh. Use event
     // delegation on the section root — it survives every inner morph and
-    // routes clicks by element id. The same handler is bound to #fights too: the ⏪ Replay
-    // card (Start / Stop / journal link) lives there since 2026-10-17.
+    // routes clicks by element id. The same handler is bound to #replay too: the ⏪ Replay
+    // card (Start / Stop / journal link) has its own tab since Layout A (Triage); #fights stays bound for old links.
     var onSectionClick = function(e){
         var t = e.target;
         if (!t) return;
@@ -14091,7 +14381,7 @@ function wpTrigApplyForm(base, f) {
           if (j) j.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
-    [section, document.getElementById('fights')].forEach(function(host){
+    [section, document.getElementById('fights'), document.getElementById('replay')].forEach(function(host){
       if (host && !host._wpTrigClickBound) { host.addEventListener('click', onSectionClick); host._wpTrigClickBound = true; }
     });
     // Delegated change handler (survives the 2s section morph) for the loot

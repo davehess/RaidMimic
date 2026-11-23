@@ -276,6 +276,8 @@ let setupMode = false;
 // ── Config ────────────────────────────────────────────────────────────────
 function defaultConfig() {
   return {
+    overlayHotkeys: { map: 'CommandOrControl+M' },   // per-overlay keys (dashboard Overlays tab); the Map starts on Ctrl+M (see loadConfig)
+    mapHotkeyDefaulted: true,
     eqPath: null,            // legacy single-folder (kept for back-compat read)
     eqPaths: [],             // multi-folder picker — every EQ install to tail
     eqPathsExcluded: [],     // auto-detected paths the user explicitly unchecked
@@ -422,6 +424,8 @@ function defaultConfig() {
     // Where Zeal installs come from: 'official' (CoastalRedwood) or 'test' (the
     // guild's fork, test-all build). zealUpdater.ZEAL_SOURCES; set from Settings.
     zealSource: 'official',
+    // The Zeal watch list: saved extra sources, each newest / pinned / pre-releases ('w:<id>' in zealSource).
+    zealWatch: [],
     // Custom UI packs (Nillipuss etc.) installed via the uiPacks updater —
     // map of pack id → last-installed release tag. Same idea as zealInstalledTag
     // but per-pack, since a user can install more than one.
@@ -499,6 +503,15 @@ function loadConfig() {
       if (raw.charProfiles && typeof raw.charProfiles === 'object') {
         for (const p of Object.values(raw.charProfiles)) { if (p && p.show && typeof p.show === 'object') p.show.showCanvas = false; }
       }
+    }
+    // Ctrl+M toggles the Map (the guild lead, 2026-11-17: "Ctrl + M as default for opening the map"; DECISIONS §628). The
+    // per-overlay hotkeys have no defaults, so the default is written into cfg.overlayHotkeys once, and the flag keeps it
+    // from coming back after the raider clears or changes it (the dashboard, the tray label and the clash check all read
+    // that one map). A key the raider already gave the Map is left alone.
+    if (raw.mapHotkeyDefaulted !== true) {
+      const oh = (raw.overlayHotkeys && typeof raw.overlayHotkeys === 'object') ? raw.overlayHotkeys : {};
+      if (typeof oh.map !== 'string') raw.overlayHotkeys = Object.assign({}, oh, { map: 'CommandOrControl+M' });   // same literal as defaultConfig()
+      raw.mapHotkeyDefaulted = true;
     }
     return Object.assign(defaultConfig(), raw);
   } catch { return defaultConfig(); }
@@ -1927,16 +1940,24 @@ async function _tickUiDeferred() {
   try {
     let eqUp = null;   // resolved lazily, once, only if needed
     const keep = [];
-    for (const entry of _uiDeferred) {
+    // The per-character keys step (keysplit) always applies first, whatever order the halves were queued in, and while
+    // it still waits no other character's shared half is applied: a character's own keys must land on a PC that
+    // already reads per-character keys (review of 3.1.0).
+    const isSplit = (e) => e.kind === 'restore' && Array.isArray(e.parts) && e.parts.includes('keysplit');
+    const ordered = _uiDeferred.filter(isSplit).concat(_uiDeferred.filter(e => !isSplit(e)));
+    let splitWaiting = false;
+    for (const entry of ordered) {
       const charLower = String(entry.character || '').toLowerCase();
-      if (_uiCharActiveInZeal(charLower)) { entry.sawActive = true; keep.push(entry); continue; }
+      const hold = () => { keep.push(entry); if (isSplit(entry)) splitWaiting = true; };
+      if (splitWaiting && entry.kind === 'restore' && _uiNeedsEqClosed(entry.parts)) { keep.push(entry); continue; }
+      if (_uiCharActiveInZeal(charLower)) { entry.sawActive = true; hold(); continue; }
       // Keybinds live in eqclient.ini, which EVERY running EverQuest writes on exit: a restore that carries
       // them waits for all of EverQuest to close, not just this character's camp.
       // Zeal's shared sections ride in the same two files, so they wait the same way.
       const ownOnly = entry.kind === 'restore' && !_uiNeedsEqClosed(entry.parts);
       if (entry.kind === 'restore' && !ownOnly) {
         if (eqUp === null) { try { eqUp = await _isEqRunning(); } catch { eqUp = false; } }
-        if (eqUp) { keep.push(entry); continue; }
+        if (eqUp) { hold(); continue; }
       }
       // Not in Zeal. Apply when we previously saw it in-game (logged out now),
       // or it was never in-game AND no EverQuest is running (nothing to clobber).
@@ -1947,11 +1968,11 @@ async function _tickUiDeferred() {
           if (_uiCharLogFresh(entry.eqDir, charLower)) { keep.push(entry); continue; }
         } else {
           if (eqUp === null) { try { eqUp = await _isEqRunning(); } catch { eqUp = false; } }
-          if (eqUp) { keep.push(entry); continue; }   // EQ up, char not seen → wait
+          if (eqUp) { hold(); continue; }   // EQ up, char not seen → wait
         }
       }
       // Stabilization: let EQ finish its logout write before we overwrite.
-      if (Date.now() - (entry.queuedAt || 0) < 6000) { keep.push(entry); continue; }
+      if (Date.now() - (entry.queuedAt || 0) < 6000) { hold(); continue; }
       _applyDeferredEntry(entry);   // drop on success or failure (don't loop forever)
     }
     if (keep.length !== _uiDeferred.length) { _uiDeferred = keep; _saveUiDeferred(); }
@@ -11262,6 +11283,42 @@ function _raidCodeTrayItems() {
     { label: '✕ Leave raid code', click: () => { _agentCall('POST', '/api/raid-code', { clear: true }).then(() => { _raidCodeTray = null; _raidCodeTrayAt = 0; try { buildTrayMenu(); } catch (e) { void e; } }); } },
   ];
 }
+// 🐺 Raid Mimic party: the agent owns it (GET/POST /api/party); the tray keeps the last answer for at most 20 s and
+// rebuilds its menu when the code changes. Create and join are typed on the dashboard card (the tray has no text box);
+// the tray opens it and can leave.
+let _partyTray = null;
+let _partyTrayAt = 0;
+function _partyTrayRefresh() {
+  const now = Date.now();
+  if (!agentPort || now - _partyTrayAt < 20000) return;
+  _partyTrayAt = now;
+  _agentCall('GET', '/api/party').then((r) => {
+    const live = r && r.ok && r.code && r.status && r.status !== 'off' && r.status !== 'ended';
+    const next = r && r.ok ? { code: live ? r.code : null, members: live ? (r.members || 0) : 0, share: !!r.share } : null;
+    const was = _partyTray ? `${_partyTray.code}|${_partyTray.share}` : '';
+    _partyTray = next;
+    if ((next ? `${next.code}|${next.share}` : '') !== was) { try { buildTrayMenu(); } catch (e) { void e; } }
+  });
+}
+// "Share with my in-game group and raid" (default off): the same setting as the dashboard card and Settings, through the agent.
+function _partySetShare(on) {
+  return _agentCall('POST', '/api/party', { action: 'share', on: !!on }).then((r) => {
+    _partyTray = null; _partyTrayAt = 0;
+    try { buildTrayMenu(); } catch (e) { void e; }
+    return { ok: !!(r && r.ok), on: !!(r && r.share) };
+  });
+}
+function _partyTrayItems() {
+  _partyTrayRefresh();
+  const p = _partyTray;
+  const share = { label: '🐺 Share with my in-game group and raid', type: 'checkbox', checked: !!(p && p.share), click: (mi) => { _partySetShare(!!mi.checked); } };
+  if (!p || !p.code) return [{ label: '🐺 Raid Mimic party…', click: () => showDashboardTab('party') }, share];
+  return [
+    { label: `🐺 Raid Mimic party ${p.code}${p.members ? ` · ${p.members} in it` : ''}`, click: () => showDashboardTab('party') },
+    share,
+    { label: '✕ Leave party', click: () => { _agentCall('POST', '/api/party', { action: 'leave' }).then(() => { _partyTray = null; _partyTrayAt = 0; try { buildTrayMenu(); } catch (e) { void e; } }); } },
+  ];
+}
 function buildTrayMenu() {
   if (!tray) return;
   const s = currentStatus();
@@ -11648,11 +11705,14 @@ function buildTrayMenu() {
     { label: '📈 My parses', click: () => showDashboardTab('myparses') },
     // Tray ↔ dashboard parity: the dashboard rail's "On this PC › Inventory" opens this same window (openLocalSite).
     { label: '🎒 Inventory (on this PC)', click: () => { if (!openLocalSite('inventory')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/inventory/`); } },
+    { label: '🗺️ PoP flags (on this PC)', click: () => { if (!openLocalSite('flags')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/flags/`); } },
     { label: '📊 My fights (on this PC)', click: () => { if (!openLocalSite('parses')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/parses/`); } },
     { label: '🎬 My replay (on this PC)', click: () => { if (!openLocalSite('replay')) shell.openExternal(`http://127.0.0.1:${agentPort}/local/replay/`); } },
     // Tray ↔ dashboard parity: the dashboard rail's "On this PC › Join a raid with a code" is the other half. A code is
     // typed on the dashboard card (the tray has no text box); the tray shows the pass while it runs and can end it.
     ..._raidCodeTrayItems(),
+    // Tray ↔ dashboard parity: the Logsync tab's "Raid Mimic party" card is the other half (create / join there).
+    ..._partyTrayItems(),
     { label: 'Open wolfpack.quest ↗', click: () => shell.openExternal(WOLFPACK_URL) },
     { label: 'Open dashboard in browser', click: () => shell.openExternal(`http://127.0.0.1:${agentPort}/`) },
     // Same folder as the dashboard's Sounds card button: drop .wav / .mp3 / .ogg files here to use them in triggers.
@@ -14160,7 +14220,7 @@ async function _loadUiSource(cfg, token, character, id) {
   if (localVersions.isLocalId(id)) {
     const files = localVersions.readVersion(_localVersionsRoot(), character, id);
     if (!files) throw new Error('that saved version is gone');
-    return { files: filterRestorable(files).files, overlays: null, source_width: _eqResOf(files) ? _eqResOf(files).w : null,
+    return { files: filterRestorable(files).files, overlays: typeof files[overlayBackup.FILE] === 'string' ? overlayBackup.parse(files[overlayBackup.FILE]) : null, source_width: _eqResOf(files) ? _eqResOf(files).w : null,
       source_height: _eqResOf(files) ? _eqResOf(files).h : null, label: null, local: true };
   }
   if (!token) throw new Error('no token configured');
@@ -14172,12 +14232,22 @@ function _localVersionsRoot() { return path.join(app.getPath('userData'), 'char-
 function _uiSameMachine(snap) {
   if (!snap) return false;
   if (snap.local === true) return true;
-  const me = _thisMachine();
-  return !!me && typeof snap.machine_name === 'string' && snap.machine_name === me;
+  const me = String(_thisMachine() || '').trim();
+  const theirs = typeof snap.machine_name === 'string' ? snap.machine_name.trim() : '';
+  // Windows computer names are not case-sensitive (uiSync.newerElsewhere compares them the same way). An empty
+  // or blank name never matches anything.
+  // ponytail: ceiling: two PCs that share a computer name (a cloned image, 'steamdeck' on every Deck) still read
+  // as one machine; telling them apart needs a per-install id in the upload, not a guess from the screen size.
+  return !!me && !!theirs && theirs.toLowerCase() === me.toLowerCase();
+}
+// The screen size a snapshot says it came from, for a backup that carries no eqclient.ini of its own.
+function _uiSnapSource(snap) {
+  const w = Number(snap && snap.source_width), h = Number(snap && snap.source_height);
+  return w > 0 && h > 0 ? { w, h } : null;
 }
 
 // ── Overlay positions as a part of a backup (the guild lead, 2026-11-11) ─────────────────────────────────────
-function _overlayBackupText() {
+function _overlayBackupText(stable) {
   try {
     if (_agentOnly()) return null;
     const cfg = loadConfig();
@@ -14189,7 +14259,7 @@ function _overlayBackupText() {
     const rects = Object.assign({}, remembered, _overlayRectsNow());
     const eq = _eqMainWindow(10 * 60 * 1000);
     return overlayBackup.build({
-      rects, flags, sig, machine: _thisMachine(), now: Date.now(),
+      rects, flags, sig, machine: _thisMachine(), now: stable ? 1 : Date.now(),
       displays: screen.getAllDisplays().map(d => d.bounds),
       eq: eq ? { x: eq.client.x, y: eq.client.y, width: eq.client.width, height: eq.client.height } : null,
     });
@@ -14251,7 +14321,7 @@ function _uiMainLayoutText(files, character) {
 // character that was not logged in anywhere was queued "until EverQuest closes" and so never landed in the session).
 // 'zealchar' is the character's own sections, but they sit INSIDE those two shared files, so it waits as well.
 function _uiNeedsEqClosed(parts) {
-  return !Array.isArray(parts) || parts.some(k => k === 'keybinds' || k === 'zeal' || k === 'zealchar');
+  return !Array.isArray(parts) || parts.some(k => k === 'keybinds' || k === 'zeal' || k === 'zealchar' || k === 'keysplit');
 }
 // A character that is in game without Zeal's pipe reporting it (the pipe fails on some PCs) still writes its log.
 function _uiCharLogFresh(eqDir, charLower) {
@@ -14269,8 +14339,11 @@ async function _uiEqBusyFor(character, parts, eqDir) {
   const cl = String(character).toLowerCase();
   // A half that writes eqclient.ini / zeal.ini waits for EverQuest to close even when this character is the one
   // logged in: answering "camp" there promised something the queue does not do (it holds that half until every
-  // client is closed). With no part list (the compare card asking about the character as a whole) it stays "camp".
-  if (_uiCharActiveInZeal(cl)) return Array.isArray(parts) && _uiNeedsEqClosed(parts) ? 'close' : 'camp';
+  // client is closed). With no part list (the compare card asking about the character as a whole) it answers for the
+  // character's OWN files; the card asks again with a shared part for the other half (busyShared in ui-restore-plan).
+  // Treating "no list" as shared made another running EverQuest read 'close' for own files that are written at once.
+  if (!Array.isArray(parts)) parts = [];
+  if (_uiCharActiveInZeal(cl)) return _uiNeedsEqClosed(parts) ? 'close' : 'camp';
   let up = false;
   try { up = await _isEqRunning(); } catch { up = false; }
   if (!up) return null;
@@ -14292,7 +14365,8 @@ async function _uiTargetRes(local) {
 }
 function _uiPartKeys(parts) {
   // 'overlays' is Mimic's own overlay layout (overlayBackup.js); the rest are EverQuest's files (uiRestorePlan.PARTS).
-  return (Array.isArray(parts) ? parts : []).filter(k => k === 'overlays' || uiRestorePlan.PARTS.some(p => p.key === k));
+  // 'keysplit' is the bring-in's one shared step (every character gets its own keys on a shared-keys PC; uiRestorePlan.splitKeysWrites).
+  return (Array.isArray(parts) ? parts : []).filter(k => k === 'overlays' || k === 'keysplit' || uiRestorePlan.PARTS.some(p => p.key === k));
 }
 // The two files every character on this PC shares get a dated copy before ANY restore touches the folder, whether
 // or not their parts are ticked (the guild lead, 2026-11-11): a keybind or Zeal section, or a write from another
@@ -14314,7 +14388,9 @@ function _uiWriteRestore(entry, backupTag) {
   const r = uiRestorePlan.buildRestore({
     backupFiles: entry.files, localFiles: local, character: entry.character,
     parts: _uiPartKeys(entry.parts), knownChars: _knownCharsIn(entry.eqDir, entry.character), target,
-    skinSizes: _uiSkinSizes(entry.eqDir), sameMachine: !!entry.sameMachine,
+    skinSizes: _uiSkinSizes(entry.eqDir), sameMachine: !!entry.sameMachine, sourceRes: entry.sourceRes || null,
+    // every character with files here, read now (a queued step applies later); the step skips any that already have keys of their own
+    splitChars: _uiPartKeys(entry.parts).includes('keysplit') ? _knownCharsIn(entry.eqDir, '') : undefined,
   });
   const written = [];
   for (const [name, text] of Object.entries(r.writes || {})) {
@@ -14326,15 +14402,25 @@ function _uiWriteRestore(entry, backupTag) {
   written.savedCopies = savedCopies;
   written.fileParts = r.fileParts || {};
   written.overlays = _uiPartKeys(entry.parts).includes('overlays') && entry.overlays ? _applyOverlayBackup(entry.overlays) : null;
+  _tellUiStudioRestored(entry.character, entry.eqDir, written);
   return written;
+}
+// An open UI Studio must re-read when a restore is actually WRITTEN, whichever surface started it (its own card, Settings,
+// the welcome walkthrough, quiet keep-in-sync) and whether it ran at once or after a camp / EverQuest closing. A queued
+// restore sends nothing until it lands, so the canvas never reloads early (and never saves guesses over it meanwhile).
+function _tellUiStudioRestored(character, eqDir, written) {
+  if (!uiStudioWindow || uiStudioWindow.isDestroyed() || !Array.isArray(written) || !written.length) return;
+  try { uiStudioWindow.webContents.send('ui-studio-restored', { character, eqDir, files: written.slice() }); } catch { /* window closing */ }
 }
 function _queueUiRestore(entry) {
   const cl = String(entry.character).toLowerCase();
   // A restore is queued in up to two halves (own files until the character camps, shared-file parts until EverQuest
   // closes); a new half replaces only the same half for that character.
   const shared = _uiNeedsEqClosed(entry.parts);
+  // The keys step is its own entry: a character's later keys half must not replace it (it has to run first).
+  const isSplit = (p) => Array.isArray(p) && p.includes('keysplit');
   _uiDeferred = _uiDeferred.filter(e => !(e.kind === 'restore' && String(e.character).toLowerCase() === cl && e.eqDir === entry.eqDir
-    && _uiNeedsEqClosed(e.parts) === shared));
+    && _uiNeedsEqClosed(e.parts) === shared && isSplit(e.parts) === isSplit(entry.parts)));
   _uiDeferred.push({ ...entry, kind: 'restore', queuedAt: Date.now(), sawActive: _uiCharActiveInZeal(cl) });
   _saveUiDeferred();
 }
@@ -14368,7 +14454,7 @@ ipcMain.handle('ui-restore-plan', async (_e, params) => {
     const skinSizes = _uiSkinSizes(eqDir);
     const sameMachine = _uiSameMachine(snap);
     const parts = uiRestorePlan.PARTS.map(p => ({ key: p.key, label: p.label, scope: p.scope,
-      ...uiRestorePlan.compare(p.key, snap.files, local, character, { knownChars, target, skinSizes, sameMachine }) }));
+      ...uiRestorePlan.compare(p.key, snap.files, local, character, { knownChars, target, skinSizes, sameMachine, sourceRes: _uiSnapSource(snap) }) }));
     // Mimic's own overlay layout: a part of its own when the backup holds one (no per-item compare; it is a layout).
     if (snap.overlays) {
       const n = Object.keys(snap.overlays.rects).length;
@@ -14377,18 +14463,22 @@ ipcMain.handle('ui-restore-plan', async (_e, params) => {
     }
     const bl = _uiMainLayoutText(snap.files, character), ml = _uiMainLayoutText(local, character);
     const fitted = bl && target
-      ? uiRestorePlan.fitLayout(bl, target.w, target.h, uiRestorePlan.fitOpts(snap.files, skinSizes, target, sameMachine)).text : null;
+      ? uiRestorePlan.fitLayout(bl, target.w, target.h, uiRestorePlan.fitOpts(snap.files, skinSizes, target, sameMachine, _uiSnapSource(snap))).text : null;
     return {
       ok: true,
       source: { machine: params?.machine ? String(params.machine).slice(0, 64) : null,
         w: snap.source_width || null, h: snap.source_height || null, label: snap.label || null },
       target: { machine: _thisMachine(), w: target ? target.w : null, h: target ? target.h : null, from: target ? target.from : null },
+      sameMachine,
+      // how keys are kept on the backup's PC and on this one (the bring-in card's key options read this)
+      keys: uiRestorePlan.keysInfo(snap.files, local, character),
       parts,
       preview: {
         backup: fitted ? uiRestorePlan.windowRects(fitted, target.w, target.h) : [],
         mine: ml && target ? uiRestorePlan.windowRects(ml, target.w, target.h) : [],
       },
-      busy: await _uiEqBusyFor(character, undefined, eqDir),
+      busy: await _uiEqBusyFor(character, undefined, eqDir),                 // the character's own files
+      busyShared: await _uiEqBusyFor(character, ['keybinds'], eqDir),        // the parts inside eqclient.ini / zeal.ini
     };
   } catch (err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
 });
@@ -14418,11 +14508,11 @@ ipcMain.handle('ui-restore-parts', async (_e, params) => {
     for (const g of halves) {
       const busy = await _uiEqBusyFor(character, g, eqDir);
       if (busy) {
-        _queueUiRestore({ character, eqDir, files: snap.files, overlays: snap.overlays || null, parts: g, label: snap.label || null, target, sameMachine });
+        _queueUiRestore({ character, eqDir, files: snap.files, overlays: snap.overlays || null, parts: g, label: snap.label || null, target, sameMachine, sourceRes: _uiSnapSource(snap) });
         queued.push({ parts: g, busy });
         continue;
       }
-      const w = _uiWriteRestore({ character, eqDir, files: snap.files, overlays: snap.overlays || null, parts: g, target, sameMachine });
+      const w = _uiWriteRestore({ character, eqDir, files: snap.files, overlays: snap.overlays || null, parts: g, target, sameMachine, sourceRes: _uiSnapSource(snap) });
       for (const n of w) if (!written.includes(n)) written.push(n);
       for (const [n, ps] of Object.entries(w.fileParts || {})) fileParts[n] = [...new Set([...(fileParts[n] || []), ...ps])];
       for (const s of (w.savedCopies || [])) if (!savedCopies.includes(s)) savedCopies.push(s);
@@ -14430,7 +14520,7 @@ ipcMain.handle('ui-restore-parts', async (_e, params) => {
     }
     if (written.length) _uiSyncPatchState(character, { lastSyncAt: Date.now() });
     // What was written, file by file with the parts that cover it, so the card can show it (FB-123).
-    const partLabel = (k) => (uiRestorePlan.PARTS.find(p => p.key === k) || { label: k }).label;
+    const partLabel = (k) => k === 'keysplit' ? 'Per-character keys' : (uiRestorePlan.PARTS.find(p => p.key === k) || { label: k }).label;
     const files = written.map(name => ({ name, parts: (fileParts[name] || []).map(partLabel) }));
     return { ok: true, character, queued: queued.length > 0, busy: queued.length ? queued[0].busy : null, queuedParts: queued,
       written, files, savedCopies, overlays, target: target ? { w: target.w, h: target.h, from: target.from } : null };
@@ -14449,6 +14539,19 @@ function _uiSyncPatchState(character, patch) {
   cfg.uiSyncState[k] = { ...(cfg.uiSyncState[k] || {}), ...patch };
   saveConfig(cfg);
 }
+// What a copy kept on THIS PC holds: the character's EverQuest files WHOLE (it never leaves the machine, and a
+// restore of a redacted eqclient.ini would wipe the player's channel passwords — the guild lead, 2026-11-11), plus
+// Mimic's own overlay layout as mimic-overlays.json (overlayBackup.js; a restore writes only .ini names, so the
+// layout never lands in the EQ folder). The layout is stamped with a fixed time so an unchanged layout is not a new
+// version. Works with no account and no network.
+function _localBackupFiles(whole) {
+  const files = { ...whole };
+  const ob = _overlayBackupText(true);
+  if (ob) files[overlayBackup.FILE] = ob;
+  return files;
+}
+// The same view of "the files now" and of a kept version, so the Changes panel compares like with like.
+const _comparableFiles = (f) => { const o = uiSync.redactForAutoBackup(f); delete o[overlayBackup.FILE]; return o; };
 const _uiAutoTimers = new Map();
 // Called when a character leaves the Zeal pipe (camped, swapped, client closed). EQ writes its files on the way
 // out, so the backup waits 15 s, and skips itself if the character came straight back.
@@ -14469,7 +14572,7 @@ async function _uiAutoBackup(character) {
   // The last few versions of the character's files stay on THIS computer (newest 5, only when something changed),
   // so a mess-up can be undone offline (the guild lead, 2026-11-11). Kept whole: it never leaves the machine.
   // source 'game': the files as the game left them on camp, so the Changes panel can show what the game changed.
-  try { localVersions.saveVersion(_localVersionsRoot(), character, whole, undefined, undefined, { source: 'game' }); } catch { /* best effort */ }
+  try { localVersions.saveVersion(_localVersionsRoot(), character, _localBackupFiles(whole), undefined, undefined, { source: 'game' }); } catch { /* best effort */ }
   if (!_uiSyncCfg().autoBackup) return;
   const files = uiSync.redactForAutoBackup(whole);
   const hash = uiSync.bundleHash(files);
@@ -14533,10 +14636,16 @@ async function _uiSyncCheck() {
       _uiSyncPatchState(character, { seenId: snap.id });
       const from = String(snap.machine_name).slice(0, 64);
       if (sc.newer === 'quiet') {
-        const parts = _uiPartKeys(sc.parts);
+        let parts = _uiPartKeys(sc.parts).filter(k => k !== 'keysplit');
         if (!parts.length) continue;
         try {
           const full = await _fetchUiSnapshot(cfg, token, character, snap.id);
+          // Never flip the shared [KeyMaps] between characters in the background: a per-character backup on a PC that
+          // shares one set is a decision for the bring-in card (which character's keys, or a set each), not for sync.
+          if (parts.includes('keybinds')) {
+            const ki = uiRestorePlan.keysInfo(full.files, _readUiBundle(eqDir, character), character);
+            if (ki.backupPerChar && !ki.pcPerChar) { parts = parts.filter(k => k !== 'keybinds'); if (!parts.length) continue; }
+          }
           if (await _uiEqBusyFor(character, parts, eqDir)) _queueUiRestore({ character, eqDir, files: full.files, parts, label: snap.label || null });
           else {
             const written = _uiWriteRestore({ character, eqDir, files: full.files, parts });
@@ -14679,12 +14788,25 @@ function _uiStudioDiskCharacters() {
 // whether this PC has files for it. The per-character calls above all start from a name read off the disk, so a
 // person with no files here could not reach their own backups (the guild lead, 2026-11-10).
 // The versions of one character's files this PC kept itself, newest first (localVersions.js).
+// "Back up on this PC": a kept copy now, no account and no network. -> { ok, created, file_count }.
+ipcMain.handle('ui-local-backup-now', (_e, params) => {
+  try {
+    const character = String(params?.character || '').trim(), eqDir = String(params?.eqDir || '').trim();
+    if (!/^[A-Za-z]+$/.test(character) || !eqDir) return { ok: false, error: 'character + eqDir required' };
+    const whole = _readUiBundle(eqDir, character);
+    if (!Object.keys(whole).length) return { ok: false, error: 'no ini files found for this character' };
+    const files = _localBackupFiles(whole);
+    const r = localVersions.snapshot(_localVersionsRoot(), character, files, undefined, undefined, { source: 'manual' });
+    return r ? { ok: true, created: !!r.created, file_count: Object.keys(files).length } : { ok: false, error: 'could not write the backup' };
+  } catch (err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
+});
 ipcMain.handle('ui-local-versions', (_e, character) => localVersions.listVersions(_localVersionsRoot(), character));
 
 // UI Studio's "Changes since previous version" panel (the guild lead, 2026-11-11). The versions this PC kept for the
 // character, each marked `same` when it is exactly what is on disk now (so the panel defaults to the newest one that
 // is not), and the key-by-key diff of one of them against the files now.
-const _sameFiles = (a, b) => {
+const _sameFiles = (a0, b0) => {
+  const a = _comparableFiles(a0), b = _comparableFiles(b0);
   const ka = Object.keys(a || {}).sort(), kb = Object.keys(b || {}).sort();
   return ka.length === kb.length && ka.every((n, i) => n === kb[i] && a[n] === b[n]);
 };
@@ -14716,7 +14838,7 @@ ipcMain.handle('ui-studio-diff', (_e, character, eqDir, id) => {
       if (!m) { complete = false; continue; }
       for (const w of (Array.isArray(m.writes) ? m.writes : [])) records.push(w);
     }
-    const diff = iniDiff.diffBundles(prev, _readUiBundle(d, c), { origin: iniDiff.makeOrigin(records, complete) });
+    const diff = iniDiff.diffBundles(_comparableFiles(prev), _comparableFiles(_readUiBundle(d, c)), { origin: iniDiff.makeOrigin(records, complete) });
     return { ok: true, base: list[at], complete, ...diff };
   } catch (err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
 });
@@ -14736,8 +14858,12 @@ ipcMain.handle('ui-account-characters', async () => {
     return {
       ok: true, characters, eqDir,
       otherAccountsOnPc: uiSync.otherCharsOnPc(characters, names).length > 0,
+      // Zeal's per-character keys switch on THIS PC (zeal.ini), for the bring-in card's key options
+      pcPerCharKeys: (() => { try { return uiRestorePlan.perCharFlag(eqDir ? _readUiBundle(eqDir, (names[0] || 'x')) : {}) === true; } catch { return false; } })(),
       // What a bring-in restores before the member's own ticks (bring-setup.js reads this). It was never sent, so the
       // card restored no part but overlays and the shared ticks (a member, 2026-11-11, FB-124 / FB-126 / FB-127).
+      // Does this PC have a zeal.ini at all (Zeal installed)? Without one the per-character switch has nothing to turn on.
+      pcHasZealIni: (() => { try { return uiRestorePlan.perCharFlag(eqDir ? _readUiBundle(eqDir, (names[0] || 'x')) : {}) !== null; } catch { return false; } })(),
       parts: uiSync.defaultParts({ otherAccountsOnPc: uiSync.otherCharsOnPc(characters, names).length > 0 }),
       otherCharsOnPc: uiSync.otherCharsOnPc(characters, names),
       thisPc: { machine: _thisMachine(), w: (_primarySize() || {}).w || null, h: (_primarySize() || {}).h || null },
@@ -15481,6 +15607,10 @@ ipcMain.handle('open-settings', (_e, section) => { openSettings(section); return
 // Dashboard ⏻ Quit — the tray's Quit, same internals (tray ↔ dashboard parity).
 ipcMain.handle('quit-app', () => { setImmediate(_quitMimic); return true; });
 ipcMain.handle('open-resources', () => { openResources(); return true; });
+ipcMain.handle('open-party-card', () => { showDashboardTab('party'); return true; });   // 🐺 Raid Mimic party (Settings' button)
+// 🐺 "Share with my in-game group and raid" in Settings: read and set through the agent, the same setting as the tray and the card.
+ipcMain.handle('party-share-get', async () => { const r = await _agentCall('GET', '/api/party'); return { ok: !!(r && r.ok), on: !!(r && r.share) }; });
+ipcMain.handle('party-share-set', (_e, on) => _partySetShare(!!on));
 // 💬 Feedback in its own window (the dashboard button and the tray item). False = no agent port yet.
 ipcMain.handle('open-feedback', () => openFeedback());
 // 🎒 "On this PC" pages (the dashboard rail group and the tray item). False = no agent port yet.
@@ -16257,8 +16387,20 @@ setInterval(() => { try { _weaveHub.tick(); } catch { /* never throw from a time
 ipcMain.handle('zeal-status', () => {
   try {
     const cfg = loadConfig();
-    return { ...zealUpdater.localStatus(_zealEqDir(), cfg.zealInstalledTag), source: zealUpdater._zealSource(cfg.zealSource) };
-  } catch (e) { return { eqDir: null, hasZealAsi: false, installedTag: null, source: 'official' }; }
+    return { ...zealUpdater.localStatus(_zealEqDir(), cfg.zealInstalledTag), source: zealUpdater._zealSource(cfg.zealSource, cfg.zealWatch), watch: zealUpdater.cleanWatch(cfg.zealWatch) };
+  } catch (e) { return { eqDir: null, hasZealAsi: false, installedTag: null, source: 'official', watch: [] }; }
+});
+// The watch list: saved extra sources (zealUpdater.cleanWatch says what a valid entry is). The Settings card
+// sends the whole list back on every change; a removed entry that was the active source falls back to official.
+ipcMain.handle('zeal-watch-save', (_e, list) => {
+  try {
+    const cfg = loadConfig();
+    cfg.zealWatch = zealUpdater.cleanWatch(list);
+    cfg.zealSource = zealUpdater._zealSource(cfg.zealSource, cfg.zealWatch);
+    saveConfig(cfg);
+    _zealNotifiedTag = null;
+    return { ok: true, watch: cfg.zealWatch, source: cfg.zealSource };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
 });
 // Switch where Zeal installs come from. Saved at once, not with the Settings
 // form, because the Check / Install buttons beside it act straight away. Nothing
@@ -16266,7 +16408,7 @@ ipcMain.handle('zeal-status', () => {
 ipcMain.handle('zeal-set-source', (_e, source) => {
   try {
     const cfg = loadConfig();
-    cfg.zealSource = zealUpdater._zealSource(source);
+    cfg.zealSource = zealUpdater._zealSource(source, cfg.zealWatch);
     saveConfig(cfg);
     _zealNotifiedTag = null;     // the other source's newest build is news again
     appendAgentLog(`[zeal-update] Zeal source set to ${cfg.zealSource}\n`);
@@ -16280,7 +16422,7 @@ ipcMain.handle('zeal-check-update', async () => {
     const cfg = loadConfig();
     const eqDir = _zealEqDir();
     const local = zealUpdater.localStatus(eqDir, cfg.zealInstalledTag);
-    const latest = await zealUpdater.checkLatest(cfg.zealSource);
+    const latest = await zealUpdater.checkLatest(cfg.zealSource, cfg.zealWatch);
     return {
       ok: true,
       source: latest.source,
@@ -16326,7 +16468,7 @@ ipcMain.handle('zeal-install-update', async () => {
       return { ok: false, error: 'EverQuest (eqgame.exe) is running on this PC — Zeal.asi is loaded by the game and can\'t be replaced while it\'s open. Close it and try again. Don\'t see a game window? A stuck one may still be running: Task Manager → Details → eqgame.exe → End task.' };
     }
     const cfg = loadConfig();
-    const res = await zealUpdater.install(eqDir, { source: cfg.zealSource });
+    const res = await zealUpdater.install(eqDir, { source: cfg.zealSource, watch: cfg.zealWatch });
     cfg.zealInstalledTag = res.tag || cfg.zealInstalledTag;
     saveConfig(cfg);
     appendAgentLog(`[zeal-update] installed ${res.tag} into ${eqDir} — ${res.written.length} file(s), ${res.backedUp.length} backed up\n`);
@@ -16367,7 +16509,7 @@ async function checkZealUpdate({ manual = false } = {}) {
     if (!manual && cfg.zealAutoCheck === false) return;
     const eqDir = _zealEqDir();
     if (!eqDir) return;                              // no EQ folder yet — nothing to update
-    const latest = await zealUpdater.checkLatest(cfg.zealSource);
+    const latest = await zealUpdater.checkLatest(cfg.zealSource, cfg.zealWatch);
     if (!latest.tag) return;
     const current = latest.tag === cfg.zealInstalledTag;
     // Tell the agent on EVERY check, before the once-per-tag latch below.
@@ -16487,6 +16629,49 @@ ipcMain.handle('ui-pack-set-options', async (_e, id, ids) => {
     appendAgentLog(`[ui-pack] ${pack.packDir} options now: ${res.applied.join(', ') || 'none'} — ${res.changed.length} file(s) changed, ${res.backedUp.length} backed up\n`);
     return { ok: true, id, applied: res.applied, changed: res.changed.length, backedUp: res.backedUp.length, loadCmd: pack.loadCmd };
   } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+});
+// Item-icon sheets in the active custom UI's EQUI_Animations.xml (uiDragItems.js; a member, 2026-11-15: items on a newer
+// DragItem sheet drew as a pearl necklace). The custom UI is the one eqclient.ini UISkin= names (_activeUiSkin); the
+// default skin, or a custom UI with no EQUI_Animations.xml of its own, has nothing to fix. Files are read and written as
+// latin1 so every byte outside the inserted blocks survives untouched.
+const uiDragItems = require('./uiDragItems');
+function _uiIconSheetsRead(eqDir) {
+  const skin = _activeUiSkin(eqDir);
+  if (skin.toLowerCase() === 'default') return { skin, status: 'nothing', message: 'You are on the default UI, which has every item-icon sheet.' };
+  const find = (dir) => {
+    try { const n = fs.readdirSync(dir).find(f => f.toLowerCase() === 'equi_animations.xml'); return n ? path.join(dir, n) : null; } catch { return null; }
+  };
+  const customPath = find(path.join(eqDir, 'uifiles', skin));
+  if (!customPath) return { skin, status: 'nothing', message: 'This custom UI has no EQUI_Animations.xml of its own, so it uses the default one.' };
+  const defPath = find(path.join(eqDir, 'uifiles', 'default'));
+  if (!defPath) return { skin, status: 'malformed', message: 'The default UI’s EQUI_Animations.xml was not found, so Mimic cannot tell what is missing.' };
+  return { skin, customPath, defPath, customXml: fs.readFileSync(customPath, 'latin1'), defXml: fs.readFileSync(defPath, 'latin1') };
+}
+ipcMain.handle('ui-icon-sheets-check', () => {
+  try {
+    const eqDir = _zealEqDir();
+    if (!eqDir) return { ok: true, status: 'nothing', missing: [], message: 'Set your EverQuest folder first.' };
+    const r = _uiIconSheetsRead(eqDir);
+    const c = r.customXml ? uiDragItems.check(r.customXml, r.defXml) : r;
+    return { ok: true, skin: r.skin, status: c.status, missing: (c.missing || []).map(m => m.n), message: c.message };
+  } catch (e) { return { ok: false, error: e && e.message ? e.message : String(e) }; }
+});
+ipcMain.handle('ui-icon-sheets-fix', () => {
+  try {
+    const eqDir = _zealEqDir();
+    if (!eqDir) return { ok: false, error: 'Set your EverQuest folder first.' };
+    const r = _uiIconSheetsRead(eqDir);
+    if (!r.customXml) return { ok: false, error: r.message };
+    const f = uiDragItems.fix(r.customXml, r.defXml);
+    if (!f.changed) return { ok: f.status === 'ok', status: f.status, message: f.message };
+    // backupAndWriteBinary keeps a dated copy (EQUI_Animations.xml.sheetsbak-<time>) before it writes.
+    const backup = require('./ghDownload').backupAndWriteBinary(r.customPath, Buffer.from(f.text, 'latin1'), 'sheets');
+    appendAgentLog(`[ui-sheets] ${r.skin}: ${f.message} backup=${backup ? path.basename(backup) : 'none'}\n`);
+    return { ok: true, status: 'fixed', message: f.message, backup: backup ? path.basename(backup) : null };
+  } catch (e) {
+    appendAgentLog(`[ui-sheets] fix failed: ${e && e.message}\n`);
     return { ok: false, error: e && e.message ? e.message : String(e) };
   }
 });

@@ -16,7 +16,11 @@
   var pick = {};       // character (lowercase) -> ticked
   var chosen = {};     // character (lowercase) -> backup id (cloud id or 'local-<stamp>')
   var older = {};      // character (lowercase) -> all full backups, once "older backups" was opened
-  var keys = null;     // key bindings tick; null = the default for this PC
+  var keys = null;     // key bindings tick; null = the default for this PC and these backups
+  var split = null;    // "give each character its own keys on this PC"; null = ticked
+  var keyChar = null;  // the character whose keys become this PC's one shared set (when split is off)
+  var plans = {};      // 'character|backup id' -> the restore plan answer, for the key options (read before the run)
+  var planP = {};      // the same keys -> the promise of that plan, so each is requested once per card paint
   var overlays = true;
   // What the last run did, per character, kept on screen (and across re-renders) until the next run starts
   // (a member, 2026-11-11, FB-123: "show me how many files were updated").
@@ -28,6 +32,113 @@
   function res(w, h) { return w && h ? w + '×' + h : 'unknown size'; }
   function when(t) { try { return new Date(t).toLocaleString(); } catch (e) { return ''; } }
   function key(c) { return String(c.character).toLowerCase(); }
+  function idFor(c) { return chosen[key(c)] || (c.latestFull && c.latestFull.id) || (c.local && c.local[0] && c.local[0].id); }
+  function pickedOf(list) { return list.filter(function (c) { var t = pick[key(c)]; return t == null ? !c.onThisPc : t; }); }
+  // The computer name a backup was made on, or null (a cloud backup with no name, or an id this card does not know).
+  function machineOf(c, id) {
+    if (String(id).indexOf('local-') === 0) return undefined;
+    var found = null;
+    (c.machines || []).concat(older[key(c)] || []).forEach(function (m) {
+      var ids = (m.list || [m.latestFull]).map(function (f) { return f && f.id; });
+      if (ids.indexOf(id) >= 0) found = m.machine_name || '';
+    });
+    return found == null ? '' : found;
+  }
+  // Was this backup made on another PC? A version kept here is this PC's; a cloud one without this PC's name is not.
+  function fromOtherPc(c) {
+    var m = machineOf(c, idFor(c));
+    if (m === undefined) return false;
+    var me = acct && acct.thisPc && acct.thisPc.machine;
+    return !me || !m || String(m).toLowerCase() !== String(me).toLowerCase();
+  }
+  // Keys, decided from what each picked backup says about how its PC kept them (plan.keys) and how this PC keeps them.
+  //   infos: [{ character, info: { backupPerChar, hasOwn } | null }]   o: { pcShared, split, keyChar }
+  // A per-character backup with keys of its own, on a PC that shares one set, needs a decision: a key set for each
+  // character (the shared step, then each character's own section), or ONE character's keys become the shared set.
+  // Either way no other character's keys may overwrite the shared set, which is what the old one-restore-per-character
+  // loop did (the last character's keys won).
+  //   o.pcZeal === false: this PC has no zeal.ini (Zeal is not set up), so per-character keys cannot be switched on and
+  //   the picker is the only way. In the picker only the picked character gets keybinds, whatever kind of PC its
+  //   backup came from; the picker lists every character that has keys to bring (a shared-keys backup's [KeyMaps] too).
+  //   skipped: the characters whose keys are NOT brought, for the result line.
+  function keysDecision(infos, o) {
+    var own = infos.filter(function (i) { return i.info && i.info.backupPerChar && i.info.hasOwn; }).map(function (i) { return i.character; });
+    var sharedBk = infos.filter(function (i) { return i.info && !i.info.backupPerChar; }).map(function (i) { return i.character; });
+    var need = !!o.pcShared && own.length > 0;
+    var canSplit = o.pcZeal !== false;
+    var useSplit = need && canSplit && o.split !== false;
+    var choices = infos.filter(function (i) { return own.indexOf(i.character) >= 0 || sharedBk.indexOf(i.character) >= 0; }).map(function (i) { return i.character; });
+    var kc = need && !useSplit ? (choices.filter(function (n) { return n === o.keyChar; })[0] || choices[0]) : null;
+    var keybinds = {};
+    infos.forEach(function (i) {
+      keybinds[i.character] = useSplit ? false : (need ? i.character === kc : true);
+    });
+    var noKeys = infos.filter(function (i) { return i.info && i.info.backupPerChar && !i.info.hasOwn; }).map(function (i) { return i.character; });
+    var skipped = need ? infos.filter(function (i) {
+      return noKeys.indexOf(i.character) < 0 && (useSplit ? own.indexOf(i.character) < 0 && !!i.info : i.character !== kc);
+    }).map(function (i) { return i.character; }) : [];
+    return { need: need, canSplit: canSplit, useSplit: useSplit, own: own, choices: choices, keyChar: kc, keybinds: keybinds, noKeys: noKeys, skipped: skipped };
+  }
+  // The split default: ticked only when a picked backup came from another PC (a same-PC backup restored onto itself
+  // must not turn per-character keys back on by itself).
+  function splitNow(list) { return split == null ? pickedOf(list).some(fromOtherPc) : split; }
+  function keysDefault(list) { return !acct.otherAccountsOnPc && !pickedOf(list).some(fromOtherPc); }
+  function decideNow(list) {
+    return keysDecision(pickedOf(list).map(function (c) {
+      var p = plans[key(c) + '|' + idFor(c)];
+      return { character: c.character, info: p && p.keys ? p.keys : null };
+    }), { pcShared: !acct || acct.pcPerCharKeys !== true, pcZeal: !acct || acct.pcHasZealIni !== false, split: splitNow(list), keyChar: keyChar });
+  }
+  function planReq(c) {
+    var k = key(c), id = idFor(c);
+    var src = (c.machines || []).concat(older[k] || []).reduce(function (s, m) { return s || ((m.latestFull && m.latestFull.id === id) ? m.latestFull.machine_name : null); }, null);
+    return { character: c.character, eqDir: acct.eqDir, id: id, machine: src };
+  }
+  // Each plan is asked for once per card paint: the promise is cached by character + backup id, and refreshKeys,
+  // the run and every arriving plan share it (before, each arriving plan restarted every plan still in flight: 23
+  // requests for six characters). A plan that failed is asked again by the run (retry).
+  function loadPlan(c, retry) {
+    var ck = key(c) + '|' + idFor(c);
+    if (planP[ck] && !(retry && plans[ck] && !plans[ck].ok)) return planP[ck];
+    planP[ck] = Promise.resolve().then(function () { return M.uiRestorePlan(planReq(c)); }).catch(function (err) { return { ok: false, error: err && err.message }; }).then(function (p) {
+      plans[ck] = p && p.ok ? p : { ok: false, error: p && p.error };
+      return p;
+    });
+    return planP[ck];
+  }
+  // The key options under the tick: the warning, the "own keys" choice, or the picker, from the plans read so far.
+  function refreshKeys(el, list) {
+    var box = el.querySelector('[data-wpbs-keysub]'), cb = el.querySelector('[data-wpbs-keys]');
+    if (!box || !cb) return;
+    // The tick follows the backups picked until the member touches it (keys stays null until then).
+    if (keys == null) cb.checked = keysDefault(list);
+    var on = cb.checked;
+    var missing = on ? pickedOf(list).filter(function (c) { return !planP[key(c) + '|' + idFor(c)]; }) : [];
+    var d = decideNow(list), h = '';
+    var shared = !acct || acct.pcPerCharKeys !== true;
+    if (on && d.need) {
+      if (d.canSplit) h += '<label style="display:flex;gap:8px;align-items:center;margin:4px 0 0"><input type="checkbox" data-wpbs-split' + (d.useSplit ? ' checked' : '') + '>Give each character its own keys on this PC</label>';
+      else h += '<div style="color:var(--wp-dim);margin:4px 0 0">Zeal is not set up on this PC, so it uses one set of keys for every character.</div>';
+      if (d.useSplit) {
+        h += '<div style="color:var(--wp-dim);margin:2px 0 4px">' + esc(d.own.join(', ')) + ' bring their own keys. The characters already here keep the keys they use today. Turns on Zeal\'s per-character keys here.</div>';
+      } else {
+        h += '<div style="margin:4px 0">' + (d.canSplit ? 'This PC uses one set of keys for every character. ' : '') + 'Use the keys of <select data-wpbs-keychar>' + d.choices.map(function (n) {
+          return '<option value="' + esc(n) + '"' + (n === d.keyChar ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select></div>' +
+          '<div style="color:var(--wp-gold);margin:0 0 4px">They replace this PC\'s keys for every character here. A copy is kept first.' +
+          (d.skipped.length ? ' The keys of ' + esc(d.skipped.join(', ')) + ' are not brought.' : '') + '</div>';
+      }
+    } else if (on && shared) {
+      h += '<div style="color:var(--wp-dim);margin:2px 0 4px">Your key bindings and shared Zeal settings will replace this computer\'s for every character. The character\'s own Zeal settings (chat routing, spell sets) always come over.</div>';
+    }
+    if (on && d.noKeys.length) h += '<div style="color:var(--wp-dim);margin:2px 0 4px">No key bindings saved for ' + esc(d.noKeys.join(', ')) + ' in this backup.</div>';
+    if (box.innerHTML !== h) {
+      box.innerHTML = h;
+      var sp = box.querySelector('[data-wpbs-split]'), kc = box.querySelector('[data-wpbs-keychar]');
+      if (sp) sp.addEventListener('change', function () { split = sp.checked; refreshKeys(el, list); });
+      if (kc) kc.addEventListener('change', function () { keyChar = kc.value; });
+    }
+    missing.forEach(function (c) { loadPlan(c).then(function () { refreshKeys(el, list); }); });
+  }
 
   function load(force) {
     if (!M || !M.uiAccountCharacters) return Promise.resolve(null);
@@ -81,7 +192,7 @@
         }).join('') + '</ul>';
       }
       if (r.fit) h += '<div style="margin:0 0 4px 18px;color:var(--wp-dim);font-size:11px">Windows fitted to ' + esc(r.fit) + '</div>';
-      if (r.kind === 'done') h += '<button type="button" data-wpbs-chat="' + esc(r.character) + '" style="margin:0 0 4px 18px;padding:2px 8px;font-size:11px">Sort your chat channels</button>';
+      if (r.kind === 'done' && !r.noChat) h += '<button type="button" data-wpbs-chat="' + esc(r.character) + '" style="margin:0 0 4px 18px;padding:2px 8px;font-size:11px">Sort your chat channels</button>';
     });
     if (lastRun.copies.length) h += '<div style="color:var(--wp-dim);font-size:11px">Saved a copy of eqclient.ini first (' + lastRun.copies.map(esc).join(', ') + ').</div>';
     if (lastRun.notes.length) h += '<div style="color:var(--wp-dim);font-size:11px">' + lastRun.notes.map(esc).join('; ') + '</div>';
@@ -106,8 +217,9 @@
       wireResult(el);
       return;
     }
-    var shared = !!a.otherAccountsOnPc;
-    var keysOn = keys == null ? !shared : keys;
+    plans = {}; planP = {};   // a new paint reads the plans again, once each
+    // Off by default when a backup came from another PC (its keys are that PC's, not this one's), or another account plays here.
+    var keysOn = keys == null ? keysDefault(list) : keys;
     el.innerHTML = line + '<div data-wpbs style="border:1px solid color-mix(in srgb, var(--wp-blue) 40%, var(--wp-bg));background:var(--wp-bg);border-radius:6px;padding:10px 12px;margin:10px 0;font-size:12px">' +
       '<div style="color:var(--wp-gold);font-size:13px;margin-bottom:4px">' + (all ? 'Bring in / restore a backup' : 'Bring your setup to this computer?') + '</div>' +
       '<div style="color:var(--wp-dim);margin:0 0 6px">' + (all ? 'Pick the characters and the backup for each. ' : 'These characters have a backup in your account but no files on this PC. ') +
@@ -122,15 +234,15 @@
       }).join('') +
       '<div style="margin-top:8px"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-wpbs-overlays' + (overlays ? ' checked' : '') + '>Overlay positions <span style="color:var(--wp-dim)">(fitted to this PC\'s screens)</span></label>' +
       '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-wpbs-keys' + (keysOn ? ' checked' : '') + '>Key bindings and shared Zeal settings</label></div>' +
-      (shared ? '<div style="color:var(--wp-dim);margin:2px 0 4px">Your key bindings and shared Zeal settings would replace this computer\'s for every character; tick to bring them anyway. The character\'s own Zeal settings (chat routing, spell sets) always come over.</div>' : '') +
+      '<div data-wpbs-keysub></div>' +
       '<div style="display:flex;gap:8px;align-items:center;margin-top:8px"><span data-wpbs-msg style="font-size:11px;margin-right:auto"></span>' +
       '<button type="button" data-wpbs-go' + (a.eqDir ? '' : ' disabled') + '>' + (all ? 'Restore' : 'Bring them in') + '</button></div>' +
       (a.eqDir ? '' : '<div style="color:var(--wp-red);margin-top:4px">No EverQuest folder is set up on this PC yet. Add one first.</div>') + '</div>';
 
-    el.querySelectorAll('[data-pick]').forEach(function (b) { b.addEventListener('change', function () { pick[b.dataset.pick] = b.checked; }); });
-    el.querySelectorAll('input[type=radio]').forEach(function (r) { r.addEventListener('change', function () { chosen[r.name.slice(5)] = r.value; }); });
+    el.querySelectorAll('[data-pick]').forEach(function (b) { b.addEventListener('change', function () { pick[b.dataset.pick] = b.checked; refreshKeys(el, list); }); });
+    el.querySelectorAll('input[type=radio]').forEach(function (r) { r.addEventListener('change', function () { chosen[r.name.slice(5)] = r.value; refreshKeys(el, list); }); });
     el.querySelector('[data-wpbs-overlays]').addEventListener('change', function (e) { overlays = e.target.checked; });
-    el.querySelector('[data-wpbs-keys]').addEventListener('change', function (e) { keys = e.target.checked; });
+    el.querySelector('[data-wpbs-keys]').addEventListener('change', function (e) { keys = e.target.checked; refreshKeys(el, list); });
     el.querySelectorAll('[data-older]').forEach(function (b) {
       b.addEventListener('click', function () {
         var k = b.dataset.older, c = list.filter(function (x) { return key(x) === k; })[0];
@@ -144,12 +256,13 @@
           });
           if (order.length) older[k] = order.map(function (m) { return by[m]; });   // snapshots come newest first, so machines do too
           el.querySelector('[data-bk="' + k + '"]').innerHTML = backupsHtml(c);
-          el.querySelectorAll('[data-bk="' + k + '"] input[type=radio]').forEach(function (rd) { rd.addEventListener('change', function () { chosen[k] = rd.value; }); });
+          el.querySelectorAll('[data-bk="' + k + '"] input[type=radio]').forEach(function (rd) { rd.addEventListener('change', function () { chosen[k] = rd.value; refreshKeys(el, list); }); });
         });
       });
     });
     el.querySelector('[data-wpbs-go]').addEventListener('click', function (e) { go(el, all, list, e.target); });
     wireResult(el);
+    refreshKeys(el, list);
   }
 
   function go(el, all, list, btn) {
@@ -168,19 +281,47 @@
     keys = withKeys; overlays = withOverlays;
     btn.disabled = true; msg.style.color = 'var(--wp-dim)';
     var notes = [], rows = [], copies = [], ok = 0;
-    var PART_WORDS = { layout: 'windows', hotkeys: 'hotbuttons', socials: 'socials', spellsets: 'spell sets', zealchar: 'Zeal settings', other: 'other settings', keybinds: 'key bindings', zeal: 'shared Zeal settings', overlays: 'overlay positions' };
+    var PART_WORDS = { keysplit: 'per-character keys on', layout: 'windows', hotkeys: 'hotbuttons', socials: 'socials', spellsets: 'spell sets', zealchar: 'Zeal settings', other: 'other settings', keybinds: 'key bindings', zeal: 'shared Zeal settings', overlays: 'overlay positions' };
+    var dec = null;
+    // Every plan is read first: how each backup's PC kept its keys decides what the whole run writes (keysDecision).
+    function readPlans(i) {
+      if (i >= picked.length) return start();
+      msg.textContent = 'Reading ' + picked[i].character + '\'s backup…';
+      return loadPlan(picked[i], true).then(function () { return readPlans(i + 1); });   // the card's own read is reused; a failed one is retried
+    }
+    function start() {
+      dec = keysDecision(picked.map(function (c) { var p = plans[key(c) + '|' + idFor(c)]; return { character: c.character, info: p && p.keys ? p.keys : null }; }),
+        { pcShared: acct.pcPerCharKeys !== true, pcZeal: acct.pcHasZealIni !== false, split: splitNow(list), keyChar: keyChar });
+      if (withKeys) dec.noKeys.forEach(function (n) { notes.push('no key bindings saved for ' + n + ' in this backup'); });
+      if (withKeys && dec.skipped.length) notes.push('key bindings not brought for ' + dec.skipped.join(', ') + ' (one set of keys on this PC)');
+      if (!(withKeys && dec.useSplit)) return next(0);
+      // The one shared step, before any character's keys: each character already here keeps today's keys in its own
+      // section, then Zeal's per-character keys are turned on. It is queued like any shared-file write when EverQuest runs.
+      var c0 = picked.filter(function (c) { return dec.own.indexOf(c.character) >= 0; })[0];
+      msg.textContent = 'Giving each character its own keys…';
+      return Promise.resolve(M.uiRestoreParts({ character: c0.character, eqDir: acct.eqDir, id: idFor(c0), parts: ['keysplit'] })).catch(function (err) { return { ok: false, error: err && err.message }; }).then(function (r) {
+        if (r && r.ok) {
+          (r.savedCopies || []).forEach(function (n) { if (copies.indexOf(n) < 0) copies.push(n); });
+          if (r.files && r.files.length) rows.push({ character: 'This PC', kind: 'done', noChat: true, files: r.files });
+          (r.queuedParts || []).forEach(function (q) { rows.push({ character: 'This PC', kind: 'queued', busy: q.busy, parts: q.parts.map(function (x) { return PART_WORDS[x] || x; }).join(', ') }); });
+        } else { rows.push({ character: 'This PC', kind: 'error', text: r && r.error ? r.error : 'could not turn on per-character keys' }); return finish(); }
+        return next(0);
+      });
+    }
     function next(i) {
       if (i >= picked.length) return finish();
       var c = picked[i], k = key(c);
-      var id = chosen[k] || (c.latestFull && c.latestFull.id) || (c.local[0] && c.local[0].id);
-      var src = (c.machines || []).concat(older[k] || []).reduce(function (s, m) { return s || ((m.latestFull && m.latestFull.id === id) ? m.latestFull.machine_name : null); }, null);
-      var t = { character: c.character, eqDir: acct.eqDir, id: id, machine: src };
+      var id = idFor(c);
       msg.textContent = 'Bringing in ' + c.character + '…';
-      return Promise.resolve(M.uiRestorePlan(t)).catch(function (err) { return { ok: false, error: err && err.message }; }).then(function (p) {
+      return Promise.resolve(plans[k + '|' + id]).then(function (p) {
         if (!p || !p.ok) { rows.push({ character: c.character, kind: 'error', text: p && p.error ? p.error : 'could not read the backup' }); return next(i + 1); }
         var inBackup = {};
         p.parts.forEach(function (x) { if (x.inBackup > 0) inBackup[x.key] = 1; });
-        var parts = base.concat(withKeys ? ['keybinds', 'zeal'] : [], withOverlays ? ['overlays'] : []).filter(function (x) { return inBackup[x]; });
+        var keyParts = withKeys ? (dec.keybinds[c.character] ? ['keybinds'] : []).concat(['zeal']) : [];
+        // After the shared step this PC reads per-character keys, so a character's own section is worth writing even
+        // when the plan (read before the step) saw no section to bring.
+        if (withKeys && dec.useSplit) inBackup.zealchar = 1;
+        var parts = base.concat(keyParts, withOverlays ? ['overlays'] : []).filter(function (x) { return inBackup[x]; });
         if (!parts.length) { rows.push({ character: c.character, kind: 'error', text: 'nothing in that backup to bring in' }); return next(i + 1); }
         return Promise.resolve(M.uiRestoreParts({ character: c.character, eqDir: acct.eqDir, id: id, parts: parts })).catch(function (err) { return { ok: false, error: err && err.message }; }).then(function (r) {
           if (r && r.ok) {
@@ -201,12 +342,13 @@
     }
     function finish() {
       btn.disabled = false;
+      plans = {}; planP = {};   // the files changed; the next card paint reads them again
       lastRun = { verb: all ? 'Restored' : 'Brought in', rows: rows, copies: copies, notes: notes };
       // Re-read the account list (a brought-in character is now on this PC) but keep every tick and backup choice.
       // onDone also gets the result rows, so the caller can tell which characters had files written just now.
       load(true).then(function () { render(el, all); if (ok && el.__wpbsDone) el.__wpbsDone(ok, rows); });
     }
-    next(0);
+    readPlans(0);
   }
 
   window.wpBringSetup = {
@@ -219,5 +361,6 @@
     // How many characters the card would offer right now (0 when signed out or nothing is backed up).
     pending: function (cb) { load(false).then(function (a) { cb(offered(a, false).length); }); },
     _offered: offered,
+    _keysDecision: keysDecision,
   };
 })();

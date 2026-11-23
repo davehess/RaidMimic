@@ -82,6 +82,39 @@ describe('wpMoreList', () => {
   });
 });
 
+describe('wpAbilityGroups (Top Abilities cards)', () => {
+  const block = sliceBlock(raw, 'const WP_PLAIN_MELEE = new Set([', '  return { abilities: abilities, melee: melee, shields: shields };\n}');
+  const { wpAbilityGroups } = evalBlock(block, ['wpAbilityGroups']);
+  const st = (count, total) => ({ count, total });
+  it('folds plain melee verbs into one line and keeps class skills as abilities', () => {
+    const g = wpAbilityGroups({ slash: st(10, 1000), crush: st(5, 500), kick: st(4, 800), backstab: st(2, 900), 'flying kick': st(1, 300) });
+    expect(g.melee).toEqual({ count: 15, total: 1500 });
+    expect(g.abilities.map((a) => a[0])).toEqual(['backstab', 'kick', 'flying kick']);
+    expect(g.shields).toEqual([]);
+  });
+  it('labels damage shields apart from abilities, by name or by the tank card sources', () => {
+    const g = wpAbilityGroups({ thorns: st(3, 90), 'non-melee': st(2, 50), 'Aegis of Fire': st(1, 40), 'Stunning Blow': st(1, 700) }, ['Aegis of Fire']);
+    expect(g.abilities.map((a) => a[0])).toEqual(['Stunning Blow']);
+    expect(g.shields.map((a) => a[0])).toEqual(['thorns', 'non-melee', 'Aegis of Fire']);
+  });
+  it('a melee-only player has no abilities and no shields (rendered as one line)', () => {
+    const g = wpAbilityGroups({ slash: st(2, 20), pierce: st(1, 5) });
+    expect(g.abilities).toEqual([]);
+    expect(g.shields).toEqual([]);
+    expect(g.melee).toEqual({ count: 3, total: 25 });
+  });
+  it('is stable: equal totals sort by name whatever the key order', () => {
+    const a = wpAbilityGroups({ Beta: st(1, 5), Alpha: st(1, 5) });
+    const b = wpAbilityGroups({ Alpha: st(1, 5), Beta: st(1, 5) });
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  });
+  it('renders player cards in a responsive grid, 8 shown before "more players"', () => {
+    const src = stripJs(raw);
+    expect(src).toContain("wpMoreList('deeps|players', playerBlocks, { show: 8, noun: 'more players' })");
+    expect(stripCss(raw.slice(0, raw.indexOf('</style>')))).toMatch(/\.wp-abgrid\s*\{[^}]*repeat\(auto-fill, minmax\(280px, 1fr\)\)/);
+  });
+});
+
 describe('wpMoreList CSS and call sites', () => {
   const css = stripCss(raw.slice(0, raw.indexOf('</style>')));
   it('pulses by animation but respects prefers-reduced-motion', () => {
