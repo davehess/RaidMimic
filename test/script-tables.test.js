@@ -115,11 +115,13 @@ describe('page libs', () => {
     expect(out[1]).toMatchObject({ observed: 1, probable: 2, in_db: true });
   });
   it('fails soft when the RPC is missing or throws, and calls npc_seen_drops with the id', async () => {
-    expect(await loadNpcSeenDrops({ rpc: async () => ({ data: null, error: { message: 'x' } }) }, 1)).toEqual([]);
-    expect(await loadNpcSeenDrops({ rpc: async () => { throw new Error('down'); } }, 1)).toEqual([]);
-    let args;
-    await loadNpcSeenDrops({ rpc: async (f, a) => { args = [f, a]; return { data: [], error: null }; } }, 218382);
+    // rpc() returns a query builder, as supabase-js does; the read is bounded with .limit() (db-read-discipline).
+    expect(await loadNpcSeenDrops({ rpc: () => ({ limit: async () => ({ data: null, error: { message: 'x' } }) }) }, 1)).toEqual([]);
+    expect(await loadNpcSeenDrops({ rpc: () => ({ limit: async () => { throw new Error('down'); } }) }, 1)).toEqual([]);
+    let args, lim;
+    await loadNpcSeenDrops({ rpc: (f, a) => { args = [f, a]; return { limit: async n => { lim = n; return { data: [], error: null }; } }; } }, 218382);
     expect(args).toEqual(['npc_seen_drops', { p_npc_id: 218382 }]);
+    expect(lim).toBe(100);
   });
   it('script file names match catalog names, hand-in labels use qty', () => {
     expect(scriptNameKey('#Old_Smith')).toBe('old smith');

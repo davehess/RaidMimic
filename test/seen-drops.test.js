@@ -26,17 +26,21 @@ describe('mergeSeenDrops', () => {
 
 describe('loadSeenDrops', () => {
   it('is empty when the RPC is missing or throws, and with no item name', async () => {
-    const missing = { rpc: async () => ({ data: null, error: { message: 'no function' } }) };
-    const boom = { rpc: async () => { throw new Error('down'); } };
+    // rpc() returns a query builder, as supabase-js does; the read is bounded with .limit() (db-read-discipline).
+    const missing = { rpc: () => ({ limit: async () => ({ data: null, error: { message: 'no function' } }) }) };
+    const boom = { rpc: () => ({ limit: async () => { throw new Error('down'); } }) };
     expect(await loadSeenDrops(missing, 1, 'X')).toEqual([]);
     expect(await loadSeenDrops(boom, 1, 'X')).toEqual([]);
     expect(await loadSeenDrops(boom, 1, null)).toEqual([]);
   });
-  it('passes the item id and name to item_seen_drops', async () => {
-    let args;
-    const sb = { rpc: async (fn, a) => { args = [fn, a]; return { data: [], error: null }; } };
-    await loadSeenDrops(sb, 27998, 'War Drums of the Rathe');
+  it('passes the item id and name to item_seen_drops, bounded, and returns its rows', async () => {
+    let args, lim;
+    const row = { npc_id: 1, npc_name: 'An_Ancient_Vekerchiki_Champion', zone_short: 'poearthb', loots: 1, last_seen: '2026-11-19T03:00:00Z', in_db: false };
+    const sb = { rpc: (fn, a) => { args = [fn, a]; return { limit: async n => { lim = n; return { data: [row], error: null }; } }; } };
+    const out = await loadSeenDrops(sb, 27998, 'War Drums of the Rathe');
     expect(args).toEqual(['item_seen_drops', { p_item_id: 27998, p_item_name: 'War Drums of the Rathe' }]);
+    expect(lim).toBe(100);
+    expect(out.length).toBe(1);
   });
 });
 
