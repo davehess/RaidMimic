@@ -37,6 +37,30 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'mimic-3-1-0-2026-11-23',
+    title: 'Mimic 3.1',
+    version: 'Mimic 3.1.0 · Agent 4.0.108',
+    date: '2026-11-23',
+    headline: 'Everything from the 3.1 beta for everyone: how you died, a sharper Command Center and Target Info, and a Map that behaves.',
+    features: [
+      { name: 'How I died', blurb: 'See the hits that killed you, the killing blow and your health line, then jump straight to that moment in the replay.' },
+      { name: 'Command Center', blurb: 'Shows who in the raid lacks the flag for this zone, tracks the 12 Rathe Councilmen one by one, and shows whose MGB is ready.' },
+      { name: 'Target Info', blurb: 'How far you are from your target, in green, orange or red, with its aggro and assist range and where its area rampage reaches. On the Timers canvas it keeps its target history.' },
+      { name: 'Map', blurb: 'Dragging never zooms out to the whole zone, the buttons sit in a column on the left, Ctrl+M opens it, and a mob anyone targeted clears when it dies.' },
+      { name: 'Weave timer', blurb: 'Pauses and says why (out of range, no line of sight, auto attack off) and flashes when it is time to press.' },
+      { name: 'Charm and pets', blurb: 'Knows Call of the Banshee, and keeps a named pet while your pet window still shows it.' },
+      { name: 'Raid Mimic party', blurb: 'Make or join a party and see the group\'s numbers together; your own timers count your AAs and worn focus.' },
+      { name: 'On this PC', blurb: 'Your PoP flags and a backup of your UI and overlay layout work with no account and no network.' },
+      { name: 'Tidier dashboard', blurb: 'The side rail folds into Setup, Live, Raid, Recap and Diagnostics.' },
+    ],
+    fixes: [
+      'The buff queue checks when things change, and no longer calls "buffs dispelled" after your own death or rez.',
+      'Mimic finds and fixes item-icon pictures a custom UI is missing.',
+      'A Zeal update can no longer change the default UI folder.',
+      'Bringing your setup to another PC: fixes from two reviews.',
+    ],
+  },
+  {
     key: 'raidmimic-pricing-keeping-2026-11-23',
     title: 'Raid Mimic: free for tonight, Pro keeps it',
     version: 'Web 2.2.31',

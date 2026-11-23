@@ -2808,6 +2808,13 @@ next touch one rather than assuming a missing row means a missing doc.
 
 ### ✅ Done — major shipped features (not exhaustive; see git + roadmapData.ts)
 
+- **Mimic 3.1.0 stable (agent 4.0.108), 2026-11-23** (the guild lead: *"push mimic up to 3.1"*). Everything on the beta
+  line since 3.0.10: How I died with Watch in replay, the Command Center's flag, Rathe Council and MGB cards, Target Info
+  distance and radii, the Map fixes, the weave timer's pause reasons and press flash, Call of the Banshee, the buff queue
+  on change, Raid Mimic party, PoP flags on this PC, the local UI/overlay backup, the dashboard rail, the quest-script data
+  in the installer, and the Zeal tag channel rule (§638). File-level promotion of `apps/mimic`, the agent, `web/local`
+  and their tests; beta re-parked at 3.1.1.
+
 - **"Set up EQ for me" now configures /tag capture (agent 3.6.33 · web 1.7.16,
   2026-09-03).** the guild lead, with a working `zeal.ini`: *"we're going to add some
   pieces for setup for tagging... we want tooltip and tag enabled."* Eight
