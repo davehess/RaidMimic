@@ -254,7 +254,8 @@ describe('wiring (comments stripped)', () => {
     expect(src).toMatch(/floorVertexColors\(fs\)/);
     expect(src).toMatch(/new MeshBasicMaterial\(\{ vertexColors: true, side: DoubleSide \}\)/);
     expect(src).not.toMatch(/opacity: floor/);
-    expect((src.match(/depthTest: false/g) || []).length).toBe(4);
+    // 8: dots plus target, spawn, me-ring and heal arc/pulse overlays all draw over the walls (heal arcs: d012abad, 33aa21c8).
+    expect((src.match(/depthTest: false/g) || []).length).toBe(8);
   });
   it('the replay board draws the paper and floor wash only for parchment, and no lines for none', () => {
     const src = read('web/app/spectator/replay/ReplayBoard.tsx');

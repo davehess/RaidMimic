@@ -34,7 +34,7 @@ export function mergeSeenDrops(rows: SeenDropRow[]): SeenDrop[] {
 export async function loadSeenDrops(sb: SupabaseClient, itemId: number, itemName: string | null): Promise<SeenDrop[]> {
   if (!itemName) return [];
   try {
-    const { data, error } = await sb.rpc('item_seen_drops', { p_item_id: itemId, p_item_name: itemName });
+    const { data, error } = await sb.rpc('item_seen_drops', { p_item_id: itemId, p_item_name: itemName }).limit(100);   // the function ends in LIMIT 100
     if (error || !Array.isArray(data)) return [];
     return mergeSeenDrops(data as SeenDropRow[]);
   } catch { return []; }

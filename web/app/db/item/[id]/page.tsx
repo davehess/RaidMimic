@@ -16,6 +16,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { supabaseServer } from '@/lib/supabase-server';
 import { requireMember } from '@/lib/member';
 import { loadDropperCounts, loadItemDrops } from '@/lib/fullReads';
+import { selectAll } from '@/lib/selectAll';
 import { loadSeenDrops } from '@/lib/seenDrops';
 import { loadScriptLootForItem, loadRewardsForItem, handInLabel } from '@/lib/scriptData';
 import {
@@ -128,8 +129,8 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
   const scriptNpcIds = [...new Set([...scriptLoot, ...rewards].map(r => r.npc_id).filter((n): n is number => !!n))];
   const scriptNpcName = new Map<number, string>();
   if (scriptNpcIds.length) {
-    const { data: sn } = await sb.from('eqemu_npc_types').select('id, name').in('id', scriptNpcIds);
-    for (const r of ((sn ?? []) as { id: number; name: string }[])) scriptNpcName.set(r.id, deUnderscore(r.name));
+    const sn = await selectAll<{ id: number; name: string }>((from, to) => sb.from('eqemu_npc_types').select('id, name').in('id', scriptNpcIds).order('id').range(from, to));
+    for (const r of sn) scriptNpcName.set(r.id, deUnderscore(r.name));
   }
   const scriptZoneShorts = [...new Set([...scriptLoot, ...rewards].map(r => r.zone_short))];
   const scriptZoneLabel = new Map<string, string>();
@@ -140,8 +141,8 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
   const handInIds = [...new Set(rewards.flatMap(r => (r.gives_for ?? []).map(g => g.item_id)))];
   const handInNames = new Map<number, string>();
   if (handInIds.length) {
-    const { data: hi } = await sb.from('eqemu_items').select('id, name').in('id', handInIds);
-    for (const r of ((hi ?? []) as { id: number; name: string }[])) handInNames.set(r.id, r.name);
+    const hi = await selectAll<{ id: number; name: string }>((from, to) => sb.from('eqemu_items').select('id, name').in('id', handInIds).order('id').range(from, to));
+    for (const r of hi) handInNames.set(r.id, r.name);
   }
   const scriptNpcLabel = (r: { npc_id: number | null; npc_name?: string | null }) =>
     (r.npc_id && scriptNpcName.get(r.npc_id)) || r.npc_name || (r.npc_id ? `NPC #${r.npc_id}` : 'a zone script');
