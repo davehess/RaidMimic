@@ -32,7 +32,7 @@ export function mergeNpcSeenDrops(rows: NpcSeenRow[]): NpcSeenDrop[] {
 
 export async function loadNpcSeenDrops(sb: SupabaseClient, npcId: number): Promise<NpcSeenDrop[]> {
   try {
-    const { data, error } = await sb.rpc('npc_seen_drops', { p_npc_id: npcId });
+    const { data, error } = await sb.rpc('npc_seen_drops', { p_npc_id: npcId }).limit(100);   // the function caps at 200 rows; the page shows the newest
     if (error || !Array.isArray(data)) return [];
     return mergeNpcSeenDrops(data as NpcSeenRow[]);
   } catch { return []; }

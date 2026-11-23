@@ -100,7 +100,7 @@ const REACH = { mouse: 12, touch: 22 };
 const PALETTE = 64;
 const FOLLOW_SPAN = 700;          // how much ground a fresh fit on a followed raider shows
 const TARGET_RED = 0xef4444;
-const HEAL_GREEN = 0x3fb950;      // a heal being cast (the 2D board's green)
+const HEAL_GREEN = 0x56d364;      // a heal being cast (--wp-green, the 2D board's green)
 const ME_RING = 0xd29922;         // the member's own character
 const MAX_ARCS3 = 32;             // arches drawn at once
 const ARC_PTS = 18;               // points along one arch
@@ -151,8 +151,8 @@ const TAG_LOOK: Record<Kind, string> = {
   hover: 'color:#c9d1d9;background:#161b22;border:1px solid #30363d',
   target: 'color:#fecaca;background:#2a1215;border:1px solid #ef4444',
   spawn: 'color:#fecaca;background:#161b22;border:1px dashed #ef4444;opacity:0.9',
-  ma: 'color:#0d1117;background:#d29922;border:1px solid #d29922;font-weight:700',
-  heal: 'color:#3fb950;background:#0d1117;border:1px solid #3fb950;padding:0 4px',
+  ma: 'color:rgb(var(--wp-bg));background:rgb(var(--wp-gold));border:1px solid rgb(var(--wp-gold));font-weight:700',
+  heal: 'color:rgb(var(--wp-green));background:rgb(var(--wp-bg));border:1px solid rgb(var(--wp-green));padding:0 4px',
 };
 
 /** A point on an arch in the server frame at fraction `u`, peaking above the chord (the lines use the same shape). */

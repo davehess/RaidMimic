@@ -9,6 +9,7 @@ import { redirect, notFound } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase';
 import { supabaseServer } from '@/lib/supabase-server';
 import { requireMember } from '@/lib/member';
+import { selectAll } from '@/lib/selectAll';
 import { loadSpawn2 } from '@/lib/fullReads';
 import { MOB_CLASS_NAMES, decodeMobSpecialChips, sortMobSpecialChips, deUnderscore } from '@/lib/npcDecode';
 import { ERA_LABEL } from '@/lib/itemDecode';
@@ -110,8 +111,8 @@ export default async function DbNpcPage({ params }: { params: Promise<{ id: stri
   for (const r of rewards) for (const g of r.gives_for ?? []) handInIds.add(g.item_id);
   const handInNames = new Map<number, string>();
   if (handInIds.size) {
-    const { data: hi } = await sb.from('eqemu_items').select('id, name').in('id', [...handInIds]);
-    for (const r of ((hi ?? []) as { id: number; name: string }[])) handInNames.set(r.id, r.name);
+    const hi = await selectAll<{ id: number; name: string }>((from, to) => sb.from('eqemu_items').select('id, name').in('id', [...handInIds]).order('id').range(from, to));
+    for (const r of hi) handInNames.set(r.id, r.name);
   }
 
   // Zone long-names + era for both spawns and the id-encoded fallback zone.

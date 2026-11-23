@@ -87,8 +87,8 @@ const RECORDED_LOOKBACK_MS = 30_000;   // a boss targeted this recently hides it
 const PATH_PAPER = '#1f6feb';          // the raid's path on the parchment (the accent): reads on paper and on the dark page
 const PATH_DARK = '#58a6ff';           // ... and on the dark backgrounds (blue)
 const KILL_GOLD = '#d29922';
-const HEAL_GREEN = '#3fb950';          // a heal being cast: the arc from healer to target (the board's green, status = good)
-const ME_RING = '#d29922';             // the member's own character: an always-on ring, apart from the white pick ring
+const HEAL_GREEN = 'rgb(86 211 100)';  // --wp-green (tokens.css): a heal being cast, the arc from healer to target (status = good); a canvas cannot read a var()
+const ME_RING = KILL_GOLD;             // the member's own character: an always-on ring, apart from the white pick ring
 const MA_TAG = 'MA';                   // the declared main assist
 const KILL_LABEL_MS = 3 * 60 * 1000;   // a kill is named beside its number for this long after it happens
 const FILL_PAUSE_MS = 250;             // between two windows of the whole-night path fill

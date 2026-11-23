@@ -64,6 +64,7 @@ export async function loadAwards(
       .range(from, to)),
     Promise.all(chunk(src.encounterIds, ID_CHUNK).map(ids => selectAll<TakenIn & { id: string }>((from, to) => sb.from('encounter_combat_rollup')
       .select('id, encounter_id, character_name, dmg:taken->>damageTaken')
+      .eq('guild_id', GUILD_TAG)
       .in('encounter_id', ids)
       .order('id')
       .range(from, to)))).then(parts => parts.flat()),
