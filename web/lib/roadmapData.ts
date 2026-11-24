@@ -37,6 +37,20 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    key: 'quarm-patch-2026-11-23',
+    title: 'Quarm\'s Monday patch',
+    version: 'Web 2.2.34 · Agent 4.0.109 · Bot 4.1.12',
+    date: '2026-11-24',
+    headline: 'Flags, items and slows follow the server\'s 2026-11-23 patch.',
+    features: [
+      { name: 'Getting in on the raid\'s flags', blurb: 'Needs half the raid flagged (was 85%), in every Planes of Power zone and the doors inside them. It still does not give you the zone flag.' },
+      { name: 'Flag paths', blurb: 'The Fire flag no longer needs the minis, Grimror\'s key and the Quintessence open other ways in, some zones open by level, and the Time phase 1 lockout is 3.5 days.' },
+      { name: 'Item stats', blurb: 'Item pages show the new stats: accuracy, avoidance, strikethrough, stun resist, spell shield, shielding and combat effects.' },
+      { name: 'Slows', blurb: 'Mimic notes when the game says your slow was mostly, partially or slightly successful.' },
+    ],
+    fixes: [],
+  },
+  {
     key: 'mimic-3-1-0-2026-11-23',
     title: 'Mimic 3.1',
     version: 'Mimic 3.1.0 · Agent 4.0.108',
