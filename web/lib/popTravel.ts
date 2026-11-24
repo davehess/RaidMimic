@@ -279,14 +279,14 @@ export const HOPS = {
     }],
     note: 'The Plane of Fire portal (door 82, POTRNQFIRE500), where Miak the Searedsoul stands. The first visit is the Lava Well of Ro in the Tower.',
     src: [door('potranquility', 82), zp('potranquility', 29), lua(TRANQ, '120-130'), FLAG_ENGINE, ...RAID_WILL],
-    unverified: 'With the alt-access bucket on, a raid with enough Fire-flagged members (default 85%) can also enter; the bucket and the percentage are live data we cannot read.',
+    unverified: 'With the alt-access bucket on, a raid with enough Fire-flagged members (50% since the 2026-11-23 patch, was 85%) can also enter; the bucket and the percentage are live data we cannot read.',
   },
   tranq_air: {
     type: 'port', via: 'portal', from: 'potranquility', to: 'poair',
     loc: L(852, -688, -625), arrive: L(884, 532, -90),
     gate: [
       { kind: 'flag', text: 'Zebuxoruk flag at 2 (qglobal zebuxoruk = "2"); the click sets the Air, Water AND Earth zone flags together', src: [lua(TRANQ, '132-144')] },
-      { kind: 'raid', alt: true, text: `with ${ALT_BUCKET}: a raid whose flagged share of members meets the percentage (default 85%) may enter without the flag`, src: RAID_WILL },
+      { kind: 'raid', alt: true, text: `with ${ALT_BUCKET}: a raid whose flagged share of members meets the percentage (50% since the 2026-11-23 patch, was 85%) may enter without the flag`, src: RAID_WILL },
     ],
     note: 'The Plane of Air portal (door 81, POTRANBURN500).',
     src: [door('potranquility', 81), zp('potranquility', 28), lua(TRANQ, '132-144'), FLAG_ENGINE],
@@ -297,7 +297,7 @@ export const HOPS = {
     loc: L(-1326, 2211, -724), arrive: L(200, -1150, 71),
     gate: [
       { kind: 'flag', text: 'Zebuxoruk flag at 2 (qglobal zebuxoruk = "2"); the click sets the Air, Water AND Earth zone flags together', src: [lua(TRANQ, '132-144')] },
-      { kind: 'raid', alt: true, text: `with ${ALT_BUCKET}: a raid whose flagged share of members meets the percentage (default 85%) may enter without the flag`, src: RAID_WILL },
+      { kind: 'raid', alt: true, text: `with ${ALT_BUCKET}: a raid whose flagged share of members meets the percentage (50% since the 2026-11-23 patch, was 85%) may enter without the flag`, src: RAID_WILL },
     ],
     note: 'The Plane of Earth portal (door 83, POTBLDR500).',
     src: [door('potranquility', 83), zp('potranquility', 30), lua(TRANQ, '132-144'), FLAG_ENGINE],
@@ -308,7 +308,7 @@ export const HOPS = {
     loc: L(-1161, 961, -781), arrive: L(-1234, -93, 11),
     gate: [
       { kind: 'flag', text: 'Zebuxoruk flag at 2 (qglobal zebuxoruk = "2"); the click sets the Air, Water AND Earth zone flags together', src: [lua(TRANQ, '132-144')] },
-      { kind: 'raid', alt: true, text: `with ${ALT_BUCKET}: a raid whose flagged share of members meets the percentage (default 85%) may enter without the flag`, src: RAID_WILL },
+      { kind: 'raid', alt: true, text: `with ${ALT_BUCKET}: a raid whose flagged share of members meets the percentage (50% since the 2026-11-23 patch, was 85%) may enter without the flag`, src: RAID_WILL },
     ],
     note: 'The Plane of Water portal (door 84, POTPOWTRG500).',
     src: [door('potranquility', 84), zp('potranquility', 27), lua(TRANQ, '132-144'), FLAG_ENGINE],
