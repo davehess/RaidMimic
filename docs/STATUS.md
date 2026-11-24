@@ -205,8 +205,11 @@ next touch one rather than assuming a missing row means a missing doc.
   the Quintessence path, level bypasses as data, Time Phase 1 lockout 3.5 days and the Phase 4 skip. Mod2 item stats:
   migration `20261123120000_eqemu_items_mod2.sql` APPLIED (7 columns, 63 items), mapped in `scripts/sync-from-eqmac.js`,
   shown on `/db/item`. Slow results ("Your spell was mostly/partially/slightly successful", "opposite effect") recorded
-  on your own slow landing (`slowResult`); not yet shown in Target Info. Open: level access in the engine (no character
-  levels), the travel guide's four "85%" lines (seeded in a migration), the stable fleet still on 85% until the next cut.
+  on your own slow landing (`slowResult`); not yet shown in Target Info. **✅ On main 2026-11-24** (070afd4e: agent 4.0.109,
+  web 2.2.34, bot 4.1.12; the patch's own lines only), so stable agents take the 50% rule on their own; the Command Center
+  card text reaches stable users at the next Mimic cut. The travel guide's 85% lines now say 50% (web 2.2.35, b12b4a97;
+  its seed was never applied, so no database change). Open: level access in the engine (no character levels), slow
+  results in Target Info.
 
 - **🧪 2026-11-22 — Plane of Air spider ring plan (beta, web 2.2.29).** Top of the Air tab on `pop/elementals.html` (and the Elemental Planes artifact): Sunday's deaths on the island map from the raid track, the plan to park the 15 Erratic Arachnids in an east mez pen (they walk to the last island kill, `poair/encounters/Dust.lua`), and the three-tank split for each wave's 3 Spawn; Sigismond's once-a-minute hate drop. Built by a scratch script from track/parse data (no names on the page).
 
