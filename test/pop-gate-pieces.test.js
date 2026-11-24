@@ -129,23 +129,15 @@ describe('missing vs not recorded', () => {
     expect(states({ flags, fullRead: false }).c_saryrn).toBe('done');
   });
 
-  it('shows each Sol Ro wing by its boss (the guild lead, 2026-11-03)', () => {
-    const WINGS = ['s_wing_xuzl', 's_wing_arlyxir', 's_wing_dresolik', 's_wing_rizlona', 's_wing_jiva'];
-    const rep = gateReport(POP_ZONE_BY_KEY.fire, { flags: ['sol_room_1', 'sol_room_2'], fullRead: true });
-    const st = Object.fromEntries(rep.pieces.map(p => [p.key, p.state]));
-    expect(WINGS.map(k => st[k])).toEqual(['done', 'done', 'missing', 'missing', 'missing']);
-    expect(rep.pieces.find(p => p.key === 's_wing_xuzl').label).toBe("Xuzl's wing");
-    const all = gateReport(POP_ZONE_BY_KEY.fire, { flags: ['solro_minis'], fullRead: true });
-    expect(WINGS.every(k => all.pieces.find(p => p.key === k).state === 'done')).toBe(true);
-  });
-
-  it('"What\'s left" says "all five cauldron wings" once when every wing is owed, and names the rest otherwise', () => {
-    const none = gateReport(POP_ZONE_BY_KEY.fire, { flags: ['pofire_1'], fullRead: true });
-    expect(none.verdict.text).toMatch(/needs all five cauldron wings/);
-    expect(none.verdict.text).not.toMatch(/Xuzl's wing/);
-    const some = gateReport(POP_ZONE_BY_KEY.fire, { flags: ['pofire_1', 'sol_room_1', 'sol_room_2', 'sol_room_5'], fullRead: true });
-    expect(some.verdict.text).toMatch(/needs Dresolik's wing, Rizlona's wing/);
-    expect(some.verdict.text).not.toMatch(/all five/);
+  it('the Fire gate no longer lists the five Sol Ro wings (quests f468b87 solrotower/A_Planar_Projection.lua)', () => {
+    const rep = gateReport(POP_ZONE_BY_KEY.fire, { flags: ['pofire_1'], fullRead: true });
+    const keys = rep.pieces.map(p => p.key);
+    expect(keys).toEqual(['s_miak', 's_rallos', 's_solusek']);
+    expect(rep.verdict.text).not.toMatch(/wing/i);
+    // Miak and the Rallos Zek step are still owed
+    const none = gateReport(POP_ZONE_BY_KEY.fire, { flags: [], fullRead: true });
+    expect(none.pieces.find(p => p.key === 's_miak').state).toBe('missing');
+    expect(none.pieces.find(p => p.key === 's_rallos').state).toBe('missing');
   });
 });
 

@@ -804,7 +804,7 @@ export default async function PopFlagsPage(
           </div>
         )}
         {z.levelBypass && (
-          <div className="text-[10px] text-dim">classic: enter unflagged at {z.levelBypass}+</div>
+          <div className="text-[10px] text-dim">or level {z.levelBypass}+ while alt access is on</div>
         )}
         {z.note && <div className="text-[11px] text-dim italic leading-snug">{z.note}</div>}
         {kids.map(k => (
@@ -1118,7 +1118,7 @@ export default async function PopFlagsPage(
           </div>
           <p className="text-xs text-dim mb-3">
             Gate: {selected.requires.map(f => POP_FLAGS[f]?.label ?? f).join(' + ') || 'open'}
-            {selected.levelBypass ? ` · classic unflagged entry at ${selected.levelBypass}+` : ''}
+            {selected.levelBypass ? ` · or level ${selected.levelBypass}+ while alt access is on` : ''}
           </p>
           <div className="grid sm:grid-cols-2 gap-4 text-sm">
             <div>

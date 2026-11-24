@@ -57,6 +57,10 @@ type ItemRow = {
   intel: number | null; wis: number | null; cha: number | null;
   worneffect: number | null; worntype: number | null;
   proc_effect: number | null; focus_effect: number | null; itemtype: number | null;
+  // mod2 stats (Quarm patch 2026-11-23); 0 = none.
+  strikethrough: number | null; stunresist: number | null; combateffects: number | null;
+  accuracy: number | null; avoidance: number | null; spellshield: number | null;
+  shielding: number | null; damageshield: number | null;
 };
 const ATTR_ORDER: [keyof ItemRow, string][] = [
   ['str','STR'], ['sta','STA'], ['agi','AGI'], ['dex','DEX'],
@@ -89,7 +93,8 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
     sb.rpc('item_card_info', { p_item_ids: [itemId] }),
     sb.from('eqemu_items')
       .select('id, name, lore, casttime, norent, str, sta, dex, agi, intel, wis, cha, '
-            + 'worneffect, worntype, proc_effect, focus_effect, itemtype')
+            + 'worneffect, worntype, proc_effect, focus_effect, itemtype, '
+            + 'strikethrough, stunresist, combateffects, accuracy, avoidance, spellshield, shielding, damageshield')
       .eq('id', itemId).maybeSingle(),
     // 124 items have more than 500 droppers (max 1,847), so WHICH 500 matters:
     // loadItemDrops reads them best-chance first. The exact total is a SQL count of
@@ -239,6 +244,16 @@ export default async function DbItemPage({ params }: { params: Promise<{ id: str
               </Line>
             ) : null}
             {attrs.length > 0 && <Line k="Stats">{attrs.join('  ')}</Line>}
+            {!!itemRow?.accuracy && <Line k="Accuracy">+{itemRow.accuracy}</Line>}
+            {!!itemRow?.avoidance && <Line k="Avoidance">+{itemRow.avoidance}</Line>}
+            {!!itemRow?.strikethrough && <Line k="Strikethrough">+{itemRow.strikethrough}%</Line>}
+            {!!itemRow?.stunresist && <Line k="Stun Resist">+{itemRow.stunresist}%</Line>}
+            {!!itemRow?.spellshield && <Line k="Spell Shield">+{itemRow.spellshield}%</Line>}
+            {!!itemRow?.shielding && (
+              <Line k="Shielding">+{itemRow.shielding}% <span className="text-dim">(reduces only the attacker&apos;s flat damage bonus)</span></Line>
+            )}
+            {!!itemRow?.combateffects && <Line k="Combat Effects">+{(itemRow.combateffects / 10).toFixed(1)}% procs</Line>}
+            {!!itemRow?.damageshield && <Line k="Damage Shield">{itemRow.damageshield}</Line>}
             {!!itemRow?.worneffect && itemRow.worneffect > 0 && (
               <Line k="Worn effect">
                 <Link href={`/db/spell/${itemRow.worneffect}`} className="text-blue hover:underline">

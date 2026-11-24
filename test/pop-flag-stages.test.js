@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { POP_ZONES, POP_ZONE_BY_KEY, zoneAccess, missingFor } from '../web/lib/popFlags.ts';
 import { BOT_INDEX, ROOT, readSource, sliceBlock, evalBlock } from './_source-slice.js';
 
 const require = createRequire(import.meta.url);
@@ -99,8 +100,20 @@ describe("the chart's gates are the server portal script's (potranquility/player
     for (const z of ['air', 'water', 'earth']) expect(gate(z)).toEqual(['zebuxoruk_2']);
     expect(gate('time')).toEqual(['time_1']);
   });
-  it('no zone claims a level bypass (Quarm turned them off)', () => {
-    expect(web).not.toMatch(/levelBypass: \d/);
+  it('level entry is back (2026-11-23, quests ab29a4f potranquility/player.lua:4-6): 55 tier two, 60 Tactics, 62 tier three', () => {
+    const lv = Object.fromEntries(POP_ZONES.filter(z => z.levelBypass).map(z => [z.key, z.levelBypass]));
+    expect(lv).toEqual({ storms: 55, valor: 55, cod: 55, torment: 55, bot: 62, hoh: 62, tactics: 60 });
+    // Sol Ro, the elementals and Time have no level path in that script
+    for (const k of ['solro', 'air', 'water', 'earth', 'fire', 'time']) expect(lv[k], k).toBeUndefined();
+  });
+  it('the Grimror key and the Quintessence are alternative ways in (altRequires), and open the zone in zoneAccess', () => {
+    expect(zoneAccess(POP_ZONE_BY_KEY.cod, new Set(['grimror_key']))).toBe(true);
+    expect(zoneAccess(POP_ZONE_BY_KEY.cod, new Set())).toBe(false);
+    expect(zoneAccess(POP_ZONE_BY_KEY.fire, new Set(['quintessence']))).toBe(true);
+    expect(zoneAccess(POP_ZONE_BY_KEY.time, new Set(['quintessence']))).toBe(false);   // Time still comes from the machine
+    expect(missingFor(POP_ZONE_BY_KEY.torment, new Set(['quintessence']))).toEqual([]);
+    // the Grimror quest does not grant the Grummus step, so the lower Crypt stays shut with it
+    expect(zoneAccess(POP_ZONE_BY_KEY.codb, new Set(['grimror_key']))).toBe(false);
   });
   it("Askr's medallion alone does not count as the Thunder flag", () => {
     expect(S.STAGE_IMPLIES.karana_2).toBeUndefined();

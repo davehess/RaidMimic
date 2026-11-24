@@ -659,7 +659,7 @@
          + stillCount + ' still to hail</div>' : '');
   }
   // Flagged vs not flagged (the guild lead, 2026-11-16) for the elemental planes and Time: the server lets a
-  // raid in with unflagged members while flagged x 100 >= raid size x 85, counting the whole raid. The agent
+  // raid in with unflagged members while flagged x 100 >= raid size x 50 (RAID_WILLING_PCT in the agent), counting the whole raid. The agent
   // does the sums (planarFlagRule) and sends w.rule; nothing is drawn when it is absent.
   function hailRuleHtml(r){
     if (!r || !(r.size > 0)) return '';
@@ -968,7 +968,7 @@
       var tail = d.verdict === 'pass' ? 'raid can enter'
         : d.verdict === 'fail' ? 'cannot enter until ' + (unk ? 'at least ' : '') + d.need + ' more ' + (d.need === 1 ? 'is' : 'are') + ' flagged'
         : 'enters if ' + d.need + ' of the ' + unk + ' with no record ' + (d.need === 1 ? 'is' : 'are') + ' flagged';
-      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Planes of Air, Water, Fire, Earth and Time let a raid in while 85% of it holds the flag, counting everyone in the raid.">' + lead + ': ' + tail + '</div>';
+      h += '<div class="fl-line ' + esc(d.verdict) + '" title="Most Planes of Power zones let a raid in while half of it holds the flag, counting everyone in the raid, when the server has that setting on. Getting in this way gives no flag.">' + lead + ': ' + tail + '</div>';
     }
     if (miss.length) {
       h += '<div class="fl-line">Not flagged for ' + esc(z.zone) + ': <b>' + miss.length + '</b></div><div class="fl-chips">';

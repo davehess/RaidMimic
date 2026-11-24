@@ -42,7 +42,13 @@ export type PopNode = {
   col: number;                 // chart column (1..5) within the tier band
   requires: string[];          // flag keys — ALL required to enter
   grants: string[];            // flag keys earned inside this zone
-  levelBypass?: number;        // classic unflagged-entry level (Quarm QoL TBD)
+  /** Level that opens the portal with no flag, but ONLY while the server's alt-access bucket (pop_alt_access_enabled)
+   *  is on. Restored by the 2026-11-23 patch (quests ab29a4f potranquility/player.lua:4-6,15,35,60,93: 55 tier two, 60
+   *  Tactics, 62 tier three). TODO: the engine has no character level and cannot read the bucket, so zoneAccess() never
+   *  uses it; it is shown as an alternative path only. */
+  levelBypass?: number;
+  /** Other flag sets that open the zone (ANY one set suffices), beside `requires`. */
+  altRequires?: string[][];
   subZoneOf?: string;          // rendered attached to parent (CoDB, HoHB, Ragrax)
   verified: boolean;
   note?: string;
@@ -93,6 +99,10 @@ export const POP_FLAG_DEFS: PopFlagDef[] = [
   // Time
   { key: 'quarm_dead',     label: 'Kill Quarm',                    kind: 'kill',  zone: 'time',       verified: true,  note: 'Phase VI — the end of the road' },
   // Funnel
+  // Patch 2026-11-23 paths that skip the chain. Not read by the bot yet (utils/popFlagStages.js has no stage for them), so a
+  // character holds them only when a session adds the proof; until then they never prove anything.
+  { key: 'grimror_key',    label: 'Grimror\'s key (Crypt of Decay entrance)', kind: 'quest', zone: 'disease', verified: true, note: 'The Grimror quest gives the Crypt of Decay entrance flag (200) and key 9294, but not the Grummus step (quests ab29a4f podisease/Grimror_Plaguebringer.lua:48-50)' },
+  { key: 'quintessence',   label: 'Quintessence of Elements',     kind: 'quest', zone: 'innovation', verified: true, note: 'Carry it and hail Maelin or Muon: it sets the earlier planar steps and the zone flags for every zone before Time (quests c576247 lua_modules/quintessence_progression.lua:4-57). Time itself still comes from the Innovation machine' },
   { key: 'unmapped',       label: 'Unattributed flag grant',       kind: 'event', zone: '',           verified: true,  note: 'The bot saw a grant it could not name — catalog TODO' },
 ];
 
@@ -105,7 +115,8 @@ export const POP_FLAGS: Record<string, PopFlagDef> =
 // 3 or more; Tactics zeks 2 or more; Sol Ro the cipher AND zeks 6 or more; Air, Earth and Water
 // zebuxoruk 2; Time the time flag (and level 65). Crypt of Decay and Halls of Honor open from inside
 // their neighbour (the pipe by Grummus; the Valor door after Aerin`Dar), and Doomfire from the Sol
-// Ro tower after Solusek Ro. No level lets anyone in unflagged.
+// Ro tower after Solusek Ro. The 2026-11-23 patch restored level entry (levelBypass, only while the server's alt-access
+// setting is on), added the Grimror key into the Crypt, and the Quintessence of Elements (altRequires).
 export const POP_ZONES: PopNode[] = [
   // Tier 1 — open at 46 (the Plane of Knowledge portal's only check)
   { key: 'justice',    name: 'Plane of Justice',      short: 'Justice',    tier: 1, col: 1, requires: [], grants: ['trial_justice'],                verified: true },
@@ -113,24 +124,24 @@ export const POP_ZONES: PopNode[] = [
   { key: 'disease',    name: 'Plane of Disease',      short: 'Disease',    tier: 1, col: 3, requires: [], grants: ['grummus_dead'],                 verified: true },
   { key: 'nightmare',  name: 'Plane of Nightmare',    short: 'Nightmare',  tier: 1, col: 4, requires: [], grants: ['hedge_event'],                  verified: true },
   // Tier 2
-  { key: 'storms',     name: 'Plane of Storms',       short: 'Storms',     tier: 2, col: 1, requires: ['trial_justice'], grants: ['askr_quest'],    verified: true, note: 'Same portal check as Valor: the Justice flag' },
-  { key: 'valor',      name: 'Plane of Valor',        short: 'Valor',      tier: 2, col: 2, requires: ['trial_justice'], grants: ['aerindar_dead'], verified: true },
-  { key: 'cod',        name: 'Crypt of Decay',        short: 'Decay',      tier: 2, col: 3, requires: ['grummus_dead'], grants: ['carprin_cycle'],  verified: true, note: 'Drop down the pipe by Grummus once he is dead' },
-  { key: 'codb',       name: 'Crypt of Decay (lower)', short: 'Bertoxx',   tier: 2, col: 3, requires: ['carprin_cycle'], grants: ['bert_dead', 'fuirstel_5'], subZoneOf: 'cod', verified: true, note: 'Tarkil Adan\'s key (the server\'s bertox_key). No raid-in' },
-  { key: 'ponb',       name: 'Lair of Terris Thule',  short: 'T. Thule',   tier: 2, col: 4, requires: ['hedge_event'], grants: ['tthule_dead', 'thelin_4'], verified: true },
-  { key: 'torment',    name: 'Plane of Torment',      short: 'Torment',    tier: 2, col: 5, requires: ['fuirstel_5', 'thelin_4'], grants: ['keeper_dead', 'saryrn_dead'], verified: true, note: 'Both Tranquility thank-yous: Bertoxxulous and Terris Thule dead, then the Fuirstels and Thelin' },
+  { key: 'storms',     name: 'Plane of Storms',       short: 'Storms',     tier: 2, col: 1, requires: ['trial_justice'], grants: ['askr_quest'],    levelBypass: 55, altRequires: [['quintessence']], verified: true, note: 'Same portal check as Valor: the Justice flag' },
+  { key: 'valor',      name: 'Plane of Valor',        short: 'Valor',      tier: 2, col: 2, requires: ['trial_justice'], grants: ['aerindar_dead'], levelBypass: 55, altRequires: [['quintessence']], verified: true },
+  { key: 'cod',        name: 'Crypt of Decay',        short: 'Decay',      tier: 2, col: 3, requires: ['grummus_dead'], grants: ['carprin_cycle'],  levelBypass: 55, altRequires: [['grimror_key'], ['quintessence']], verified: true, note: 'Drop down the pipe by Grummus once he is dead' },
+  { key: 'codb',       name: 'Crypt of Decay (lower)', short: 'Bertoxx',   tier: 2, col: 3, requires: ['carprin_cycle'], grants: ['bert_dead', 'fuirstel_5'], subZoneOf: 'cod', altRequires: [['quintessence']], verified: true, note: 'Tarkil Adan\'s key (the server\'s bertox_key). No raid-in' },
+  { key: 'ponb',       name: 'Lair of Terris Thule',  short: 'T. Thule',   tier: 2, col: 4, requires: ['hedge_event'], grants: ['tthule_dead', 'thelin_4'], altRequires: [['quintessence']], verified: true },
+  { key: 'torment',    name: 'Plane of Torment',      short: 'Torment',    tier: 2, col: 5, requires: ['fuirstel_5', 'thelin_4'], grants: ['keeper_dead', 'saryrn_dead'], levelBypass: 55, altRequires: [['quintessence']], verified: true, note: 'Both Tranquility thank-yous: Bertoxxulous and Terris Thule dead, then the Fuirstels and Thelin' },
   // Tier 3
-  { key: 'bot',        name: 'Bastion of Thunder',    short: 'Thunder',    tier: 3, col: 1, requires: ['askr_quest'], grants: ['agnarr_dead', 'zebuxoruk_2'], verified: true },
-  { key: 'hoh',        name: 'Halls of Honor',        short: 'Honor',      tier: 3, col: 2, requires: ['aerindar_dead'], grants: ['hoh_trials'],    verified: true },
-  { key: 'hohb',       name: 'Temple of Marr',        short: 'M. Marr',    tier: 3, col: 2, requires: ['hoh_trials'], grants: ['marr_dead'],        subZoneOf: 'hoh', verified: false },
-  { key: 'tactics',    name: 'Plane of Tactics',      short: 'Tactics',    tier: 3, col: 3, requires: ['behemoth_dead'], grants: ['tallon_dead', 'vallon_dead', 'zeks_6', 'rallos_dead'], verified: true },
-  { key: 'solro',      name: 'Tower of Solusek Ro',   short: 'Sol Ro',     tier: 3, col: 4, requires: ['cipher_1', 'zeks_6'], grants: ['solro_minis', 'solro_dead'], verified: true, note: 'The cipher (Saryrn + Marr halves) and Maelin\'s reading of the Zek notes' },
+  { key: 'bot',        name: 'Bastion of Thunder',    short: 'Thunder',    tier: 3, col: 1, requires: ['askr_quest'], grants: ['agnarr_dead', 'zebuxoruk_2'], levelBypass: 62, altRequires: [['quintessence']], verified: true },
+  { key: 'hoh',        name: 'Halls of Honor',        short: 'Honor',      tier: 3, col: 2, requires: ['aerindar_dead'], grants: ['hoh_trials'],    levelBypass: 62, altRequires: [['quintessence']], verified: true },
+  { key: 'hohb',       name: 'Temple of Marr',        short: 'M. Marr',    tier: 3, col: 2, requires: ['hoh_trials'], grants: ['marr_dead'],        subZoneOf: 'hoh', altRequires: [['quintessence']], verified: false },
+  { key: 'tactics',    name: 'Plane of Tactics',      short: 'Tactics',    tier: 3, col: 3, requires: ['behemoth_dead'], grants: ['tallon_dead', 'vallon_dead', 'zeks_6', 'rallos_dead'], levelBypass: 60, altRequires: [['quintessence']], verified: true },
+  { key: 'solro',      name: 'Tower of Solusek Ro',   short: 'Sol Ro',     tier: 3, col: 4, requires: ['cipher_1', 'zeks_6'], grants: ['solro_minis', 'solro_dead'], altRequires: [['quintessence']], verified: true, note: 'The cipher (Saryrn + Marr halves) and Maelin\'s reading of the Zek notes' },
   // Tier 4 — elementals
-  { key: 'earth',      name: 'Plane of Earth',        short: 'Earth',      tier: 4, col: 1, requires: ['zebuxoruk_2'], grants: ['arbitor_dead'], verified: true, note: '4 rings + Arbitor open Ragrax' },
-  { key: 'poeb',       name: 'Ragrax, Stronghold of the Twelve', short: 'Ragrax', tier: 4, col: 1, requires: ['arbitor_dead'], grants: ['rathe_dead', 'stone_loot'], subZoneOf: 'earth', verified: false, note: 'No raid-in' },
-  { key: 'air',        name: 'Eryslai, the Kingdom of Wind', short: 'Air', tier: 4, col: 2, requires: ['zebuxoruk_2'], grants: ['avatars_air', 'xegony_dead', 'cloud_loot'], verified: true },
-  { key: 'water',      name: 'Reef of Coirnav',       short: 'Water',      tier: 4, col: 3, requires: ['zebuxoruk_2'], grants: ['coirnav_dead', 'sphere_loot'], verified: true },
-  { key: 'fire',       name: 'Doomfire, the Burning Lands', short: 'Fire', tier: 4, col: 4, requires: ['solro_dead'], grants: ['fennin_dead', 'globe_loot'], verified: true, note: 'Opened from the Sol Ro tower after Solusek Ro' },
+  { key: 'earth',      name: 'Plane of Earth',        short: 'Earth',      tier: 4, col: 1, requires: ['zebuxoruk_2'], grants: ['arbitor_dead'], altRequires: [['quintessence']], verified: true, note: '4 rings + Arbitor open Ragrax' },
+  { key: 'poeb',       name: 'Ragrax, Stronghold of the Twelve', short: 'Ragrax', tier: 4, col: 1, requires: ['arbitor_dead'], grants: ['rathe_dead', 'stone_loot'], subZoneOf: 'earth', altRequires: [['quintessence']], verified: false, note: 'No raid-in' },
+  { key: 'air',        name: 'Eryslai, the Kingdom of Wind', short: 'Air', tier: 4, col: 2, requires: ['zebuxoruk_2'], grants: ['avatars_air', 'xegony_dead', 'cloud_loot'], altRequires: [['quintessence']], verified: true },
+  { key: 'water',      name: 'Reef of Coirnav',       short: 'Water',      tier: 4, col: 3, requires: ['zebuxoruk_2'], grants: ['coirnav_dead', 'sphere_loot'], altRequires: [['quintessence']], verified: true },
+  { key: 'fire',       name: 'Doomfire, the Burning Lands', short: 'Fire', tier: 4, col: 4, requires: ['solro_dead'], grants: ['fennin_dead', 'globe_loot'], altRequires: [['quintessence']], verified: true, note: 'Opened from the Sol Ro tower after Solusek Ro' },
   // Time
   { key: 'time',       name: 'Plane of Time',         short: 'Time',       tier: 5, col: 2, requires: ['time_1'], grants: ['quarm_dead'], verified: true, note: 'Level 65 too. Phases I–VI' },
 ];
@@ -140,8 +151,8 @@ export const POP_ZONE_BY_KEY: Record<string, PopNode> =
 
 export const TIER_LABELS: Record<number, { name: string; sub: string }> = {
   1: { name: 'Tier One',   sub: 'Open at 46' },
-  2: { name: 'Tier Two',   sub: 'Flag required; no level bypass on Quarm' },
-  3: { name: 'Tier Three', sub: 'Flag required; no level bypass on Quarm' },
+  2: { name: 'Tier Two',   sub: 'Flag required, or level 55 while alt access is on' },
+  3: { name: 'Tier Three', sub: 'Flag required, or level 60 to 62 while alt access is on' },
   4: { name: 'Tier Four — Elemental', sub: 'Maelin\'s power-source step' },
   5: { name: 'Plane of Time', sub: 'The time flag and level 65' },
 };
@@ -165,10 +176,16 @@ export const JUSTICE_MARKS = [
 export const MARK_OF_JUSTICE = { id: 31599, name: 'The Mark of Justice' } as const;
 
 export function zoneAccess(zone: PopNode, flags: Set<string>): boolean {
-  return zone.requires.every(f => flags.has(f));
+  return zone.requires.every(f => flags.has(f)) || altOpen(zone, flags);
 }
 
-// Flags a character is missing for a zone.
+// An alternative flag set the character holds in full (the Grimror key, the Quintessence). Level access is not here: see levelBypass.
+function altOpen(zone: PopNode, flags: Set<string>): boolean {
+  return (zone.altRequires ?? []).some(set => set.every(f => flags.has(f)));
+}
+
+// Flags a character is missing for a zone (none when an alternative path is held).
 export function missingFor(zone: PopNode, flags: Set<string>): string[] {
+  if (altOpen(zone, flags)) return [];
   return zone.requires.filter(f => !flags.has(f));
 }

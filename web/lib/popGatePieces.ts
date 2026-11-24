@@ -59,7 +59,6 @@ export type GatePiece = {
 };
 
 // requirement flag (an entry of POP_ZONES[].requires) → the pieces it is made of, in the order they happen.
-const WINGS = { key: 'solro_wings', needs: 'all five cauldron wings' };
 
 export const REQ_PIECES: Record<string, GatePiece[]> = {
   // ── Tier one → two ────────────────────────────────────────────────────────
@@ -131,15 +130,10 @@ export const REQ_PIECES: Record<string, GatePiece[]> = {
     { key: 'z_maelin', label: 'Maelin reads the notes', kind: 'handin', proof: ['zeks_6'], to: 'Maelin', needs: "Maelin's Zek reading", verified: true, note: 'Maelin only offers it once you hold the cipher' },
   ],
   // ── Fire: Solusek Ro dead and the projection hailed (pofire 1-2). popFlags.ts asks for the solro_dead KILL;
-  // the portal itself asks for pofire_2, which needs the five wings, Miak and the Rallos Zek step (popSteps.ts solro).
+  // the portal itself asks for pofire_2, which needs Miak and the Rallos Zek step (popSteps.ts solro). Since the 2026-11-23
+  // patch it no longer needs the five wings (quests f468b87 solrotower/A_Planar_Projection.lua); the wings still open the
+  // chamber door unless the raid is let in, so they stay in the guide and the Sol Ro route, not in this gate.
   solro_dead: [
-    // One column per wing, named by its boss (the guild lead, 2026-11-03: "break the first step out by each wing. they
-    // are named by the boss"). sol_room_1..5 = Xuzl, Arlyxir, Dresolik, Rizlona, Jiva (solrotower/player.lua doors).
-    { key: 's_wing_xuzl', label: "Xuzl's wing", kind: 'task', proof: ['sol_room_1'], needs: "Xuzl's wing", verified: true, group: WINGS },
-    { key: 's_wing_arlyxir', label: "Arlyxir's wing", kind: 'task', proof: ['sol_room_2'], needs: "Arlyxir's wing", verified: true, group: WINGS },
-    { key: 's_wing_dresolik', label: "Dresolik's wing", kind: 'task', proof: ['sol_room_3'], needs: "Dresolik's wing", verified: true, group: WINGS },
-    { key: 's_wing_rizlona', label: "Rizlona's wing", kind: 'task', proof: ['sol_room_4'], needs: "Rizlona's wing", verified: true, group: WINGS },
-    { key: 's_wing_jiva', label: "Jiva's wing", kind: 'task', proof: ['sol_room_5'], needs: "Jiva's wing", verified: true, group: WINGS },
     { key: 's_miak', label: "Miak's talk", kind: 'task', proof: ['pofire_1'], needs: "Miak's talk in Tranquility", verified: true },
     { key: 's_rallos', label: 'Rallos Zek step', kind: 'kill', proof: ['zeks_7'], pending: 'cl_rallos', kills: ['rallos_dead'], needs: 'a Rallos Zek kill (after the Zek reading)', verified: true },
     { key: 's_solusek', label: 'Solusek Ro + projection', kind: 'kill', proof: ['pofire_2'], pending: 'cl_solusek', kills: ['solro_dead'], needs: 'a Solusek Ro kill', verified: true },

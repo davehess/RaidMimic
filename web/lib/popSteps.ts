@@ -152,7 +152,12 @@ export const STEP_IMPLIES: Record<string, string[]> = {
   mmarr_1: ['hohtrials_111'], mmarr_book_1: ['hohtrials_111'],
   cipher_1: ['saryrn_1', 'mmarr_1'],                 // the cipher replaces both halves
   zebuxoruk_2: ['zebuxoruk_1'], zebuxoruk_1: ['karana_4', 'mmarr_book_1'],   // and replaces both notes
-  pofire_2: ['pofire_1', 'zeks_7', 'sol_room_1', 'sol_room_2', 'sol_room_3', 'sol_room_4', 'sol_room_5'],
+  // The Fire flag no longer carries the five wings: Solusek Ro's projection wants only pofire 1 and zeks 7 (quests f468b87
+  // solrotower/A_Planar_Projection.lua, the hail branch). The chamber door still wants sol_room 11111 unless the raid is let in.
+  pofire_2: ['pofire_1', 'zeks_7'],
+  // The Quintessence of Elements sets all of these at once (quests c576247 lua_modules/quintessence_progression.lua:5-11).
+  quintessence: ['mavuin_3', 'fuirstel_5', 'thelin_4', 'poi_door_1', 'zeks_7', 'aerindar_2', 'tylis_2', 'hohtrials_111', 'cipher_1', 'grummus_1',
+    'sol_room_1', 'sol_room_2', 'sol_room_3', 'sol_room_4', 'sol_room_5', 'zebuxoruk_2', 'pofire_2', 'bertox_key_1', 'earthb_key_1'],
   // catalog flags → their stage
   trial_justice: ['mavuin_3'], grummus_dead: ['grummus_1'], bert_dead: ['fuirstel_4'], carprin_cycle: ['bertox_key_1'],
   hedge_event: ['thelin_2'], tthule_dead: ['thelin_3'], behemoth_dead: ['zeks_2'],

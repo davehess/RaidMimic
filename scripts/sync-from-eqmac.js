@@ -446,7 +446,7 @@ const TRANSFORMS = {
     };
   },
   items: (cols, row) => {
-    const r = pick(cols, row, ['id', 'name', 'lore', 'loregroup', 'nodrop', 'norent', 'magic', 'itemtype', 'slots', 'icon', 'weight', 'reclevel', 'reqlevel', 'classes', 'races', 'ac', 'hp', 'mana', 'damage', 'delay', 'focuseffect', 'proceffect', 'astr', 'asta', 'adex', 'aagi', 'aint', 'awis', 'acha', 'mr', 'cr', 'dr', 'fr', 'pr', 'price', 'casttime', 'clickeffect', 'clicktype', 'clicklevel', 'maxcharges', 'worneffect', 'worntype', 'attack', 'haste', 'regen', 'manaregen', 'damageshield', 'idfile', 'material', 'color', 'light']);
+    const r = pick(cols, row, ['id', 'name', 'lore', 'loregroup', 'nodrop', 'norent', 'magic', 'itemtype', 'slots', 'icon', 'weight', 'reclevel', 'reqlevel', 'classes', 'races', 'ac', 'hp', 'mana', 'damage', 'delay', 'focuseffect', 'proceffect', 'astr', 'asta', 'adex', 'aagi', 'aint', 'awis', 'acha', 'mr', 'cr', 'dr', 'fr', 'pr', 'price', 'casttime', 'clickeffect', 'clicktype', 'clicklevel', 'maxcharges', 'worneffect', 'worntype', 'attack', 'haste', 'regen', 'manaregen', 'damageshield', 'strikethrough', 'stunresist', 'combateffects', 'accuracy', 'avoidance', 'spellshield', 'shielding', 'idfile', 'material', 'color', 'light']);
     if (!r.id) return null;
     return {
       id: r.id, name: r.name, lore: r.lore,
@@ -476,6 +476,9 @@ const TRANSFORMS = {
       worneffect: r.worneffect, worntype: r.worntype,
       attack: r.attack, haste: r.haste,
       regen: r.regen, manaregen: r.manaregen, damageshield: r.damageshield,
+      // mod2 stats (EQMacEmu 7d54c5a, Quarm patch 2026-11-23). A dump without a column leaves it undefined, so it never nulls a stored value.
+      strikethrough: r.strikethrough, stunresist: r.stunresist, combateffects: r.combateffects,
+      accuracy: r.accuracy, avoidance: r.avoidance, spellshield: r.spellshield, shielding: r.shielding,
       // What the item looks like on a body (the guild lead, 2026-10-05: "how we look as characters"):
       // `material` is the armor texture number, `color` the dye (unsigned 32-bit, so bigint on our side),
       // `idfile` the model name ('IT63') a weapon or shield is drawn from, `light` what it lights.

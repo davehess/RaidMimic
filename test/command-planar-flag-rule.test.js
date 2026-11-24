@@ -1,8 +1,8 @@
 // test/command-planar-flag-rule.test.js — flagged vs not flagged on the Command Center (the guild lead, 2026-11-16).
 //
-// The 85% rule for Planes of Air/Water/Fire/Earth/Time (zone ids 215-219): a raid may bring unflagged members
-// while flagged x 100 >= raid size x 85, counting the whole raid (EQMacEmu c2cd2651 zoning.cpp:41-73,
-// raids.cpp:617-638; DECISIONS 596). Runs the agent's real planarFlagRule and the overlay's real row renderer.
+// The raid-in rule for Planes of Power zones (ids 200-212, 214-223): a raid may bring unflagged members
+// while flagged x 100 >= raid size x 50, counting the whole raid (EQMacEmu 49e964b zone/zoning.cpp
+// IsPopRaidWillingZone + PopRaidFlagRequirement; the patch of 2026-11-23, it was 85; DECISIONS 596). Runs the agent's real planarFlagRule and the overlay's real row renderer.
 // Names are invented. Run: npx vitest run test/command-planar-flag-rule.test.js
 
 import { describe, it, expect } from 'vitest';
@@ -10,7 +10,7 @@ import path from 'node:path';
 import { readSource, ROOT, sliceBlock, evalBlock } from './_source-slice.js';
 
 const agent = readSource(path.join(ROOT, 'packages', 'wolfpack-logsync', 'index.js'));
-const rule = evalBlock(sliceBlock(agent, 'function planarFlagRule(size, flagged) {', 'maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,\n  };\n}'),
+const rule = evalBlock(sliceBlock(agent, 'const RAID_WILLING_PCT = 50;', 'maxUnflagged - notFlagged : 0, short: passes ? 0 : notFlagged - maxUnflagged,\n  };\n}'),
   ['planarFlagRule']);
 const { planarFlagRule: calc } = rule;
 
@@ -19,8 +19,8 @@ const cmd = readSource(path.join(ROOT, 'apps', 'mimic', 'command.html'));
 const hailRuleHtml = new Function(sliceBlock(cmd, '  function hailRuleHtml(r){', "'</div>';\n  }") + '\nreturn hailRuleHtml;')();
 
 describe('planarFlagRule', () => {
-  it('allows size - ceil(0.85 x size) unflagged', () => {
-    for (const [size, max] of [[42, 6], [48, 7], [54, 8], [60, 9], [72, 10]]) {
+  it('allows size - ceil(0.50 x size) unflagged', () => {
+    for (const [size, max] of [[42, 21], [48, 24], [54, 27], [60, 30], [72, 36]]) {
       expect(calc(size, size).max_unflagged).toBe(max);
       expect(calc(size, size - max).passes).toBe(true);
       expect(calc(size, size - max - 1).passes).toBe(false);
@@ -29,17 +29,17 @@ describe('planarFlagRule', () => {
 
   it('reports counts, percentages and the room left', () => {
     const r = calc(42, 37);
-    expect(r).toMatchObject({ size: 42, flagged: 37, not_flagged: 5, pct_flagged: 88, pct_not: 12, passes: true, spare: 1, short: 0 });
+    expect(r).toMatchObject({ size: 42, flagged: 37, not_flagged: 5, pct_flagged: 88, pct_not: 12, passes: true, spare: 16, short: 0 });
   });
 
   it('reports how many too many when it fails', () => {
-    const r = calc(42, 34);   // 8 unflagged, 6 allowed
+    const r = calc(42, 19);   // 23 unflagged, 21 allowed
     expect(r).toMatchObject({ passes: false, short: 2, spare: 0 });
   });
 
-  it('is exact on the boundary (85.0% passes)', () => {
-    expect(calc(20, 17).passes).toBe(true);
-    expect(calc(20, 16).passes).toBe(false);
+  it('is exact on the boundary (50.0% passes)', () => {
+    expect(calc(20, 10).passes).toBe(true);
+    expect(calc(20, 9).passes).toBe(false);
   });
 
   it('survives an empty raid and clamps flagged to the size', () => {
@@ -56,8 +56,8 @@ describe('the Command Center row', () => {
     expect(html).toContain('Not flagged <b>5 (12%)</b>');
   });
 
-  it('does not show the 85% entry verdict (a kill\'s flag is not a zone\'s entry flag)', () => {
-    expect(hailRuleHtml(calc(42, 34))).not.toMatch(/85% rule|too many|room for/);
+  it('does not show the entry verdict (a kill\'s flag is not a zone\'s entry flag)', () => {
+    expect(hailRuleHtml(calc(42, 19))).not.toMatch(/50% rule|85% rule|too many|room for/);
   });
 
   it('draws nothing without a rule', () => {
