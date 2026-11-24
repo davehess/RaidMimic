@@ -33,12 +33,12 @@ describe('tierViews', () => {
     expect(a.missing.some(m => m.names.includes('Corvale'))).toBe(false);
   });
 
-  it('gives the elemental planes and Time the 85% door line, counting not recorded as undecided', () => {
+  it('gives every gated zone the 50% door line, counting not recorded as undecided', () => {
     const t = tierViews(raiders, new Map([['aldenmar', new Set(['zebuxoruk_2'])]]), new Set(['aldenmar', 'brackwyn']));
     const a = air(t);
-    expect(a.door).toEqual({ tone: 'fail', text: '85% door: 1/6 flagged · fails: 1 too many unflagged' });
+    expect(a.door).toEqual({ tone: 'depends', text: '50% door: 1/6 flagged · passes if 2 of the 4 not recorded are flagged' });
     expect(t[0].zones.find(z => z.key === 'time').door).not.toBeNull();
-    expect(t[2].zones.every(z => z.door === null)).toBe(true);
+    expect(t[2].zones.every(z => z.door !== null)).toBe(true);
   });
 
   it('lists a sub-zone straight after its parent', () => {

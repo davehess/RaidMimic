@@ -280,6 +280,22 @@ const POP_FLAGS = Object.fromEntries([
 		note: "Phase VI — the end of the road"
 	},
 	{
+		key: "grimror_key",
+		label: "Grimror's key (Crypt of Decay entrance)",
+		kind: "quest",
+		zone: "disease",
+		verified: true,
+		note: "The Grimror quest gives the Crypt of Decay entrance flag (200) and key 9294, but not the Grummus step (quests ab29a4f podisease/Grimror_Plaguebringer.lua:48-50)"
+	},
+	{
+		key: "quintessence",
+		label: "Quintessence of Elements",
+		kind: "quest",
+		zone: "innovation",
+		verified: true,
+		note: "Carry it and hail Maelin or Muon: it sets the earlier planar steps and the zone flags for every zone before Time (quests c576247 lua_modules/quintessence_progression.lua:4-57). Time itself still comes from the Innovation machine"
+	},
+	{
 		key: "unmapped",
 		label: "Unattributed flag grant",
 		kind: "event",
@@ -337,6 +353,8 @@ const POP_ZONES = [
 		col: 1,
 		requires: ["trial_justice"],
 		grants: ["askr_quest"],
+		levelBypass: 55,
+		altRequires: [["quintessence"]],
 		verified: true,
 		note: "Same portal check as Valor: the Justice flag"
 	},
@@ -348,6 +366,8 @@ const POP_ZONES = [
 		col: 2,
 		requires: ["trial_justice"],
 		grants: ["aerindar_dead"],
+		levelBypass: 55,
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -358,6 +378,8 @@ const POP_ZONES = [
 		col: 3,
 		requires: ["grummus_dead"],
 		grants: ["carprin_cycle"],
+		levelBypass: 55,
+		altRequires: [["grimror_key"], ["quintessence"]],
 		verified: true,
 		note: "Drop down the pipe by Grummus once he is dead"
 	},
@@ -370,6 +392,7 @@ const POP_ZONES = [
 		requires: ["carprin_cycle"],
 		grants: ["bert_dead", "fuirstel_5"],
 		subZoneOf: "cod",
+		altRequires: [["quintessence"]],
 		verified: true,
 		note: "Tarkil Adan's key (the server's bertox_key). No raid-in"
 	},
@@ -381,6 +404,7 @@ const POP_ZONES = [
 		col: 4,
 		requires: ["hedge_event"],
 		grants: ["tthule_dead", "thelin_4"],
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -391,6 +415,8 @@ const POP_ZONES = [
 		col: 5,
 		requires: ["fuirstel_5", "thelin_4"],
 		grants: ["keeper_dead", "saryrn_dead"],
+		levelBypass: 55,
+		altRequires: [["quintessence"]],
 		verified: true,
 		note: "Both Tranquility thank-yous: Bertoxxulous and Terris Thule dead, then the Fuirstels and Thelin"
 	},
@@ -402,6 +428,8 @@ const POP_ZONES = [
 		col: 1,
 		requires: ["askr_quest"],
 		grants: ["agnarr_dead", "zebuxoruk_2"],
+		levelBypass: 62,
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -412,6 +440,8 @@ const POP_ZONES = [
 		col: 2,
 		requires: ["aerindar_dead"],
 		grants: ["hoh_trials"],
+		levelBypass: 62,
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -423,6 +453,7 @@ const POP_ZONES = [
 		requires: ["hoh_trials"],
 		grants: ["marr_dead"],
 		subZoneOf: "hoh",
+		altRequires: [["quintessence"]],
 		verified: false
 	},
 	{
@@ -438,6 +469,8 @@ const POP_ZONES = [
 			"zeks_6",
 			"rallos_dead"
 		],
+		levelBypass: 60,
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -448,6 +481,7 @@ const POP_ZONES = [
 		col: 4,
 		requires: ["cipher_1", "zeks_6"],
 		grants: ["solro_minis", "solro_dead"],
+		altRequires: [["quintessence"]],
 		verified: true,
 		note: "The cipher (Saryrn + Marr halves) and Maelin's reading of the Zek notes"
 	},
@@ -459,6 +493,7 @@ const POP_ZONES = [
 		col: 1,
 		requires: ["zebuxoruk_2"],
 		grants: ["arbitor_dead"],
+		altRequires: [["quintessence"]],
 		verified: true,
 		note: "4 rings + Arbitor open Ragrax"
 	},
@@ -471,6 +506,7 @@ const POP_ZONES = [
 		requires: ["arbitor_dead"],
 		grants: ["rathe_dead", "stone_loot"],
 		subZoneOf: "earth",
+		altRequires: [["quintessence"]],
 		verified: false,
 		note: "No raid-in"
 	},
@@ -486,6 +522,7 @@ const POP_ZONES = [
 			"xegony_dead",
 			"cloud_loot"
 		],
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -496,6 +533,7 @@ const POP_ZONES = [
 		col: 3,
 		requires: ["zebuxoruk_2"],
 		grants: ["coirnav_dead", "sphere_loot"],
+		altRequires: [["quintessence"]],
 		verified: true
 	},
 	{
@@ -506,6 +544,7 @@ const POP_ZONES = [
 		col: 4,
 		requires: ["solro_dead"],
 		grants: ["fennin_dead", "globe_loot"],
+		altRequires: [["quintessence"]],
 		verified: true,
 		note: "Opened from the Sol Ro tower after Solusek Ro"
 	},
@@ -529,11 +568,11 @@ const TIER_LABELS = {
 	},
 	2: {
 		name: "Tier Two",
-		sub: "Flag required; no level bypass on Quarm"
+		sub: "Flag required, or level 55 while alt access is on"
 	},
 	3: {
 		name: "Tier Three",
-		sub: "Flag required; no level bypass on Quarm"
+		sub: "Flag required, or level 60 to 62 while alt access is on"
 	},
 	4: {
 		name: "Tier Four — Elemental",
@@ -552,9 +591,13 @@ const TIER_COLORS = {
 	5: "#a371f7"
 };
 function zoneAccess(zone, flags) {
-	return zone.requires.every((f) => flags.has(f));
+	return zone.requires.every((f) => flags.has(f)) || altOpen(zone, flags);
+}
+function altOpen(zone, flags) {
+	return (zone.altRequires ?? []).some((set) => set.every((f) => flags.has(f)));
 }
 function missingFor(zone, flags) {
+	if (altOpen(zone, flags)) return [];
 	return zone.requires.filter((f) => !flags.has(f));
 }
 //#endregion
@@ -2137,7 +2180,7 @@ const BASE_ITEMS = [
 		who: "raid",
 		flag: "solro_minis",
 		title: "The five Tower of Solusek Ro minis",
-		detail: "Xuzl, Arlyxir, the Protector of Dresolik, Rizlona and Jiva, in any order. Each wing is a boss fight and then a click, and everyone clicks their own: when the boss dies a flaming cauldron appears for 30 minutes, and while it is up you click the cauldron to take that wing’s flag. Click when it is not there and you only become disoriented. Dresolik’s Protector appears when the last of the four Guardians of Dresolik dies; Rizlona has a second form where she falls, and it is that one’s death that leaves the cauldron. Nobody speaks to anything here. All five wings, with your Zeks flag at 7 (every flag up to Rallos Zek and the Zek notes), open the lava runes that take you into Solusek Ro’s chamber, and his projection checks all five too. Alts take a wing the same way: whoever reaches a cauldron and clicks it inside its 30 minutes gets that wing. Each cauldron runs its own 30 minutes from its own boss’s death, so send the alts to each wing right after its kill; clearing all five first and clicking later misses the early ones.",
+		detail: "Xuzl, Arlyxir, the Protector of Dresolik, Rizlona and Jiva, in any order. Each wing is a boss fight and then a click, and everyone clicks their own: when the boss dies a flaming cauldron appears for 30 minutes, and while it is up you click the cauldron to take that wing’s flag. Click when it is not there and you only become disoriented. Dresolik’s Protector appears when the last of the four Guardians of Dresolik dies; Rizlona has a second form where she falls, and it is that one’s death that leaves the cauldron. Nobody speaks to anything here. All five wings, with your Zeks flag at 7 (every flag up to Rallos Zek and the Zek notes), open the lava runes that take you into Solusek Ro’s chamber, unless your raid is let in by the raid-in rule. His projection no longer checks the wings: the Fire flag needs only Miak and your Zeks flag at 7. Alts take a wing the same way: whoever reaches a cauldron and clicks it inside its 30 minutes gets that wing. Each cauldron runs its own 30 minutes from its own boss’s death, so send the alts to each wing right after its kill; clearing all five first and clicking later misses the early ones.",
 		where: [
 			L.xuzl,
 			L.xuzlCauldron,
@@ -2339,7 +2382,7 @@ const BASE_ITEMS = [
 		flag: "quarm_dead",
 		title: "Kill Quarm",
 		link: popZone("time"),
-		detail: "Loot from Phase 1 bosses is limited for 12 hours and from Phases 2 and 3 for 3.5 days (never past the end of the cycle); Phase 4 to 6 bosses stay down until the cycle ends. Once your guild clears Phase 3 it keeps a checkpoint for the cycle: later visits clear Phase 1, then continue at the first unfinished phase from Phase 4. A visit ends after 10 minutes with no participating players in the zone. The raid cap is 90, with 18 straight into each Phase 1 wing."
+		detail: "Loot from Phases 1, 2 and 3 is limited for 3.5 days (never past the end of the cycle; Phase 1 was 12 hours before the 2026-11-23 patch); Phase 4 to 6 bosses stay down until the cycle ends. Once your guild reaches the Phase 4 checkpoint (clearing Phase 3, or any god already killed), Phases 1 to 3 are skipped for the rest of the cycle: later visits go straight to the first unfinished phase from Phase 4. A visit ends after 10 minutes with no participating players in the zone. The raid cap is 90, with 18 straight into each Phase 1 wing."
 	}
 ];
 const I = (name, id) => `[[${name}#${id}]]`;
@@ -3605,14 +3648,27 @@ const STEP_IMPLIES = {
 	cipher_1: ["saryrn_1", "mmarr_1"],
 	zebuxoruk_2: ["zebuxoruk_1"],
 	zebuxoruk_1: ["karana_4", "mmarr_book_1"],
-	pofire_2: [
-		"pofire_1",
+	pofire_2: ["pofire_1", "zeks_7"],
+	quintessence: [
+		"mavuin_3",
+		"fuirstel_5",
+		"thelin_4",
+		"poi_door_1",
 		"zeks_7",
+		"aerindar_2",
+		"tylis_2",
+		"hohtrials_111",
+		"cipher_1",
+		"grummus_1",
 		"sol_room_1",
 		"sol_room_2",
 		"sol_room_3",
 		"sol_room_4",
-		"sol_room_5"
+		"sol_room_5",
+		"zebuxoruk_2",
+		"pofire_2",
+		"bertox_key_1",
+		"earthb_key_1"
 	],
 	trial_justice: ["mavuin_3"],
 	grummus_dead: ["grummus_1"],
@@ -3867,7 +3923,7 @@ for (const [key, brief] of Object.entries({
 	time_timelockout: "Your guild has one fixed 6 day 18 hour cycle from its first entry; kills no longer extend it.",
 	time_quintessence: "Hail each god’s Essence for its piece (no drop), then combine all four in the vial, which you can pass on.",
 	time_join_late: "The Time A portal puts you in at your guild’s current phase; only another guild’s Time lockout stops you.",
-	flag_quarm: "Phase 1 loot is limited 12 hours, Phases 2 and 3 for 3.5 days, Phase 4 to 6 until the cycle ends. Raid cap 90."
+	flag_quarm: "Phase 1 to 3 loot: 3.5 days. The Phase 4 checkpoint skips them for the cycle. Phase 4 to 6: until it ends. Cap 90."
 })) STEP_MORE[key] = {
 	...STEP_MORE[key],
 	brief
@@ -4136,10 +4192,6 @@ const NEXT_LINES = [
 			{
 				zone: "solro",
 				steps: ["pofire_miak"]
-			},
-			{
-				zone: "solro",
-				steps: ["flag_solro_minis"]
 			},
 			{
 				zone: "solro",
@@ -4713,10 +4765,6 @@ function zoneViews(held) {
 }
 //#endregion
 //#region web/lib/popGatePieces.ts
-const WINGS = {
-	key: "solro_wings",
-	needs: "all five cauldron wings"
-};
 const REQ_PIECES = {
 	trial_justice: [
 		{
@@ -4980,51 +5028,6 @@ const REQ_PIECES = {
 		}
 	],
 	solro_dead: [
-		{
-			key: "s_wing_xuzl",
-			label: "Xuzl's wing",
-			kind: "task",
-			proof: ["sol_room_1"],
-			needs: "Xuzl's wing",
-			verified: true,
-			group: WINGS
-		},
-		{
-			key: "s_wing_arlyxir",
-			label: "Arlyxir's wing",
-			kind: "task",
-			proof: ["sol_room_2"],
-			needs: "Arlyxir's wing",
-			verified: true,
-			group: WINGS
-		},
-		{
-			key: "s_wing_dresolik",
-			label: "Dresolik's wing",
-			kind: "task",
-			proof: ["sol_room_3"],
-			needs: "Dresolik's wing",
-			verified: true,
-			group: WINGS
-		},
-		{
-			key: "s_wing_rizlona",
-			label: "Rizlona's wing",
-			kind: "task",
-			proof: ["sol_room_4"],
-			needs: "Rizlona's wing",
-			verified: true,
-			group: WINGS
-		},
-		{
-			key: "s_wing_jiva",
-			label: "Jiva's wing",
-			kind: "task",
-			proof: ["sol_room_5"],
-			needs: "Jiva's wing",
-			verified: true,
-			group: WINGS
-		},
 		{
 			key: "s_miak",
 			label: "Miak's talk",

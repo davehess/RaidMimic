@@ -35,9 +35,14 @@ describe('stepsHeld expands a series to every step it proves', () => {
     const got = stepsHeld(['cipher_1']);
     for (const k of ['saryrn_1', 'mmarr_1', 'tylis_1', 'tylis_2', ...range('hoh_trial_', 1, 3)]) expect(got.has(k)).toBe(true);
   });
-  it('the Doomfire stage carries all five wings, Miak and the Rallos Zek step', () => {
+  it('the Doomfire stage carries Miak and the Rallos Zek step, and no longer the five wings (quests f468b87)', () => {
     const got = stepsHeld(['pofire_2']);
-    for (const k of [...range('sol_room_', 1, 5), 'pofire_1', 'zeks_7']) expect(got.has(k)).toBe(true);
+    for (const k of ['pofire_1', 'zeks_7']) expect(got.has(k)).toBe(true);
+    for (const k of range('sol_room_', 1, 5)) expect(got.has(k), k).toBe(false);
+  });
+  it('the Quintessence carries the earlier planar steps it sets (quests c576247), the wings and Doomfire included', () => {
+    const got = stepsHeld(['quintessence']);
+    for (const k of ['mavuin_3', 'cipher_1', 'zebuxoruk_2', 'pofire_2', 'earthb_key_1', 'bertox_key_1', ...range('sol_room_', 1, 5)]) expect(got.has(k), k).toBe(true);
   });
   it('holding nothing proves nothing', () => {
     expect(stepsHeld([]).size).toBe(0);

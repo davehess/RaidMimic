@@ -3769,11 +3769,11 @@ export const EVENTS: PopEvent[] = [
   "zoneName": "Plane of Time (B)",
   "name": "Phase 1: five elemental trials (Terlok of Earth, Neimon of Air, Rythor of the Undead, Anar of Water, Kazrok of Fire)",
   "kind": "optional",
-  "kindWhy": "Time content past the flag chain. It sets no flag. Each boss drops loot and counts toward the next phase. A boss already killed in the last 12 hours comes back as a 'Shadow of' version.",
+  "kindWhy": "Time content past the flag chain. It sets no flag. Each boss drops loot and counts toward the next phase. A boss already killed in the last 3 days 12 hours comes back as a 'Shadow of' version, until your guild's Phase 4 checkpoint skips Phases 1 to 3 for the rest of the cycle.",
   "size": "90 players",
   "groupLimit": "A Time B instance holds up to 90 players. A trial starts when the first player stands in its room.",
   "start": "Walk into one of the five trial rooms. The trial starts 44 seconds later.",
-  "timers": "Each boss has a 12 hour loot lockout in Phase 1. The Time B cycle lasts 6 days 18 hours.",
+  "timers": "Each boss has a 3 day 12 hour loot lockout in Phase 1, the same as Phases 2 and 3 (it was 12 hours before the 2026-11-23 patch). Once your guild reaches the Phase 4 checkpoint, Phases 1 to 3 are skipped for the rest of the cycle. The Time B cycle lasts 6 days 18 hours.",
   "mechanics": [
    "Earth, Terlok of Earth: waves of living rubble and rock-shaped assassins come in, then the boss.",
    "Water, Anar of Water: triloun gatherers and deepwater trilouns. The boss appears after 7 kills.",

@@ -111,7 +111,8 @@ export const NEXT_LINES: NextLine[] = [
   ] },
   { key: 'solro', label: 'Sol Ro to Fire', short: 'Sol Ro', stages: [
     { zone: 'solro', steps: ['pofire_miak'] },
-    { zone: 'solro', steps: ['flag_solro_minis'] },
+    // The five wings are no longer a stage: the Fire flag does not need them (quests f468b87 solrotower/A_Planar_Projection.lua).
+    // Only the chamber door still does, unless the raid is let in; the guide step flag_solro_minis says so.
     { zone: 'solro', steps: ['flag_solro'] },
     { zone: 'fire', steps: ['flag_fennin'] },
   ] },
