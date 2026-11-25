@@ -105,6 +105,21 @@ function aeRampageInfo(row) {
   return { radius_still: r2(still), radius_moving: r2(moving), chance: p.chance, targets: p.targets, damage_pct: p.damagePct };
 }
 
+// The mob-info field `reach` (the guild lead, 2026-11-25: "show where the mob is with the target info, how large it is and its
+// attack range"): { radius, melee, melee_moving }, or null when the size is unknown. `radius` is its bounding radius (how big
+// it is); `melee` is how far from its centre it can hit a player while it stands, `melee_moving` while it walks: rule 2 above,
+// the same combat range an Area Rampage uses, so every NPC has one whether or not it rampages. Rounded to 2 places.
+function reachInfo(row) {
+  if (!row) return null;
+  const radius = boundingRadius(row.race, row.size);
+  const rooted = row.runspeed != null && Number(row.runspeed) === 0;
+  const still = aeRampageRadius(row.race, row.size, { moving: false, rooted });
+  const moving = aeRampageRadius(row.race, row.size, { moving: true, rooted });
+  if (radius == null || still == null || moving == null) return null;
+  const r2 = (x) => Math.round(x * 100) / 100;
+  return { radius: r2(radius), melee: r2(still), melee_moving: r2(moving) };
+}
+
 // Ability 3 (regular Rampage) from a `special_abilities` string, or null when the mob has none.
 function rampageParams(specialAbilities) {
   const ab = parseSpecials(specialAbilities).get(RAMPAGE_CODE);
@@ -123,4 +138,4 @@ function rampageInfo(row) {
   return p ? { range: p.range, chance: p.chance, damage_pct: p.damagePct } : null;
 }
 
-module.exports = { boundingRadius, aeRampageRadius, aeRampageParams, aeRampageInfo, rampageParams, rampageInfo, PLAYER_RADIUS };
+module.exports = { boundingRadius, aeRampageRadius, aeRampageParams, aeRampageInfo, rampageParams, rampageInfo, reachInfo, PLAYER_RADIUS };
