@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.14': [
+    'Internal: mob info says how big each mob is and how far it can hit you, for Mimic\'s map and its blind radar.',
+  ],
   '4.1.13': [
     'Internal: the bot tells each raider\'s Mimic Map who in the raid has targeted which mob, so the Map can draw a dashed line from each raider to their target.',
   ],
