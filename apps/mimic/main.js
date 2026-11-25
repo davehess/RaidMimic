@@ -3212,7 +3212,9 @@ let _blindSource   = null;
 let _blindStartMs  = 0;
 // 'me' (2026-09-24): blind removes the game UI — HP, mana, target, casting
 // all go dark — and the Me overlay is exactly that UI, so it comes up too.
-const _BLIND_FORCED_KEYS = ['mobinfo', 'charm', 'pets', 'triggers', 'me'];
+// 'map' (the guild lead, 2026-11-25: "build the map into blind mode zoomed in enough to see where the closest walls are"):
+// the game screen is black, so the Map is how you see the room; map.html zooms in on its own while the agent says blind.
+const _BLIND_FORCED_KEYS = ['mobinfo', 'charm', 'pets', 'triggers', 'me', 'map'];
 function _blindForceOpen(key) { return _blindActive && _BLIND_FORCED_KEYS.includes(key); }
 const _STATE_POLL_MAX_BYTES = 16 * 1024 * 1024;
 let _statePollTooBigLogged = false;
@@ -3263,10 +3265,12 @@ function _pollBlindState() {
         if (!petsWindow)    createPetsOverlay();
         if (!triggerWindow) createTriggerOverlay();
         if (!meWindow)      createMeOverlay();
+        if (!mapWindow)     createMapOverlay();
         applyMobInfoVisibility();
         applyCharmVisibility();
         applyPetsVisibility();
         applyTriggerVisibility();
+        applyMapVisibility();
         applyMeVisibility();
         // One that lives on the Timers canvas shows there, not twice.
         _reapDisabledOverlays();
@@ -3280,6 +3284,7 @@ function _pollBlindState() {
         applyPetsVisibility();
         applyTriggerVisibility();
         applyMeVisibility();
+        applyMapVisibility();
       }
     });
   });
@@ -8744,9 +8749,9 @@ function applyMapVisibility() {
   const cfg = loadConfig();
   const unlocked  = setupMode || cfg.overlaysLocked === false;
   // Full mode covers the screen, so unlocking does not conjure it (see _overlayWanted): its own switch decides.
-  const shouldShow = _mapFull
+  const shouldShow = _blindForceOpen('map') || (_mapFull
     ? !!cfg.showMap && (unlocked || (!cfg.hideOverlays && _eqGateOk(cfg)))
-    : unlocked || (cfg.showMap && !cfg.hideOverlays && _eqGateOk(cfg));
+    : unlocked || (cfg.showMap && !cfg.hideOverlays && _eqGateOk(cfg)));
   if (shouldShow) mapWindow.showInactive(); else mapWindow.hide();
 }
 
@@ -10209,7 +10214,7 @@ function _overlayWanted(cfg, e) {
   if (_canvasHostedKeys(cfg).includes(e.key)) return false;
   // The Map in Full mode covers the screen, so setup / unlock do not conjure it for placement: its own switch decides.
   if (e.key === 'map' && _mapFull) {
-    return !!cfg.showMap && (setupMode || cfg.overlaysLocked === false || (!cfg.hideOverlays && _eqGateOk(cfg)));
+    return _blindForceOpen('map') || !!cfg.showMap && (setupMode || cfg.overlaysLocked === false || (!cfg.hideOverlays && _eqGateOk(cfg)));
   }
   if (_overlayForcedOn(cfg, e)) return true;
   if (!cfg[e.flag]) return false;

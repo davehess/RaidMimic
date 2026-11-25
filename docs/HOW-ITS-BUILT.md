@@ -6328,6 +6328,14 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   `_mapAttribute`, `_mapApplyMark`, `_handleMapState`, `_handleMapMark`). Zone data from the bot's `zone-spawns`, disk first
   (`zone-spawns-cache/`); timers in `map_timers.json`. Zeal pipe x/y are swapped against the server frame (`_mapServerXY`).
   Mimic's pipe handler now also carries `target_loc` / `target_type` (Zeal 1.4.8).
+- **Blind: the Map opens zoomed on the nearest walls** (2026-11-25, Mimic beta, agent 4.0.110): `map` is in `_BLIND_FORCED_KEYS`
+  (Window and Full); `/api/map-state` carries `blind`; `map.html` `noteBlind` / `blindZoom` / `blindNearestWall`: Follow me, your
+  floor ±25 bright and the floors above and below faint, radius 3x the nearest wall on your floor (60 to 250 units), the Engaged
+  list slid out, all put back after; the wheel stops the auto zoom. Tests: `test/map-blind.test.js`.
+- **Targeter lines** (2026-11-25, Mimic beta, agent 4.0.110, bot 4.1.13): the bot's map-sync targets carry `by` (who is on each
+  NPC, scoped as the count), the agent pairs them (`_mapAims` → `/api/map-state` `aims`, kind engaged / friendly / idle), and
+  `map.html` draws a dashed line from each raider's drawn spot to the mob (red hurt, faint green cons better than threatening,
+  yellow otherwise) with a dot at the mob, under the ⚙ target line switch. NPC targets only. Tests: `test/map-target-lines.test.js`.
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
