@@ -3274,6 +3274,9 @@ function _pollBlindState() {
         applyMeVisibility();
         // One that lives on the Timers canvas shows there, not twice.
         _reapDisabledOverlays();
+        // The HUD stays above the Map: a full-screen radar is opaque, and it hid the BLINDED ring (the guild lead,
+        // 2026-11-25: "Should still see the blinded hud view").
+        try { if (_live(meWindow) && meWindow.isVisible()) meWindow.moveTop(); } catch { /* mid-close */ }
       } else if (!nowOn && _blindActive) {
         _blindActive = false;
         appendAgentLog(`[blind] leaving blind mode (was ${_blindSource})\n`);

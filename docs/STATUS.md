@@ -209,6 +209,14 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-25 — Blind round two (beta: agent 4.0.113).** From the guild lead's test the same day. ⚙ → Blind view gains
+  **Radar + mini map** (the radar fills the window, the Map sits bottom-right; now the default). The HUD ring and the radar count
+  the blind down ("BLINDED · 21s", "~" when the spell's duration is unknown and the agent guessed 30 s). The HUD is raised above
+  the Map when a blind starts (a full-screen radar hid it). ⚙ → Test length (10 s / 30 s / 60 s / 2 min) and **Black out while
+  testing** (the Map's background goes solid black during a test, the way a real blind blacks out the game). Not fixed: the
+  radar raises every map line into a wall, and Brewall's maps also draw terrain edges (in Plane of Tranquility a 400-unit grey
+  hill line passes the arrival huts), so those show as walls that are not there. The fix is surfaces from the zone's collision
+  mesh (Decision Desk `radar-surfaces`).
 - **🧪 2026-11-25 — Radar sense while blind (beta: agent 4.0.111; bot 4.1.14 on main; Desk `radar-sense` A).** Blinded (or
   ⚙ → Test blind, 30 s, no spell needed), the Map window shows the Map and a radar side by side by default (⚙ → Blind view: Map +
   radar / Radar / Map). The radar is the room from behind you, the way you face: your map lines raised into walls, a grid at your

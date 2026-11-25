@@ -84,7 +84,7 @@ describe('main: an overlay on the canvas has no window of its own', () => {
     const at = wanted.indexOf('if (_canvasHostedKeys(cfg).includes(e.key)) return false;');
     expect(at).toBeGreaterThan(0);
     expect(at).toBeLessThan(wanted.indexOf('if (_overlayForcedOn(cfg, e)) return true;'));
-    expect(m).toMatch(/applyMeVisibility\(\);\s*_reapDisabledOverlays\(\);\s*\} else if \(!nowOn && _blindActive\)/);
+    expect(m).toMatch(/applyMeVisibility\(\);\s*_reapDisabledOverlays\(\);\s*(?:try \{ if \(_live\(meWindow\) && meWindow\.isVisible\(\)\) meWindow\.moveTop\(\); \} catch \{[^}]*\}\s*)?\} else if \(!nowOn && _blindActive\)/);
     expect(m).toMatch(/applyMeVisibility\(\); applyOverlayInteractivity\(\);\s*try \{ _reapDisabledOverlays\(\); \}/);
   });
   it('the catalog is the dock\'s plus the HUD ring', () => {

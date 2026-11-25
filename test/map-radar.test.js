@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import { readSource, sliceBlock, stripJs, ROOT, AGENT_INDEX } from './_source-slice.js';
+import { readSource, sliceBlock, stripJs, stripCss, ROOT, AGENT_INDEX } from './_source-slice.js';
 
 const MAP_RAW = readSource(path.join(ROOT, 'apps', 'mimic', 'map.html'));
 const MAP = stripJs(MAP_RAW);
@@ -136,15 +136,36 @@ describe('bot: mob info carries reach', () => {
 });
 
 describe('map.html wiring', () => {
-  it('⚙ → Blind view: Map + radar (the default), Radar, Map; remembered', () => {
-    expect(MAP).toMatch(/<select id="cfgBlindView"><option value="split">Map \+ radar<\/option><option value="radar">Radar<\/option><option value="map">Map<\/option><\/select>/);
-    expect(MAP).toMatch(/S\.blindView = \(function \(\) \{ var v = lsGet\('wp-map-blind-view'\); return v === 'map' \|\| v === 'radar' \? v : 'split'; \}\)\(\);/);
+  it('⚙ → Blind view: Radar + mini map (the default), Map + radar, Radar, Map; remembered', () => {
+    expect(MAP).toMatch(/<select id="cfgBlindView"><option value="inset">Radar \+ mini map<\/option><option value="split">Map \+ radar<\/option><option value="radar">Radar<\/option><option value="map">Map<\/option><\/select>/);
+    const pick = new Function(sliceBlock(MAP, "  var BLIND_VIEWS = ['inset', 'split', 'radar', 'map'];", "return BLIND_VIEWS.indexOf(v) >= 0 ? v : 'inset'; }") + '\nreturn blindViewOf;')();
+    expect(['inset', 'split', 'radar', 'map'].map(pick)).toEqual(['inset', 'split', 'radar', 'map']);
+    expect([null, '', 'x'].map(pick)).toEqual(['inset', 'inset', 'inset']);
+    expect(MAP).toMatch(/S\.blindView = blindViewOf\(lsGet\('wp-map-blind-view'\)\);/);
   });
-  it('the layouts: split halves the Map, radar covers it, only while blind', () => {
-    expect(MAP).toMatch(/#mapPane\.blind-split #stage\{right:50%\}/);
-    expect(MAP).toMatch(/#mapPane\.blind-radar #radar\{width:100%/);
+  it('the layouts: split halves the Map, radar covers it, inset puts the Map in the corner over the radar; only while blind', () => {
+    const css = stripCss(MAP);
+    expect(css).toMatch(/#mapPane\.blind-split #stage\{right:50%\}/);
+    expect(css).toMatch(/#mapPane\.blind-radar #radar\{width:100%/);
+    expect(css).toMatch(/#mapPane\.blind-inset #radar\{width:100%;border-left:0\}/);
+    expect(css).toMatch(/#mapPane\.blind-inset #stage\{inset:auto 12px 12px auto;width:32%;height:38%;[^}]*z-index:2;/);
     const sync = sliceBlock(MAP, 'function syncBlindView() {', 'resize();');
     expect(sync).toMatch(/var v = S\.blind \? S\.blindView : 'map';/);
+    expect(sync).toMatch(/paneEl\.classList\.toggle\('blind-inset', v === 'inset'\);/);
+  });
+  it('test options: the length is sent, black out only while a test runs', () => {
+    expect(MAP).toMatch(/body: JSON\.stringify\(\{ on: on, secs: S\.blindSecs \}\)/);
+    expect(MAP).toMatch(/S\.blindSecs = \(function \(\) \{ var n = Number\(lsGet\('wp-map-blind-secs'\)\); return \[10, 30, 60, 120\]\.indexOf\(n\) >= 0 \? n : 30; \}\)\(\);/);
+    const sync = sliceBlock(MAP, 'function syncBlindView() {', 'var v = S.blind');
+    expect(sync).toMatch(/paneEl\.classList\.toggle\('blind-black', !!\(S\.blindBlack && S\.blindTest != null\)\);/);
+    expect(stripCss(MAP)).toMatch(/#mapPane\.blind-black\{background:rgb\(0 0 0\)\}/);
+  });
+  it('the radar says how long the blind has left, "~" when the agent guessed', () => {
+    const f = new Function('S', sliceBlock(MAP, '  function blindLeftTxt() {', "S.blindLeft + ' s'; }") + '\nreturn blindLeftTxt;');
+    expect(f({ blindLeft: null })()).toBe('');
+    expect(f({ blindLeft: 21, blindEst: false })()).toBe(' · 21 s');
+    expect(f({ blindLeft: 21, blindEst: true })()).toBe(' · ~21 s');
+    expect(MAP).toMatch(/S\.blindLeft = p\.blind && p\.blind_left != null \? p\.blind_left : null; S\.blindEst = !!p\.blind_est;/);
   });
   it('the test button posts to the agent and the radar runs after every Map paint', () => {
     expect(MAP).toMatch(/fetch\('http:\/\/127\.0\.0\.1:' \+ PORT \+ '\/api\/blind-test', \{ method: 'POST'/);
@@ -155,5 +176,35 @@ describe('map.html wiring', () => {
     const block = sliceBlock(MAP, 'var rch = targetReach(P.target);', 'ctx.restore();');
     expect(block).toMatch(/ctx\.arc\(tq\[0\], tq\[1\], rch\.radius \* v\.scale/);
     expect(block).toMatch(/ctx\.setLineDash\(\[4, 3\]\); ctx\.arc\(tq\[0\], tq\[1\], rch\.melee \* v\.scale/);
+  });
+});
+
+// Round two (the guild lead, 2026-11-25, after testing it): "Also a timer on the blind" and "Should still see the blinded hud
+// view". The agent counts the blind down for the HUD and the Map; Mimic keeps the HUD above the Map.
+describe('the blind countdown and the HUD on top', () => {
+  const blindLeft = new Function(sliceBlock(AGENT_RAW, 'function _blindLeft(b, now) {', '\n}\n') + '\nreturn _blindLeft;')();
+  it('_blindLeft: whole seconds to the expiry, est for a guessed end, null when not blind', () => {
+    expect(blindLeft(null, 0)).toBeNull();
+    expect(blindLeft({ active: false, expiresAt: 5000 }, 0)).toBeNull();
+    expect(blindLeft({ active: true, expiresAt: 21400 }, 0)).toEqual({ left: 21, est: false });
+    expect(blindLeft({ active: true, expiresAt: 1000, est: true }, 5000)).toEqual({ left: 0, est: true });
+  });
+  it('a blind with no known duration is marked est where it starts; both feeds carry the countdown', () => {
+    expect(AGENT).toMatch(/expiresAt: atMs \+ b\.dur,\s*est: !b\.dur_sec,/);
+    expect(AGENT).toMatch(/expiresAt: atMs \+ \(secs \? secs \* 1000 : _BLIND_DUR_GENERIC_MS\), est: !secs,/);
+    expect(AGENT).toMatch(/blind_left: blind && blind\.active && blind\.expiresAt \? Math\.max\(0, Math\.round\(\(blind\.expiresAt - now\) \/ 1000\)\) : null,\s*blind_est: !!\(blind && blind\.active && blind\.est\),/);
+    expect(AGENT).toMatch(/const bl = out\.blind \? _blindLeft\(b, now\) : null;\s*if \(bl\) \{ out\.blind_left = bl\.left; out\.blind_est = bl\.est; \}/);
+  });
+  it('the HUD ring and box say it', () => {
+    const ME = stripJs(readSource(path.join(ROOT, 'apps', 'mimic', 'me.html')));
+    const f = new Function(sliceBlock(ME, '  function blindLeftTxt(s){', '\n') + '\nreturn blindLeftTxt;')();
+    expect(f({ blind_left: null })).toBe('');
+    expect(f({ blind_left: 9, blind_est: true })).toBe(' · ~9s');
+    expect(ME).toMatch(/'👁 BLINDED' \+ blindLeftTxt\(s\), 11,/);
+    expect(ME).toMatch(/'<div class="blind">👁 BLINDED' \+ blindLeftTxt\(s\) \+ ' — this panel still works<\/div>'/);
+  });
+  it('Mimic raises the HUD over the Map when blind starts', () => {
+    const MAIN = stripJs(readSource(path.join(ROOT, 'apps', 'mimic', 'main.js')));
+    expect(MAIN).toMatch(/_reapDisabledOverlays\(\);\s*try \{ if \(_live\(meWindow\) && meWindow\.isVisible\(\)\) meWindow\.moveTop\(\); \}/);
   });
 });

@@ -46,6 +46,14 @@
   #radar[hidden]{display:none}
   #mapPane.blind-split #stage{right:50%}
   #mapPane.blind-radar #radar{width:100%;border-left:0}
+  /* Radar + mini map (the guild lead, 2026-11-25: "i like the idea of the fullsize radar mode and minimap in the corner"):
+     the radar fills the pane and the Map sits in the bottom-right corner, above it. */
+  #mapPane.blind-inset #radar{width:100%;border-left:0}
+  #mapPane.blind-inset #stage{inset:auto 12px 12px auto;width:32%;height:38%;min-width:160px;min-height:140px;z-index:2;
+    border:1px solid rgba(255,255,255,0.3);border-radius:6px;overflow:hidden;background:rgb(var(--map-bg, 19 26 38))}
+  /* ⚙ → Blind → Black out: a test blind darkens the pane the way a real blind darkens the game (the guild lead, 2026-11-25:
+     "seems like it's going translucent for me"). */
+  #mapPane.blind-black{background:rgb(0 0 0)}
   #hits{position:absolute;inset:0;pointer-events:none}
   body.dragging #hits{display:none}
   /* A spawn dot's click target: a real button, so the preload's hover handshake arms the click-through window. */
@@ -377,8 +385,10 @@
         <label class="row" title="Walls this far above or below you stay bright; the rest fade. Height is in game units: you are about 6 tall, one floor is roughly 30 to 60, so ±100 is about your floor and the ones next to it."><span class="bl" id="levelsVal">Levels</span><input id="levels" type="range" min="0" max="7" step="1"></label>
         <label class="row" title="Spawn points this far above or below you are shown; the rest are hidden. Same height units as Levels: ±25 is about your own floor, ±100 a floor or two either way."><span class="bl" id="spawnVal">Spawn height</span><input id="spawnLevels" type="range" min="0" max="7" step="1"></label>
         <div class="grp">Blind</div>
-        <label class="row" title="What the Map shows while you are blind (or testing it): the zoomed Map, the radar (the room drawn in lines from behind you, people and mobs seen through walls), or both side by side."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="split">Map + radar</option><option value="radar">Radar</option><option value="map">Map</option></select></label>
-        <div class="row"><button type="button" id="blindTestBtn" title="Blind your character for 30 seconds without a spell: everything a real blind opens opens, so you can see it. Click again to end it.">Test blind (30 s)</button></div>
+        <label class="row" title="What the Map shows while you are blind (or testing it): the zoomed Map, the radar (the room drawn in lines from behind you, people and mobs seen through walls), or both side by side."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="inset">Radar + mini map</option><option value="split">Map + radar</option><option value="radar">Radar</option><option value="map">Map</option></select></label>
+        <label class="row" title="How long Test blind lasts."><span class="bl">Test length</span><select id="cfgBlindSecs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">2 min</option></select></label>
+        <label class="row" title="While a test blind runs, the Map's background goes solid black, the way a real blind blacks out the game, so you see only what Mimic shows. A real blind is not changed by this."><input type="checkbox" id="cfgBlindBlack"><span class="bl">Black out while testing</span></label>
+        <div class="row"><button type="button" id="blindTestBtn" title="Blind your character without a spell, for the test length above: everything a real blind opens opens, so you can see it. Click again to end it.">Test blind (30 s)</button></div>
         <div class="grp">Show</div>
         <label class="row" title="Which way each raider faces. Arrow: a small arrowhead in their class colour, the point is the way they look. Slice: a pizza slice of a circle opening the way they look. Off: plain dots. Yours is the same, a little bigger, with a white rim."><span class="bl">Facing</span><select id="cfgFacing"><option value="arrow">Arrow</option><option value="slice">Slice</option><option value="off">Off</option></select></label>
         <label class="row" title="North: north is at the top. Your heading: the map turns so the way you face is the top, with you in the middle. Text never turns. The same switch as the toolbar's North up / Heading up."><span class="bl">Map up</span><select id="cfgOrient"><option value="north">North</option><option value="heading">Your heading</option></select></label>
@@ -2309,14 +2319,20 @@
   var RADAR_WALL_H = 20, RADAR_R = 160, RADAR_FLOOR_Z = 60, RADAR_FONT = '600 12px system-ui, sans-serif';
   var radarEl = document.getElementById('radar'), rctx = radarEl ? radarEl.getContext('2d') : null;
   var paneEl = document.getElementById('mapPane');
-  S.blindView = (function () { var v = lsGet('wp-map-blind-view'); return v === 'map' || v === 'radar' ? v : 'split'; })();
+  var BLIND_VIEWS = ['inset', 'split', 'radar', 'map'];
+  function blindViewOf(v) { return BLIND_VIEWS.indexOf(v) >= 0 ? v : 'inset'; }
+  S.blindView = blindViewOf(lsGet('wp-map-blind-view'));
+  S.blindSecs = (function () { var n = Number(lsGet('wp-map-blind-secs')); return [10, 30, 60, 120].indexOf(n) >= 0 ? n : 30; })();
+  S.blindBlack = lsGet('wp-map-blind-black') === '1';
   function syncBlindView() {
     if (PART_TIMERS || !radarEl) return;
+    paneEl.classList.toggle('blind-black', !!(S.blindBlack && S.blindTest != null));
     var v = S.blind ? S.blindView : 'map';
     if (S.radarView === v) return;
     S.radarView = v;
     paneEl.classList.toggle('blind-split', v === 'split');
     paneEl.classList.toggle('blind-radar', v === 'radar');
+    paneEl.classList.toggle('blind-inset', v === 'inset');
     radarEl.hidden = v === 'map';
     resize();
   }
@@ -2432,7 +2448,7 @@
     }
     // The corner: what this is, and the test blind's seconds left.
     g.globalAlpha = 0.85; g.font = RADAR_FONT; g.fillStyle = 'rgba(255,255,255,0.85)';
-    g.fillText('Radar' + (S.blindTest != null ? ' · test blind · ' + S.blindTest + ' s' : ''), 12, h - 32);   // under the toolbar's reach
+    g.fillText('Radar · ' + (S.blindTest != null ? 'test blind' : 'blind') + blindLeftTxt(), 12, h - 32);   // under the toolbar's reach
     g.globalAlpha = 1;
   }
   // ⚙ → Blind: the view, and the test blind (agent POST /api/blind-test, which blinds the active character for 30 s without a
@@ -2441,17 +2457,28 @@
   if (blindViewSel) {
     blindViewSel.value = S.blindView;
     blindViewSel.addEventListener('change', function () {
-      S.blindView = blindViewSel.value === 'map' || blindViewSel.value === 'radar' ? blindViewSel.value : 'split';
+      S.blindView = blindViewOf(blindViewSel.value);
       lsSet('wp-map-blind-view', S.blindView); syncBlindView(); renderMap();
     });
   }
+  var blindSecsSel = document.getElementById('cfgBlindSecs'), blindBlackCb = document.getElementById('cfgBlindBlack');
+  if (blindSecsSel) {
+    blindSecsSel.value = String(S.blindSecs);
+    blindSecsSel.addEventListener('change', function () { S.blindSecs = Number(blindSecsSel.value) || 30; lsSet('wp-map-blind-secs', S.blindSecs); syncBlindTestBtn(); });
+  }
+  if (blindBlackCb) {
+    blindBlackCb.checked = S.blindBlack;
+    blindBlackCb.addEventListener('change', function () { S.blindBlack = blindBlackCb.checked; lsSet('wp-map-blind-black', S.blindBlack ? '1' : '0'); syncBlindView(); });
+  }
+  // " · 21 s" left on the blind, "~" when the agent only guessed its end (an unknown blind spell: 30 s).
+  function blindLeftTxt() { return S.blindLeft == null ? '' : ' · ' + (S.blindEst ? '~' : '') + S.blindLeft + ' s'; }
   function syncBlindTestBtn() {
     if (!blindTestBtn) return;
-    blindTestBtn.textContent = S.blindTest != null ? 'End test blind (' + S.blindTest + ' s)' : 'Test blind (30 s)';
+    blindTestBtn.textContent = S.blindTest != null ? 'End test blind (' + S.blindTest + ' s)' : 'Test blind (' + (S.blindSecs >= 120 ? '2 min' : S.blindSecs + ' s') + ')';
   }
   if (blindTestBtn) blindTestBtn.addEventListener('click', function () {
     var on = S.blindTest == null;
-    fetch('http://127.0.0.1:' + PORT + '/api/blind-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on, secs: 30 }) })
+    fetch('http://127.0.0.1:' + PORT + '/api/blind-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on, secs: S.blindSecs }) })
       .then(function (r) { return r.json(); })
       .then(function (j) { if (j && !j.ok && j.error) blindTestBtn.textContent = j.error; else poll(); })
       .catch(function () { blindTestBtn.textContent = 'The agent did not answer'; });
@@ -2511,6 +2538,7 @@
     noteCharPrefs();  // FB-129: a new character gets their own zoom / pan mode / settings back
     noteBlind(!!p.blind);   // blinded: follow you, zoom to the nearest walls, show the Engaged list (back as it was after)
     S.blindTest = p.blind && p.blind_test != null ? p.blind_test : null;   // a test blind's seconds left (⚙ → Test blind)
+    S.blindLeft = p.blind && p.blind_left != null ? p.blind_left : null; S.blindEst = !!p.blind_est;   // the radar's countdown
     syncBlindView(); syncBlindTestBtn();   // ⚙ → Blind view: the radar beside or over the Map while blind
     noteHunt(p);     // Targeted named mobs: load this character's list, record a named target, refresh the highlighted ids
     S.timerBy = {}; S.candBy = {}; S.seenBy = {};
