@@ -469,4 +469,5 @@ module.exports = {
   // here, and _buildMobInfo is evaluated in tests with `mobSpecials` as its only catalog helper.
   aeRampageInfo: (row) => require('./aeRampage').aeRampageInfo(row),
   rampageInfo: (row) => require('./aeRampage').rampageInfo(row),
+  reachInfo: (row) => require('./aeRampage').reachInfo(row),
 };
