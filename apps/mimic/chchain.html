@@ -310,6 +310,11 @@
     border:1px solid var(--border, var(--wp-border));border-radius:5px;padding:6px 8px;
     margin-bottom:5px;font-size:10px;color:var(--wp-text)}
   #cfg-panel.show{display:block}
+  #cfg-panel input[type=number]{background:rgba(255,255,255,0.06);color:inherit;border:1px solid rgba(255,255,255,0.15);border-radius:3px;font:inherit;font-size:10px;padding:1px 3px}
+  /* ♩ Metronome line (see metroUpdate): waiting, counting down, GO. */
+  .metro{margin:2px 0 4px;padding:2px 6px;border-radius:4px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--wp-dim);font-size:11px}
+  .metro.count{color:var(--wp-gold);background:rgba(210,153,34,0.12);font-size:14px}
+  .metro.go{color:var(--wp-bg);background:var(--wp-green);font-size:16px;text-align:center}
   #cfg-panel .row{display:flex;align-items:center;gap:6px}
   #cfg-panel label{color:#8b949e;font-size:10px;white-space:nowrap}
   #cfg-panel label input[type=checkbox]{vertical-align:middle;margin-right:2px;cursor:pointer}
@@ -528,6 +533,14 @@
         <input id="leadSlider" type="range" min="0.3" max="3.0" step="0.1" value="1.5" />
         <span class="val" id="leadVal">1.5s</span>
       </div>
+      <div class="row" title="Metronome: when the number you follow calls, it clicks each second of your wait and says GO at the end.">
+        <label for="metroOn"><input id="metroOn" type="checkbox" /> Metronome</label>
+        <label for="metroAfter">after #</label>
+        <input id="metroAfter" type="number" min="1" max="99" step="1" value="1" style="width:3.2em" />
+        <label for="metroWait">wait</label>
+        <input id="metroWait" type="number" min="0" max="15" step="0.5" value="3" style="width:3.6em" />
+        <span class="val">s</span>
+      </div>
       <div class="hint"><b>Auto</b> (default) tracks this chain's own measured beat — the gap between callouts — and sets the lead to ~25% of it, so a tight 2-4s chain doesn't fire <b>CH GAP SOON</b> on nearly every single call. Drag the slider to pin a manual value instead (switches off Auto). Persists per-machine.</div>
     </div>
     <!-- Learn a CH call (setup mode only). Hint: a chat line looked like a CH call but matched nothing. Panel:
@@ -582,6 +595,7 @@
       <div id="dicallNames" class="dicall-names"></div>
       <div id="dicallNote" class="dicall-note" style="display:none"></div>
     </div>
+    <div id="metro" class="metro" style="display:none"></div>
     <div id="rows" class="rows"></div>
     <!-- ▭ Mini, variant B "Timeline lanes" (the guild vote, 2026-09-17). Shown
          only under body.wp-mini while a chain exists; filled by renderMini().
@@ -776,6 +790,74 @@
   // lead is ~20-25%), applied uniformly so it scales with however tight
   // THIS chain actually runs. Dragging the slider is an explicit manual
   // override that turns Auto off; both states persist in localStorage.
+  // ♩ Metronome (the guild lead, 2026-11-25: "implement a metronome for the CH overlay so that I can set what the delay is and a
+  // metronome watching for the previous number"). ⚙ → Metronome, after #N, wait S seconds: when slot N's call lands (its
+  // lastAtMs changes), it clicks once per second of the wait and gives a high tone and GO at the end; GO shows for 2 s. A
+  // call older than the wait + 1 s when first seen (an old call at load) starts nothing. Saved on this machine.
+  // metroPhase(startAt, waitMs, now) -> { phase: 'wait' | 'count' | 'go', remMs, sec } (sec = whole seconds left, for clicks).
+  var METRO_GO_SHOW_MS = 2000;
+  function metroPhase(startAt, waitMs, now) {
+    if (!startAt) return { phase: 'wait', remMs: null, sec: null };
+    var rem = startAt + waitMs - now;
+    if (rem > 0) return { phase: 'count', remMs: rem, sec: Math.ceil(rem / 1000) };
+    if (-rem < METRO_GO_SHOW_MS) return { phase: 'go', remMs: 0, sec: 0 };
+    return { phase: 'wait', remMs: null, sec: null };
+  }
+  var M = { on: false, after: 1, waitMs: 3000, startAt: 0, seenAt: 0, lastSec: null, went: false };
+  try {
+    M.on = localStorage.getItem('chchain_metro_on') === '1';
+    var _ma = parseInt(localStorage.getItem('chchain_metro_after'), 10); if (_ma >= 1 && _ma <= 99) M.after = _ma;
+    var _mw = parseFloat(localStorage.getItem('chchain_metro_wait')); if (_mw >= 0 && _mw <= 15) M.waitMs = Math.round(_mw * 1000);
+  } catch (e) {}
+  var _metroAudio = null;
+  function metroClick(hz, ms) {
+    try {
+      _metroAudio = _metroAudio || new (window.AudioContext || window.webkitAudioContext)();
+      var o = _metroAudio.createOscillator(), g = _metroAudio.createGain(), t = _metroAudio.currentTime;
+      o.frequency.value = hz; o.connect(g); g.connect(_metroAudio.destination);
+      g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + ms / 1000);
+      o.start(t); o.stop(t + ms / 1000);
+    } catch (e) {}
+  }
+  function metroUpdate(c, now) {
+    var el = document.getElementById('metro');
+    if (!el) return;
+    if (!M.on) { el.style.display = 'none'; return; }
+    var s = c && c.slots ? c.slots[M.after] : null, at = s && s.lastAtMs ? s.lastAtMs : 0;
+    if (at && at !== M.seenAt) {
+      M.seenAt = at;
+      if (now - at < M.waitMs + 1000) { M.startAt = at; M.lastSec = null; M.went = false; }
+    }
+    var p = metroPhase(M.startAt, M.waitMs, now);
+    el.style.display = 'block';
+    if (p.phase === 'count') {
+      if (p.sec !== M.lastSec) { M.lastSec = p.sec; metroClick(880, 60); }
+      el.className = 'metro count'; el.textContent = '♩ #' + M.after + ' called · ' + (p.remMs / 1000).toFixed(1) + 's';
+    } else if (p.phase === 'go') {
+      if (!M.went) { M.went = true; metroClick(1760, 220); }
+      el.className = 'metro go'; el.textContent = 'GO';
+    } else {
+      el.className = 'metro'; el.textContent = '♩ waiting for #' + M.after + ' · ' + (M.waitMs / 1000).toFixed(1) + 's after';
+    }
+  }
+  (function () {
+    var on = document.getElementById('metroOn'), af = document.getElementById('metroAfter'), wt = document.getElementById('metroWait');
+    if (!on || !af || !wt) return;
+    on.checked = M.on; af.value = String(M.after); wt.value = String(M.waitMs / 1000);
+    [on, af, wt].forEach(function (el) {
+      el.addEventListener('mouseenter', function(){ try { window.mimic.overlayHoverInteractive(true); } catch (e) {} });
+      el.addEventListener('mouseleave', function(){ try { window.mimic.overlayHoverInteractive(false); } catch (e) {} });
+    });
+    on.addEventListener('change', function () { M.on = !!on.checked; try { localStorage.setItem('chchain_metro_on', M.on ? '1' : '0'); } catch (e) {} });
+    af.addEventListener('change', function () {
+      var v = parseInt(af.value, 10); if (!(v >= 1 && v <= 99)) { af.value = String(M.after); return; }
+      M.after = v; M.startAt = 0; M.seenAt = 0; try { localStorage.setItem('chchain_metro_after', String(v)); } catch (e) {}
+    });
+    wt.addEventListener('change', function () {
+      var v = parseFloat(wt.value); if (!(v >= 0 && v <= 15)) { wt.value = String(M.waitMs / 1000); return; }
+      M.waitMs = Math.round(v * 1000); try { localStorage.setItem('chchain_metro_wait', String(v)); } catch (e) {}
+    });
+  })();
   var LEAD_AUTO_RATIO = 0.25;
   var _leadAuto = true;
   var _leadSec  = 1.5;   // effective lead; recomputed from beat_ms each render while auto
@@ -1568,6 +1650,7 @@
   // atMs, which changes on every new personal-macro heal the agent reports).
   var _lastSpotHealKey = null;
   function render(){
+    metroUpdate(_last, Date.now());   // ♩ the metronome runs on the render clock (150 ms) so its clicks land on the second
     renderOffHeal();
     renderDi();
     renderDiCallout();
