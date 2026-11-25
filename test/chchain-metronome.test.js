@@ -25,7 +25,7 @@ function boot({ on = true, after = 2, wait = 3 } = {}) {
   const store = { chchain_metro_on: on ? '1' : '0', chchain_metro_after: String(after), chchain_metro_wait: String(wait) };
   const f = new Function('document', 'localStorage', 'window',
     BLOCK.replace('\n  function metroUpdate(c, now) {', '') + '\n' + UPDATE.replace(/function metroClick[\s\S]*?\n  \}\n/, '')
-    + '\nreturn { metroPhase, metroUpdate, M };');
+    + '\nreturn { metroPhase, metroUpdate, metroSlot, M };');
   const api = f({ getElementById: () => el }, { getItem: (k) => store[k] ?? null }, {});
   return { api, el, clicks };
 }
@@ -40,6 +40,15 @@ describe('metroPhase', () => {
     expect(api.metroPhase(1000, 3000, 4000).phase).toBe('go');
     expect(api.metroPhase(1000, 3000, 5999).phase).toBe('go');
     expect(api.metroPhase(1000, 3000, 6000).phase).toBe('wait');
+  });
+});
+
+describe('metroSlot: what you type in "after #"', () => {
+  const { api } = boot();
+  it('4, 04, and the chain\'s own 444 or 44 all mean slot 4; 12 is 12; nonsense is null', () => {
+    for (const v of ['4', '04', '444', '44']) expect(api.metroSlot(v)).toBe(4);
+    expect(api.metroSlot('12')).toBe(12);
+    for (const v of ['0', '000', '31', '1234', 'x', '']) expect(api.metroSlot(v)).toBeNull();
   });
 });
 
@@ -93,7 +102,7 @@ describe('the page', () => {
   const js = stripJs(SRC);
   it('⚙ has the switch, after # and wait; the line sits above the rows; render drives it', () => {
     expect(SRC).toMatch(/<input id="metroOn" type="checkbox" \/> Metronome/);
-    expect(SRC).toMatch(/<input id="metroAfter" type="number" min="1" max="99"/);
+    expect(SRC).toMatch(/<input id="metroAfter" type="number" min="1" max="999"/);
     expect(SRC).toMatch(/<input id="metroWait" type="number" min="0" max="15" step="0\.5"/);
     expect(SRC).toMatch(/<div id="metro" class="metro" style="display:none"><\/div>\s*<div id="rows" class="rows"><\/div>/);
     expect(js).toMatch(/function render\(\)\{\s*metroUpdate\(_last, Date\.now\(\)\);/);
