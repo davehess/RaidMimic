@@ -199,6 +199,13 @@ next touch one rather than assuming a missing row means a missing doc.
 - **Security hardening (2026-11-10) — phase 2: guild-scoped read policies** (migration `20261110120000_guild_scoped_reads.sql`, APPLIED 2026-11-10 after a dry run of the whole migration plus `supabase/tests/two_guild_rls.sql` in one rolled-back transaction passed): `public.my_guild_ids()` (the caller's guilds, once per query) + `public.is_member_of(guild)` + `public.home_guild_id()`; the 46 member-only read policies on guild_id tables check the row's own guild, and the 9 public read policies on guild_id tables serve home-guild rows only. `supabase/tests/two_guild_rls.sql` (run by hand, rolls back) + `test/guild-scoped-reads.test.js` guard it. After applying: a real Wolf Pack login still reads 45,410 encounters and 621 characters; a 7-day /who read of 17,104 rows takes 66 ms with the guild set computed once (`loops=1`).
 - **Security hardening (2026-11-10) — standard browser security headers on every route** (`web/next.config.js` `headers()`, web 2.1.124): nosniff, strict-origin-when-cross-origin referrer, HSTS (1 year, no preload), a Permissions-Policy denying camera/microphone/geolocation/payment, same-origin framing only, and a report-only CSP to be tightened from what it flags. `test/security-headers.test.js` guards the set.
 
+- **🧪 2026-11-25 — Blind Map and targeter lines (beta: agent 4.0.110; bot 4.1.13 on main).** Blinded, the Map opens (Window or
+  Full), follows you and zooms so the nearest wall on your floor is in view, floors above and below faint, the Engaged list out;
+  it all goes back after. Every raider running Mimic gets a dashed line to their NPC target: red hurt, faint green friendly by your
+  /con, yellow otherwise. The HUD ring already carries the current target at its top. Open (Decision Desk): radar sense (a 3D
+  wireframe view while blind, from the EQEmu collision mesh and your position and facing), lines to player targets (healers on
+  tanks; needs the agent to send a player target's zone), and marking floors above vs below differently.
+
 - **🧪 2026-11-23 — Quarm's Monday patch (beta: agent 4.0.109, web 2.2.34; DECISIONS §655).** Raid willing at 50% across zones
   200-212 and 214-223 (agent `RAID_WILLING_PCT`, `_ZONE_DOOR_IDS`; `web/lib/popRaidEntry.ts`); the gate engine
   (`web/lib/popFlags.ts`, regenerated `utils/popEngine.js`): Sol Ro's Fire flag without the minis, Grimror's key into CoD,

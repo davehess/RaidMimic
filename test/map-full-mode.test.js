@@ -396,8 +396,9 @@ describe('main.js: Full mode is a screen-sized, click-through cover like the Can
     expect(js).toMatch(/if \(win === canvasWindow \|\| \(win === mapWindow && _mapFull\)\) \{ win\.setIgnoreMouseEvents\(true, \{ forward: true \}\); return(?: true)?; \}/);   // _restoreClickThrough (2026-11-03)
   });
   it('setup / unlock do not conjure a Full-mode Map that is switched off, and the EQ gate still applies', () => {
-    expect(js).toMatch(/if \(e\.key === 'map' && _mapFull\) \{\s*return !!cfg\.showMap && \(setupMode \|\| cfg\.overlaysLocked === false \|\| \(!cfg\.hideOverlays && _eqGateOk\(cfg\)\)\);/);
-    expect(js).toMatch(/const shouldShow = _mapFull\s*\? !!cfg\.showMap && \(unlocked \|\| \(!cfg\.hideOverlays && _eqGateOk\(cfg\)\)\)/);
+    // Blind is the one exception (test/map-blind.test.js): the game screen is black, so the Map shows whatever its switch says.
+    expect(js).toMatch(/if \(e\.key === 'map' && _mapFull\) \{\s*return _blindForceOpen\('map'\) \|\| !!cfg\.showMap && \(setupMode \|\| cfg\.overlaysLocked === false \|\| \(!cfg\.hideOverlays && _eqGateOk\(cfg\)\)\);/);
+    expect(js).toMatch(/const shouldShow = _blindForceOpen\('map'\) \|\| \(_mapFull\s*\? !!cfg\.showMap && \(unlocked \|\| \(!cfg\.hideOverlays && _eqGateOk\(cfg\)\)\)/);
   });
   it('only Window mode saves the Map\'s bounds (the cover must never overwrite the window\'s own spot)', () => {
     expect(js).toMatch(/mapWindow\.on\('moved',\s+\(\) => \{ if \(!_mapFull\) _persistBounds\('mapBounds', mapWindow\); _mapGeomPush\(\); \}\);/);

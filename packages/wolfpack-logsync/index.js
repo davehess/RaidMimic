@@ -57260,8 +57260,10 @@ function _mapApplyShared(zone, j, now) {
     for (const t of j.targets.slice(0, 40)) {
       const x = Number(t && t.x), y = Number(t && t.y), at = Number(t && t.at), id = Number(t && t.id);
       if (!t || typeof t.name !== 'string' || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(at) || !(id > 0)) continue;
+      // `by`: who is on it (bot 4.1.13+, lowercase names, scoped like the count), for the Map's targeter lines. Older bot: none.
+      const by = Array.isArray(t.by) ? t.by.filter(b => typeof b === 'string' && /^[a-z]{2,30}$/.test(b)).slice(0, 12) : [];
       rows.push({ name: t.name.slice(0, 80), id, x, y, z: Number.isFinite(Number(t.z)) ? Number(t.z) : 0,
-        n: Math.max(1, Math.trunc(Number(t.n)) || 1), age: Math.max(0, botNow - at) });   // age on the bot's clock, when the pull came back
+        n: Math.max(1, Math.trunc(Number(t.n)) || 1), age: Math.max(0, botNow - at), by });   // age on the bot's clock, when the pull came back
     }
     _mapSync.targets[zone] = { rows, pulledAt: now };
     // Another raider's target is a sighting here too (the guild lead, 2026-11-17: "if another raider has targetted a mob
@@ -57788,6 +57790,32 @@ function _mapPosNote(zone, id, loc, now) {
   for (const [k, v] of _mapPosMem.m) if (now - v.at > MAP_POS_KEEP_MS) _mapPosMem.m.delete(k); else break;
   while (_mapPosMem.m.size > MAP_PIN_MAX) _mapPosMem.m.delete(_mapPosMem.m.keys().next().value);
 }
+// The Map's targeter lines (the guild lead, 2026-11-25: "dashed lines from other targetters running mimic to their target.
+// faint green for friendly/NPC, red for engaged mobs, yellow for mobs not engaged/moving"). One row per (raider, mob) from
+// the bot's shared targets (`by`, bot 4.1.13+), you left out: { by, id, name, x, y, z, kind }. kind:
+//   'engaged'  — the mob is hurt (1-99%: the Map's own "engaged" rule), from the Engaged / seen rows' health;
+//   'friendly' — not hurt, and your last /con of it was better than threatening (dubious or kinder: it will not aggro you);
+//   'idle'     — anything else: up and not engaged, standing or walking.
+// Rows older than MAP_POS_KEEP_MS give none. The Map finds each raider's own spot in its raid / group positions.
+function _mapAims(shared, character, engaged, seen, cons, now) {
+  if (!shared || !Array.isArray(shared.rows)) return [];
+  const me = String(character || '').toLowerCase(), out = [], hpOf = new Map();
+  for (const r of [...(seen || []), ...(engaged || [])]) {   // engaged last: its health is the fresher
+    const id = Number(r && r.spawn_id);
+    if (id > 0 && r.hp_pct != null && Number.isFinite(Number(r.hp_pct))) hpOf.set(id, Number(r.hp_pct));
+  }
+  for (const r of shared.rows) {
+    if (!Array.isArray(r.by) || !r.by.length || now - (shared.pulledAt - r.age) > MAP_POS_KEEP_MS) continue;
+    const hp = hpOf.has(r.id) ? hpOf.get(r.id) : null;
+    const c = cons ? (cons[String(r.name).toLowerCase()] != null ? cons[String(r.name).toLowerCase()] : cons[_mapNormName(r.name)]) : undefined;
+    const kind = hp != null && hp > 0 && hp < 100 ? 'engaged' : (typeof c === 'number' && c > 1 ? 'friendly' : 'idle');
+    for (const b of r.by) {
+      if (b === me || out.length >= 60) continue;
+      out.push({ by: b, id: r.id, name: r.name, x: r.x, y: r.y, z: r.z, kind });
+    }
+  }
+  return out;
+}
 function _mapSeenPos(seen, own, shared, zone, now) {
   const mem = _mapPosMem.zone === zone ? _mapPosMem.m : new Map();
   for (const s of seen) {
@@ -58142,6 +58170,8 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     out.traps = rec.body.traps || null;   // trap types by helper npc id + the server's trap table (bot; points carry `trap`). The Map's traps layer
   }
   try { out.me = _mapMe(character, st); } catch { out.me = null; }
+  // Blind (same flag the HUD reads): the Map zooms in on the nearest walls while it lasts (the guild lead, 2026-11-25).
+  try { const b = _blindState[String(character || '').toLowerCase()]; out.blind = !!(b && b.active); } catch { out.blind = false; }
   const zd = _mapZoneDoc(zone);
   try {   // a corpse in the Extended Target rows (if the bot ever sends one) is proof of death too, same as your own target
     const ecc = typeof _extTargetCache === 'undefined' ? null : _extTargetCache.get(String(character).trim().toLowerCase());
@@ -58179,6 +58209,7 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     const ec2 = typeof _extTargetCache === 'undefined' ? null : _extTargetCache.get(String(character).trim().toLowerCase());
     out.engaged = _mapPromoteHurt(out.seen, _mapEngaged(ec2 && ec2.payload && ec2.payload.targets), now, _mapHpMemFor(zone));
   } catch { out.engaged = []; }
+  try { out.aims = _mapAims(_mapSync.targets[zone], character, out.engaged, out.seen, out.cons, now); } catch { out.aims = []; }
   try {   // the kite's totals line over those rows; max HP from the cached Mob Info row (a lookup is started when missing)
     const maxHp = new Map();
     out.kite = _mapKite(out.engaged, (name) => {

@@ -2195,7 +2195,60 @@
   }
   function bandsOf() { return S.prep ? S.prep.bands : []; }
   function selfZ() { return S.p && S.p.self && S.p.self.z != null ? Number(S.p.self.z) : null; }
-  function levelRange() { return LEVEL_STEPS[S.levels] || 0; }
+  function levelRange() { return S.blind ? BLIND_LEVEL : (LEVEL_STEPS[S.levels] || 0); }
+  // Blind (the guild lead, 2026-11-25: "build the map into blind mode zoomed in enough to see where the closest walls are near
+  // or directly above/below the player"). The agent's map feed says blind (the HUD's flag); Mimic shows this window for it.
+  // While it lasts: Follow me, walls on your floor (±BLIND_LEVEL) bright and the floors above and below faint, and the zoom
+  // kept so the nearest wall on your floor is in view. The ⚔ Engaged list (the mobs on the raid) is slid out. Nothing here is
+  // saved: blind ending puts back your zoom, Follow and the list as they were. Your wheel during blind stops the auto zoom.
+  var BLIND_LEVEL = 25, BLIND_MIN_R = 60, BLIND_MAX_R = 250, BLIND_WALL_X = 3, BLIND_EVERY_MS = 500;
+  function noteBlind(on) {
+    if (PART_TIMERS) return;
+    var before;
+    if (on && !S.blind) {
+      S.blind = { follow: S.follow, who: S.followWho, side: S.sideOpen, auto: true, at: 0, set: false };
+      S.follow = true; S.followWho = 'me'; syncFollowBtn();
+      if (!S.sideOpen && !S.popped) { before = slotOpen(); S.sideOpen = true; syncSide(); slotChanged(before); }
+    } else if (!on && S.blind) {
+      var b = S.blind;
+      S.blind = null;
+      S.view.scale = S.userScale; S.follow = b.follow; S.followWho = b.who; syncFollowBtn();
+      if (!b.side && S.sideOpen && !S.popped) { before = slotOpen(); S.sideOpen = false; syncSide(); slotChanged(before); }
+    }
+  }
+  // Distance (map units, flat) from you to the nearest wall line on your floor, from your own map files. null = none known.
+  function blindNearestWall(me) {
+    if (!me || !localWalls()) return null;
+    var s = toScreen(me.x, me.y), sz = me.z != null ? Number(me.z) : selfZ(), best = Infinity;
+    for (var gi = 0; gi < S.local.groups.length; gi++) {
+      var G = S.local.groups[gi];
+      for (var i = 0, j = 0; i < G.xy.length; i += 4, j++) {
+        if (sz != null && Math.abs(G.z[j] - sz) > BLIND_LEVEL) continue;
+        var d = segDist(s.sx, s.sy, G.xy[i], G.xy[i + 1], G.xy[i + 2], G.xy[i + 3]);
+        if (d < best) best = d;
+      }
+    }
+    return isFinite(best) ? best : null;
+  }
+  function segDist(px, py, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+    var t = l2 ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l2)) : 0;
+    var ex = x1 + t * dx - px, ey = y1 + t * dy - py;
+    return Math.sqrt(ex * ex + ey * ey);
+  }
+  // The view radius: BLIND_WALL_X times the nearest wall, kept between BLIND_MIN_R and BLIND_MAX_R (100 with no walls known),
+  // so the room and the raiders in it fit, not just one wall (a 30 minimum hid everyone, 2026-11-25 screenshot). Changed only
+  // when it is 15% off, so standing still does not breathe.
+  function blindZoom(rt) {
+    var b = S.blind;
+    if (!b || !b.auto || !S.p || !S.p.self || rt - b.at < BLIND_EVERY_MS) return;
+    b.at = rt;
+    var d = blindNearestWall(drawn('self', S.p.self, rt));
+    var r = Math.max(BLIND_MIN_R, Math.min(BLIND_MAX_R, d == null ? 100 : d * BLIND_WALL_X));
+    var ns = Math.max(0.02, Math.min(20, Math.min(S.w, S.h) / (2 * r)));
+    if (!(ns > 0) || (b.set && Math.abs(ns / S.view.scale - 1) < 0.15)) return;
+    S.view.scale = ns; b.set = true;
+  }
   function spawnRange() { return LEVEL_STEPS[S.spawnLevels] || 0; }
   function pointBounds() {
     var b = null;
@@ -2249,7 +2302,8 @@
     syncRouteNote();
     noteClearKey();   // a new zone or character: read the keep-clear areas again
     noteCharPrefs();  // FB-129: a new character gets their own zoom / pan mode / settings back
-    noteHunt(p);      // Targeted named mobs: load this character's list, record a named target, refresh the highlighted ids
+    noteBlind(!!p.blind);   // blinded: follow you, zoom to the nearest walls, show the Engaged list (back as it was after)
+    noteHunt(p);     // Targeted named mobs: load this character's list, record a named target, refresh the highlighted ids
     S.timerBy = {}; S.candBy = {}; S.seenBy = {};
     S.watchBy = p.watched && typeof p.watched === 'object' ? p.watched : {};   // spots marked "watch for <named>": { <point_id>: { named, by } }
     (p.timers || []).forEach(function (t) { S.timerBy[String(t.point_id)] = t; });
@@ -2733,6 +2787,7 @@
     return [(s.sx - v.cx) * v.scale + S.w / 2, (s.sy - v.cy) * v.scale + S.h / 2];
   }
   var RING = { wait: '#f85149', window: '#f0b429', up: '#56d364' };
+  var AIM_COL = { engaged: RING.wait, idle: RING.window, friendly: RING.up };   // the targeter lines (P.aims): red, yellow, green
   // Pather routes (zone payload `grids`): a thin dashed line per route a VISIBLE point walks, a tick on every
   // waypoint where it pauses. A circular route (type 0) closes. Routes of points outside the level range fade like
   // the dots do; hovering a pather's dot lights its whole route.
@@ -3209,6 +3264,7 @@
     ctx.clearRect(0, 0, S.w, S.h);
     var rt = Date.now();
     updateRot(rt);   // heading up: turn the picture to your heading first, so everything below projects through it
+    blindZoom(rt);   // blind: keep the nearest wall in view (before Follow, which places the view at this scale)
     // Follow me: the view rides the DRAWN position of you, so the map glides with you instead of stepping per poll.
     if (S.follow && S.p && !S.drag) followTo(followSubject(rt));
     var v = S.view, w = S.w, h = S.h, now = nowMs(), rot = v.rot || 0;
@@ -3534,6 +3590,31 @@
           halo(petTxt, pq[0] + 3.5 * I.dot + 4, pq[1], fontSmall, CO.pather);
           ctx.restore();
         }
+      }
+      // Other raiders' targets (the guild lead, 2026-11-25): a dashed line from each raider running Mimic to the mob they
+      // have targeted. Red = the mob is hurt (engaged), faint green = it will not aggro you (your /con), yellow = up and not
+      // engaged, standing or walking. The agent sends the pairs (P.aims, see _mapAims); the raider's end is their drawn spot
+      // in your group / raid positions, so a raider your Zeal cannot place draws no line. Under the ⚙ target line switch.
+      if (SH.targetLine && Array.isArray(P.aims) && P.aims.length) {
+        var aimAt = {};
+        [['g:', P.group], ['r:', P.raid]].forEach(function (src) {
+          (src[1] || []).forEach(function (m) { var k = String(m.name || '').toLowerCase(); if (k && m.x != null && !aimAt[k]) aimAt[k] = drawn(src[0] + m.name, m, rt); });
+        });
+        ctx.save(); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.2;
+        var aimEnd = {};
+        P.aims.forEach(function (a) {
+          var from = aimAt[String(a.by).toLowerCase()];
+          if (!from || a.x == null) return;
+          var fq = wpt(from.x, from.y), mq = wpt(a.x, a.y);
+          ctx.globalAlpha = a.kind === 'friendly' ? 0.35 : 0.85;
+          ctx.strokeStyle = AIM_COL[a.kind] || AIM_COL.idle;
+          ctx.beginPath(); ctx.moveTo(fq[0], fq[1]); ctx.lineTo(mq[0], mq[1]); ctx.stroke();
+          if (!aimEnd[a.id]) {   // the mob's end: one dot per mob, so a line never ends in empty space
+            aimEnd[a.id] = 1;
+            ctx.beginPath(); ctx.arc(mq[0], mq[1], 3.5, 0, 6.2832); ctx.fillStyle = ctx.strokeStyle; ctx.fill();
+          }
+        });
+        ctx.restore();
       }
       // Target: a ring and a dotted line from you.
       S.aeRing = null; S.rampRing = null;
@@ -4765,6 +4846,7 @@
       v.cx = wx - zu.dx / ns; v.cy = wy - zu.dy / ns;
     }
     v.scale = ns; S.userScale = ns; S.fitted = true;
+    if (S.blind) S.blind.auto = false;   // your wheel wins over the blind zoom until blind ends
     try { localStorage.setItem('wp-map-scale', String(ns)); } catch (err) {}
     renderMap();
   }
