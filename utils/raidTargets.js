@@ -29,6 +29,9 @@
 // Privacy: a target's name and position is game state, not chat. A sample is held for SAMPLE_FRESH_MS and then
 // forgotten; the trail rows hold an NPC's points and nothing else (no character, no discord id). snapshot() feeds the
 // raid replay recording (utils/raidTrack.js) with each NPC's position and a COUNT of targeters, never who.
+// targetsFor() (the live Map, inside SCOPE) also says WHO is on each NPC (`by`, lowercase character names, at most BY_MAX),
+// so a raider's Map can draw a dashed line from each targeter to their mob (the guild lead, 2026-11-25: "dashed lines from
+// other targetters running mimic to their target"). It is the same scope the counts already had; nothing is kept.
 //
 // Pure apart from the injected `supabase` (utils/supabase or a stand-in), clock and timer.
 'use strict';
@@ -57,6 +60,7 @@ const ESCORT_NPCS = {
 const SAMPLE_FRESH_MS = 90 * 1000;        // live-state heartbeats every 45 s; two missed and the target is stale
 const SAMPLES_MAX     = 2000;
 const TARGETS_MAX     = 40;               // rows served per zone
+const BY_MAX          = 12;               // targeter names served per row (the Map's dashed lines)
 const COORD_MAX       = 100000;
 const INT4_MAX        = 2147483647;
 
@@ -257,7 +261,7 @@ function create({ supabase = null, guildId = null, now = Date.now, log = console
       if (s.at > g.at) Object.assign(g, { name: s.name, x: s.x, y: s.y, z: s.z, at: s.at });
     }
     return [...by.values()].sort((a, b) => b.raiders.size - a.raiders.size || b.at - a.at).slice(0, TARGETS_MAX)
-      .map(g => ({ name: g.name, id: g.id, type: 1, x: g.x, y: g.y, z: g.z, n: g.raiders.size, at: g.at }));
+      .map(g => ({ name: g.name, id: g.id, type: 1, x: g.x, y: g.y, z: g.z, n: g.raiders.size, at: g.at, by: [...g.raiders].slice(0, BY_MAX) }));
   }
 
   // Every fresh targeted NPC in every zone, for the raid replay (utils/raidTrack.js): { name, id, zone, x, y, z, n }
