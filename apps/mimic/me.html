@@ -870,8 +870,11 @@
   }
   function pctTxt(p){ return p == null ? '—' : Math.round(p) + '%'; }
   function blindRing(s){
-    return s.blind ? '<circle cx="200" cy="200" r="194" fill="none" stroke="var(--red)" stroke-width="3" stroke-dasharray="10 6"/>' + T(CX, 128, '👁 BLINDED', 11, 'var(--red)', 'middle', 700) : '';
+    return s.blind ? '<circle cx="200" cy="200" r="194" fill="none" stroke="var(--red)" stroke-width="3" stroke-dasharray="10 6"/>' + T(CX, 128, '👁 BLINDED' + blindLeftTxt(s), 11, 'var(--red)', 'middle', 700) : '';
   }
+  // The countdown (the guild lead, 2026-11-25: "Also a timer on the blind"): " · 21s", or " · ~21s" when the end is the
+  // agent's 30 s guess rather than the spell's own duration.
+  function blindLeftTxt(s){ return s.blind_left == null ? '' : ' · ' + (s.blind_est ? '~' : '') + s.blind_left + 's'; }
   function svgWrap(inner, weight){ return '<svg id="hudsvg" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" class="w-' + (weight || 'thin') + '">' + inner + '</svg>'; }
   // Round two (the guild lead, 2026-09-24, after playing all three): "Bars are a
   // little too thick" · "The way the text wraps on H1 for the name up top is
@@ -2082,7 +2085,7 @@
       document.getElementById('tname').textContent = s.character;
       document.getElementById('tclass').textContent = (s.level != null ? s.level + ' ' : '') + (s.class || '');
       // The HUDs draw their own blind ring inside the SVG.
-      if (s.blind && !isHud(style)) html += '<div class="blind">👁 BLINDED — this panel still works</div>';
+      if (s.blind && !isHud(style)) html += '<div class="blind">👁 BLINDED' + blindLeftTxt(s) + ' — this panel still works</div>';
       html += isHud(style) ? renderHud(s) : renderA(s);
     }
     document.body.classList.toggle('hud', isHud(style));

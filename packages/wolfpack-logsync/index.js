@@ -6073,7 +6073,7 @@ function noteBlindLine(line, character) {
       const hit = bt.start.get(msg), secs = hit.secs;
       _blindState[cl] = {
         active: true, source: 'npc_blind', since: atMs,
-        expiresAt: atMs + (secs ? secs * 1000 : _BLIND_DUR_GENERIC_MS),
+        expiresAt: atMs + (secs ? secs * 1000 : _BLIND_DUR_GENERIC_MS), est: !secs,
         target: _zealTargetForChar(cl) || null, selfHits: 0,
         spell: hit.name,   // so the Zeal buff window can say when it really ends (_expireStaleBlinds)
       };
@@ -6109,6 +6109,7 @@ function noteBlindLine(line, character) {
         source: b.source,
         since: atMs,
         expiresAt: atMs + b.dur,
+        est: !b.dur_sec,   // the 30 s fallback: the end is a guess, so the countdown shows "~"
         target: _zealTargetForChar(cl) || null,
         selfHits: 0,
       };
@@ -6164,6 +6165,12 @@ function _zealHasBuff(cl, spell, now) {
     return st.buffs.some(b => b && b.name && norm(b.name) === want);
   }
   return null;
+}
+// The blind's countdown for the HUD and the Map (the guild lead, 2026-11-25: "Also a timer on the blind"): whole seconds
+// left by its expiry, and est = that end is the 30 s fallback, not the spell's own duration. null when not blind.
+function _blindLeft(b, now) {
+  if (!b || !b.active || !b.expiresAt) return null;
+  return { left: Math.max(0, Math.round((b.expiresAt - now) / 1000)), est: !!b.est };
 }
 function _expireStaleBlinds() {
   const now = Date.now();
@@ -18738,6 +18745,9 @@ function _serializeMeState() {
       pr: _meNum(_meLabel(st, 12)), dr: _meNum(_meLabel(st, 13)),
     },
     blind: !!(blind && blind.active),
+    // Seconds left for the ring's countdown, as _blindLeft counts them (inline: test harnesses run this builder on its own).
+    blind_left: blind && blind.active && blind.expiresAt ? Math.max(0, Math.round((blind.expiresAt - now) / 1000)) : null,
+    blind_est: !!(blind && blind.active && blind.est),
     track: _meTrackFor(cl, st, now),
     ..._meSideArcs(active, st, now, [tx && tx.tot ? tx.tot.name : null]),
     ..._meClickyFields(active),
@@ -58180,6 +58190,8 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     const b = _blindState[String(character || '').toLowerCase()];
     out.blind = !!(b && b.active);
     if (out.blind && b.source === 'test') out.blind_test = Math.max(0, Math.round((b.expiresAt - now) / 1000));   // seconds left
+    const bl = out.blind ? _blindLeft(b, now) : null;
+    if (bl) { out.blind_left = bl.left; out.blind_est = bl.est; }
   } catch { out.blind = false; }
   const zd = _mapZoneDoc(zone);
   try {   // a corpse in the Extended Target rows (if the bot ever sends one) is proof of death too, same as your own target

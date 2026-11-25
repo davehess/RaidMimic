@@ -6352,6 +6352,10 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   `POST /api/blind-test` (`_blindTestSet`, source `test`, never over a real blind), map feed `blind_test` = seconds left.
   Target size and reach: bot mob info `reach` (`utils/aeRampage.js` `reachInfo`), agent `_mapAeRampage` → Map target `reach`,
   `targetReach`; the 2D Map draws the body and ring too. Tests: `test/map-radar.test.js`, `test/ae-rampage.test.js`.
+  Round two (agent 4.0.113): Blind view `inset` (Radar + mini map, default; `#mapPane.blind-inset`, `blindViewOf`), ⚙ → Test length
+  (`wp-map-blind-secs`) and Black out while testing (`wp-map-blind-black`, `#mapPane.blind-black`, test blinds only). The countdown:
+  agent `_blindLeft` (seconds to `expiresAt`, `est` when the start had no known duration) → `/api/me` `blind_left`/`blind_est`
+  (HUD `blindLeftTxt`) and the map feed (radar corner). `main.js` raises the HUD (`meWindow.moveTop()`) when blind starts.
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
