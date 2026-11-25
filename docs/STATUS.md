@@ -209,6 +209,13 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-25 — Radar walls from the zone mesh (beta: agent 4.0.114; Desk `radar-sense` B, DECISIONS §659).** The radar
+  draws the server's own 3D shape of the zone as a wireframe: walls, floors, ceilings, stairs and the placed furniture (the
+  Plane of Tranquility library's bookcases and desk). The agent downloads EQEmu's `base/<zone>.map` once per zone (about 1 MB)
+  the first time the radar needs it, decodes it as the server does and keeps only the crease and border edges, so flat ground
+  is not a triangle grid. Map lines draw until it arrives, and ⚙ → Radar walls switches back to them. The radar's corner says
+  which walls it draws. Open: EQEmu builds its maps from the newest client files, so a zone that a later expansion rebuilt may
+  not match Quarm's older version; not yet checked zone by zone.
 - **🧪 2026-11-25 — Blind round two (beta: agent 4.0.113).** From the guild lead's test the same day. ⚙ → Blind view gains
   **Radar + mini map** (the radar fills the window, the Map sits bottom-right; now the default). The HUD ring and the radar count
   the blind down ("BLINDED · 21s", "~" when the spell's duration is unknown and the agent guessed 30 s). The HUD is raised above

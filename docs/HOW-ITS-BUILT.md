@@ -6356,6 +6356,14 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   (`wp-map-blind-secs`) and Black out while testing (`wp-map-blind-black`, `#mapPane.blind-black`, test blinds only). The countdown:
   agent `_blindLeft` (seconds to `expiresAt`, `est` when the start had no known duration) → `/api/me` `blind_left`/`blind_est`
   (HUD `blindLeftTxt`) and the map feed (radar corner). `main.js` raises the HUD (`meWindow.moveTop()`) when blind starts.
+  Radar walls B (agent 4.0.114, Desk `radar-sense` B): agent "Zone meshes" block — `_mapMeshEnsure` downloads
+  `https://raw.githubusercontent.com/EQEmu/maps/master/base/<zone>.map` into `zone-meshes/` (`_mapPaths.mesh`; `.none` marker on
+  a 404, retried weekly), `_meshDecode` = zone/map.cpp `Map::LoadV2` (zone triangles, placed models with the server's x/y swap,
+  placeable groups, terrain tiles; non-collidable skipped), `_meshEdges` keeps edges where faces meet at more than 25° or that one
+  face uses, `_meshGrid` + `_mapMeshNear` answer `GET /api/map-mesh?zone&x&y&z&r` (server frame, whole units, ≤ 24,000 edges).
+  `map.html`: `meshFetch` (asks within 300, again after moving 120), `meshToScreen`, `drawMesh` (one stroke per brightness step),
+  `radarWallsTxt`; ⚙ → Radar walls (`wp-map-radar-walls`: mesh default, lines). The web replay has its own reader of the same
+  files (`web/lib/zoneMap/slice.ts` `parseEqemuMap`, zone triangles only). Tests: `test/radar-mesh.test.js`.
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
