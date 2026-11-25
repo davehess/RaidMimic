@@ -3816,6 +3816,11 @@ Loads the character's ini bundle (`ui-studio-read-bundle`), parses window
 sections (`XPos<res>` blocks, bare Width/Height), rescales source→target
 resolution, drag/snap editor, writes back with `.bak` or defers until logout
 (`defer-save` + background watcher).
+**Resize by any edge or corner** (2026-11-25, Mimic beta): every window that is not fixed-size carries eight grips
+(`UiFit.RESIZE_DIRS`), shown on hover or selection; the drag runs `UiFit.resizeRect` (far edge stays, at least 16, stops at
+the screen edge) and pins the size (`sizeEdited`), so Save writes Width/Height. Before, one bottom-right grip on the selected
+window only. ⚠ The game keeps a saved size only where the skin lets that window resize; for the others the skin's size wins.
+Tests: `test/ui-studio-resize.test.js`.
 **Design lab (beta branch only, 2026-11-14, DECISIONS §582):** `web/app/lab` (index + one page per draft, `?v=a|b|c`,
 `?bare=1`), `web/lib/lab/registry.ts` (the drafts), `web/lib/lab/people.ts` (made-up raiders), `web/components/lab/`.
 Nothing under it reads the database (`test/lab-drafts.test.js`). A draft's recommended version is staged on the real

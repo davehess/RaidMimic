@@ -85,6 +85,22 @@
     return w > 0 && h > 0 ? { w: w, h: h } : null;
   }
 
+  // UI Studio's drag-to-resize (the guild lead, 2026-11-25: "it would be cool to resize UI in UI studio by drag/pull"): a
+  // window dragged by an edge or corner. dir is a compass point: n, s, e, w, ne, nw, se, sw. A west or north edge moves the
+  // window as it changes its size, so the far edge stays put. The size stays at least `min`, and the window stays on the
+  // screen (sw x sh). orig = { x, y, w, h }; dx, dy in layout pixels. -> a new { x, y, w, h }.
+  var RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+  function resizeRect(orig, dir, dx, dy, min, sw, sh) {
+    min = min > 0 ? min : 16;
+    var x = orig.x, y = orig.y, w = orig.w, h = orig.h, right = orig.x + orig.w, bottom = orig.y + orig.h;
+    if (dir.indexOf('e') >= 0) w = Math.min(Math.max(min, Math.round(orig.w + dx)), sw - Math.max(0, x));
+    if (dir.indexOf('s') >= 0) h = Math.min(Math.max(min, Math.round(orig.h + dy)), sh - Math.max(0, y));
+    if (dir.indexOf('w') >= 0) { x = Math.max(0, Math.min(right - min, Math.round(orig.x + dx))); w = right - x; }
+    if (dir.indexOf('n') >= 0) { y = Math.max(0, Math.min(bottom - min, Math.round(orig.y + dy))); h = bottom - y; }
+    return { x: x, y: y, w: w, h: h };
+  }
+
   return { GUESS_W: GUESS_W, GUESS_H: GUESS_H, MIN_CHAT_W: MIN_CHAT_W, MIN_CHAT_H: MIN_CHAT_H, TUCK: TUCK,
-    isChatSection: isChatSection, fitAxis: fitAxis, fitRect: fitRect, isOffScreen: isOffScreen, parseRes: parseRes };
+    isChatSection: isChatSection, fitAxis: fitAxis, fitRect: fitRect, isOffScreen: isOffScreen, parseRes: parseRes,
+    RESIZE_DIRS: RESIZE_DIRS, resizeRect: resizeRect };
 });

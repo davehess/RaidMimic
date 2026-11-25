@@ -154,7 +154,8 @@ describe('raid bars draw a full raid laid out like Zeal does', () => {
     const code = stripJs(studio);
     expect(code).toMatch(/if \(\/\^zeal\\\.ini\$\/i\.test\(fname\)\) \{\s*_zealBarWindows\(parsed, STATE\.srcW, STATE\.srcH, fxX, fxY\)/);
     expect(code).toMatch(/if \(w\.zealBar\) kv = _zealBarEdits\(w\);/);
-    expect(code).toContain("(STATE.selected === i && !w.fixedSize ? '<div class=\"grip se\" data-grip=\"se\"></div>' : '')");
+    // A fixed-size window (Zeal's bars) still gets no grip; the others now carry all eight (test/ui-studio-resize.test.js).
+    expect(code).toContain("(!w.fixedSize ? UiFit.RESIZE_DIRS.map(function (d) { return '<div class=\"grip ' + d + '\" data-grip=\"' + d + '\"></div>'; }).join('') : '')");
     expect(code).toContain("test:function(n){ return /^zeal|^raidbars$|^assistbar$/i.test(n); }");
   });
 });
