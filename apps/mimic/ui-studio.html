@@ -93,6 +93,19 @@
   .win .grip{position:absolute;width:8px;height:8px;background:#7ee7c7;
     border:1px solid #000;border-radius:1px;z-index:5}
   .win .grip.se{right:-4px;bottom:-4px;cursor:nwse-resize}
+  /* Drag any edge or corner (the guild lead, 2026-11-25: "resize UI in UI studio by drag/pull"): every resizable window
+     carries all eight grips; they show while the pointer is over the window or it is selected. Edges are thin bars. */
+  .win .grip{display:none}
+  .win:hover .grip,.win.selected .grip{display:block}
+  .win .grip.nw{left:-4px;top:-4px;cursor:nwse-resize}
+  .win .grip.ne{right:-4px;top:-4px;cursor:nesw-resize}
+  .win .grip.sw{left:-4px;bottom:-4px;cursor:nesw-resize}
+  .win .grip.n,.win .grip.s{left:calc(50% - 10px);width:20px;height:6px}
+  .win .grip.e,.win .grip.w{top:calc(50% - 10px);width:6px;height:20px}
+  .win .grip.n{top:-3px;cursor:ns-resize}
+  .win .grip.s{bottom:-3px;cursor:ns-resize}
+  .win .grip.e{right:-3px;cursor:ew-resize}
+  .win .grip.w{left:-3px;cursor:ew-resize}
   /* Chat window ↔ Inspector link: the selected chat window's rectangle and routing
      card share one highlight; while a chip is dragged, valid rectangles light up. */
   .win.kind-chat.selected{outline:2px solid #7ee7c7;outline-offset:-2px}
@@ -1867,7 +1880,7 @@
             + (w.zealBar === 'raidbars' ? _raidBarsCellsHtml(w, STATE.sliceScale) : '')
             + '<span class="lbl"' + (dys[k] ? ' style="top:' + (2 + dys[k]) + 'px"' : '') + '>' + escapeHtml(it.lbl) + '</span>'
             + '<span class="sz">' + w.w + '×' + w.h + '</span>'
-            + (STATE.selected === i && !w.fixedSize ? '<div class="grip se" data-grip="se"></div>' : '')
+            + (!w.fixedSize ? UiFit.RESIZE_DIRS.map(function (d) { return '<div class="grip ' + d + '" data-grip="' + d + '"></div>'; }).join('') : '')
             + '</div>';
     }
     stage.innerHTML = html;
@@ -2131,20 +2144,17 @@
     if (DRAG.mode === 'move') {
       w.x = Math.round(DRAG.origX + dx);
       w.y = Math.round(DRAG.origY + dy);
-    } else if (DRAG.mode === 'resize-se') {
-      w.w = Math.max(16, Math.round(DRAG.origW + dx));
-      w.h = Math.max(16, Math.round(DRAG.origH + dy));
+    } else if (DRAG.mode.indexOf('resize-') === 0) {
+      // Any edge or corner (UiFit.resizeRect): the far edge stays put, at least 16 each way, and it stops at the screen
+      // edge rather than pushing the window along.
+      var r = UiFit.resizeRect({ x: DRAG.origX, y: DRAG.origY, w: DRAG.origW, h: DRAG.origH }, DRAG.mode.slice(7), dx, dy, 16, STATE.tgtW, STATE.tgtH);
+      w.x = r.x; w.y = r.y; w.w = r.w; w.h = r.h;
       w.sizeEdited = true;
     }
     // Snap-to-edges of other windows + screen edges (10px tolerance in
     // world coords). Only on move, not resize.
     if (STATE.snapOn && DRAG.mode === 'move') applySnap(w);
-    // Clamp to screen bounds. A resize stops at the screen edge (it used to push the window left instead), and
-    // a window larger than the screen sits at 0 rather than at a negative place.
-    if (DRAG.mode === 'resize-se') {
-      w.w = Math.max(16, Math.min(w.w, STATE.tgtW - Math.max(0, w.x)));
-      w.h = Math.max(16, Math.min(w.h, STATE.tgtH - Math.max(0, w.y)));
-    }
+    // Clamp to screen bounds: a window larger than the screen sits at 0 rather than at a negative place.
     w.x = Math.max(0, Math.min(w.x, STATE.tgtW - w.w));
     w.y = Math.max(0, Math.min(w.y, STATE.tgtH - w.h));
     renderStage();
