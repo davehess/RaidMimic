@@ -6336,6 +6336,14 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   NPC, scoped as the count), the agent pairs them (`_mapAims` → `/api/map-state` `aims`, kind engaged / friendly / idle), and
   `map.html` draws a dashed line from each raider's drawn spot to the mob (red hurt, faint green cons better than threatening,
   yellow otherwise) with a dot at the mob, under the ⚙ target line switch. NPC targets only. Tests: `test/map-target-lines.test.js`.
+- **Radar sense while blind** (2026-11-25, Mimic beta, agent 4.0.111, bot 4.1.14; Decision Desk `radar-sense` A): `map.html`
+  `radarCam` / `radarPt` / `radarSeg` (pure helpers: a chase camera from your position and Zeal heading, no EverQuest camera) and
+  `renderRadar` on a second canvas `#radar`; your map lines stood up 20 tall, a floor grid, people / mobs / targeter lines over
+  the walls, your target's body and dashed melee ring with name, health, distance, size and reach. ⚙ → Blind view: Map + radar
+  (split, default), Radar, Map (`syncBlindView`, `#mapPane.blind-split` / `.blind-radar`). ⚙ → Test blind (30 s): agent
+  `POST /api/blind-test` (`_blindTestSet`, source `test`, never over a real blind), map feed `blind_test` = seconds left.
+  Target size and reach: bot mob info `reach` (`utils/aeRampage.js` `reachInfo`), agent `_mapAeRampage` → Map target `reach`,
+  `targetReach`; the 2D Map draws the body and ring too. Tests: `test/map-radar.test.js`, `test/ae-rampage.test.js`.
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
