@@ -83,6 +83,25 @@ describe('targetsFor: ingest and aggregation', () => {
     expect(out.map(t => [t.id, t.n, t.x, t.y])).toEqual([[4321, 2, 50, 60], [9, 1, 9, 9]]);
     expect(out[0]).toMatchObject({ name: 'a gnoll pup', type: 1, at: T0 + 2000 });
   });
+  it('says who is on each NPC (lowercase), for the Map\'s targeter lines, at most 12', () => {
+    const { rt } = mk();
+    rt.noteSample(rec({ character: 'Aldenmar' }));
+    rt.noteSample(rec({ character: 'Brackwyn' }));
+    const out = rt.targetsFor({ zone: 'ponightmare', scope: RAID('r1'), raidForName: () => 'r1', own: new Set() });
+    expect(out[0].by.sort()).toEqual(['aldenmar', 'brackwyn']);
+    for (let i = 0; i < 20; i++) rt.noteSample(rec({ character: 'Raider' + String.fromCharCode(97 + i) }));
+    const many = rt.targetsFor({ zone: 'ponightmare', scope: RAID('r1'), raidForName: () => 'r1', own: new Set() });
+    expect(many[0].n).toBe(22);
+    expect(many[0].by.length).toBe(12);
+  });
+  it('a targeter outside the requester\'s scope is neither counted nor named', () => {
+    const { rt } = mk();
+    rt.noteSample(rec({ character: 'Aldenmar' }));
+    rt.noteSample(rec({ character: 'Brackwyn' }));
+    const out = rt.targetsFor({ zone: 'ponightmare', scope: RAID('r1', true), raidForName: (n) => (n === 'brackwyn' ? 'r2' : 'r1'), own: new Set() });
+    expect(out[0].by).toEqual(['aldenmar']);
+    expect(out[0].n).toBe(1);
+  });
   it('serves only the asked zone', () => {
     const { rt } = mk();
     rt.noteSample(rec()); rt.noteSample(rec({ character: 'Brackwyn', zone: 'cazicthule' }));

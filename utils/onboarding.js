@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.13': [
+    'Internal: the bot tells each raider\'s Mimic Map who in the raid has targeted which mob, so the Map can draw a dashed line from each raider to their target.',
+  ],
   '4.1.12': [
     'Planes of Power flags follow Quarm\'s 2026-11-23 patch: getting in on the raid\'s flags needs half the raid flagged (was 85%) in every PoP zone, the Fire flag no longer needs the minis, and the Time phase 1 lockout is 3.5 days.',
   ],
