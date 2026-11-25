@@ -18247,6 +18247,7 @@ async function _buildMobInfo(supabase, { name, norm, caseKey, reqZoneId, reqGend
       const move = mobSpecials.deriveMovement(r);
       const aeRampage = mobSpecials.aeRampageInfo(r);
       const rampage = mobSpecials.rampageInfo(r);
+      const reach = mobSpecials.reachInfo(r);
 
       // Faction consequences of killing this mob. ⚠ Reuses the bot's existing
       // resolver rather than re-deriving the npc_faction → faction_list chain:
@@ -18350,6 +18351,8 @@ async function _buildMobInfo(supabase, { name, norm, caseKey, reqZoneId, reqGend
         ...(aeRampage ? { ae_rampage: aeRampage } : {}),
         // Regular Rampage reach: one person inside `range` of the mob, not the tank. Same absent-not-null rule.
         ...(rampage ? { rampage } : {}),
+        // Its size and how far it hits a player (utils/aeRampage.js reachInfo), for the Mimic radar. Absent when the size is unknown.
+        ...(reach ? { reach } : {}),
         // Provenance for the overlay/diagnostics: how many bodies were merged,
         // which preference tier won, and whether we had to fall back to a
         // placeholder because the name has no real row at all.

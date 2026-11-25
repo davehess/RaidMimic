@@ -119,6 +119,25 @@ describe('aeRampageInfo (the mob-info field)', () => {
   });
 });
 
+describe('reachInfo (the mob-info `reach` field: size and melee reach, for the Mimic radar)', () => {
+  it('Recuso: radius 14.4, hits at 16.55 standing and 14.55 walking, with or without Area Rampage', () => {
+    const want = { radius: 14.4, melee: 16.55, melee_moving: 14.55 };
+    expect(ae.reachInfo({ race: 237, size: 12, runspeed: 1.25 })).toEqual(want);
+    expect(ae.reachInfo({ race: 237, size: 12, special_abilities: '4,1,5', runspeed: 1.25 })).toEqual(want);
+  });
+  it('a playable race is radius 5 whatever its size; the 14 floor applies', () => {
+    expect(ae.reachInfo({ race: 1, size: 30 })).toEqual({ radius: 5, melee: 16, melee_moving: 14 });
+  });
+  it('a rooted mob is capped at 60, a mobile one at 75', () => {
+    expect(ae.reachInfo({ race: 237, size: 200, runspeed: 0 }).melee).toBe(60);
+    expect(ae.reachInfo({ race: 237, size: 200, runspeed: 1 }).melee).toBe(75);
+  });
+  it('is null with no size or no row', () => {
+    expect(ae.reachInfo({ race: 237, size: null })).toBeNull();
+    expect(ae.reachInfo(null)).toBeNull();
+  });
+});
+
 describe('rampageParams (regular Rampage, ability 3)', () => {
   it('reads chance, range and damage from the parameters', () => {
     expect(ae.rampageParams('1,1^3,1,10,40,50^31,1')).toEqual({ chance: 10, range: 40, damagePct: 50 });
