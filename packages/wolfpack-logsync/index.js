@@ -38738,6 +38738,14 @@ function startWebDashboard(port) {
       if (req.url === '/api/map-mark' && req.method === 'POST') return _handleMapMark(req, res);
       if (req.url === '/api/map-kill' && req.method === 'POST') return _handleMapKill(req, res);
       if (req.url === '/api/blind-test' && req.method === 'POST') return _handleBlindTest(req, res);
+      // The radar's wireframe: the server's zone mesh around you (see "Zone meshes").
+      if (req.url && req.url.split('?')[0] === '/api/map-mesh' && req.method === 'GET') {
+        let ans;
+        try { ans = _mapMeshAnswer(new URL(req.url, 'http://x').searchParams, Date.now()); }
+        catch (e) { ans = { ok: false, status: 'error', error: String(e && e.message) }; }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(ans));
+      }
       if (req.url === '/api/map-watch' && req.method === 'POST') return _handleMapWatch(req, res);
       if (req.url === '/api/map-leg' && req.method === 'POST') return _handleMapLeg(req, res);
       // Kite coach (map.html): one loop summary out, the guild's loops for the zone in.
@@ -55464,6 +55472,10 @@ const _mapPaths = {
   _b: undefined,
   get brewall() { return this._b === undefined ? path.join(__dirname, 'brewall-maps') : this._b; },
   set brewall(v) { this._b = v; },
+  // The server's zone meshes (see "Zone meshes"); null switches the download off.
+  _m: undefined,
+  get mesh() { return this._m === undefined ? path.join(__dirname, 'zone-meshes') : this._m; },
+  set mesh(v) { this._m = v; },
 };
 const MAP_ASSIGN_MAX_UNITS   = 60;                  // a death is credited to a point only within this of where the mob was first seen
 const MAP_ASSIGN_GAP_UNITS   = 120;                 // ...and the next point is at least twice as far, or beyond this
@@ -55960,6 +55972,262 @@ function _mapBrewallEnsure(short, now) {
   })();
 }
 // ── end Brewall maps ──
+
+// ── Zone meshes: the server's own geometry, for the radar's wireframe ───────────────────────────────────────
+// The guild lead, 2026-11-25: "get going on the wireframe" (Decision Desk radar-sense B, after raised map lines showed a hill
+// edge as a wall). The EQEmu server loads a collision mesh per zone (zone/map.cpp Map::LoadV2) and the public EQEmu/maps repo
+// keeps them under base/<zone>.map. The first time the radar asks for a zone, its file is fetched into zone-meshes/ next to
+// the agent and kept. Plain GETs to GitHub with nothing about the player in them, like the Brewall maps.
+// What the radar gets is not the triangles but their FEATURE EDGES: an edge where two faces meet at more than MESH_CREASE_DEG,
+// or that only one face uses. Flat ground and flat walls are many triangles each; their inner edges are dropped, so the
+// wireframe shows the room's shape (wall corners, floor edges, ledges, stairs) rather than how it was triangulated.
+// ⚠ EQEmu's maps are built from the zone's newest client files. A zone that was rebuilt in a later expansion (some old-world
+// cities) may not match Quarm's older version of it. The radar says which source it draws.
+const MAP_MESH_BASE      = 'https://raw.githubusercontent.com/EQEmu/maps/master/base/';
+const MAP_MESH_MAX_BYTES = 40 * 1024 * 1024;
+const MAP_MESH_RETRY_MS  = 10 * 60 * 1000;
+const MAP_MESH_NONE_MS   = 7 * 24 * 3600 * 1000;
+const MAP_MESH_KEEP      = 2;          // zones held decoded in memory
+const MESH_CREASE_DEG    = 25;
+const MESH_CELL          = 128;        // spatial grid for the radius query
+const MESH_MAX_SEGS      = 24000;      // per answer
+const _mapMesh = new Map();            // short -> { inflight, retryAt }
+const _mapMeshMem = new Map();         // short -> { segs: Float32Array (6 per edge), grid: Map, tris, edges }
+const _mapMeshNet = {                  // one GET -> { status, buf }; status 0 = network failure. Swapped out by tests.
+  get(url) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (!done) { done = true; resolve(v); } };
+      const rq = https.get(url, { timeout: 30000, headers: { 'User-Agent': 'wolfpack-logsync' } }, (r) => {
+        if (r.statusCode !== 200) { r.resume(); return finish({ status: r.statusCode || 0 }); }
+        const chunks = []; let n = 0;
+        r.on('data', (c) => { n += c.length; if (n > MAP_MESH_MAX_BYTES) { rq.destroy(); finish({ status: 0 }); } else chunks.push(c); });
+        r.on('end', () => finish({ status: 200, buf: Buffer.concat(chunks) }));
+        r.on('error', () => finish({ status: 0 }));
+      });
+      rq.on('timeout', () => { rq.destroy(); finish({ status: 0 }); });
+      rq.on('error', () => finish({ status: 0 }));
+    });
+  },
+};
+// 'ready' | 'loading' | 'none' (EQEmu has no mesh for the zone) | 'off'. Starts the download when it is not on disk.
+function _mapMeshEnsure(short, now) {
+  const dir = _mapPaths.mesh;
+  if (!dir || !short || !/^[a-z0-9_]{1,32}$/i.test(short)) return 'off';
+  const st = _mapMesh.get(short);
+  try { if (fs.statSync(path.join(dir, short + '.map')).isFile()) return 'ready'; } catch { /* not yet */ }
+  if (st && st.inflight) return 'loading';
+  if (st && now < st.retryAt) return st.none ? 'none' : 'loading';
+  try {
+    const none = fs.statSync(path.join(dir, short + '.none'));
+    if (now - none.mtimeMs < MAP_MESH_NONE_MS) { _mapMesh.set(short, { inflight: false, none: true, retryAt: none.mtimeMs + MAP_MESH_NONE_MS }); return 'none'; }
+  } catch { /* no marker */ }
+  const rec = { inflight: true, retryAt: 0 };
+  _mapMesh.set(short, rec);
+  (async () => {
+    try {
+      const got = await _mapMeshNet.get(MAP_MESH_BASE + short + '.map');
+      fs.mkdirSync(dir, { recursive: true });
+      if (got.status === 404) { fs.writeFileSync(path.join(dir, short + '.none'), ''); rec.none = true; rec.retryAt = Date.now() + MAP_MESH_NONE_MS; return; }
+      if (got.status !== 200 || !got.buf) { rec.retryAt = Date.now() + MAP_MESH_RETRY_MS; return; }
+      _meshDecode(got.buf);   // a file that does not decode is not kept
+      const f = path.join(dir, short + '.map');
+      fs.writeFileSync(f + '.tmp', got.buf); fs.renameSync(f + '.tmp', f);
+      rec.retryAt = Infinity;
+    } catch (e) {
+      rec.retryAt = Date.now() + MAP_MESH_RETRY_MS;
+      console.log('[map] zone mesh for ' + short + ': ' + (e && e.message));
+    } finally { rec.inflight = false; }
+  })();
+  return 'loading';
+}
+// zone/map.cpp RotateVertex: about x, then y, then z (radians), in place.
+function _meshRot(v, rx, ry, rz) {
+  let y = Math.cos(rx) * v[1] - Math.sin(rx) * v[2], z = Math.sin(rx) * v[1] + Math.cos(rx) * v[2]; v[1] = y; v[2] = z;
+  let x = Math.cos(ry) * v[0] + Math.sin(ry) * v[2]; z = -Math.sin(ry) * v[0] + Math.cos(ry) * v[2]; v[0] = x; v[2] = z;
+  x = Math.cos(rz) * v[0] - Math.sin(rz) * v[1]; y = Math.sin(rz) * v[0] + Math.cos(rz) * v[1]; v[0] = x; v[1] = y;
+}
+// A v2 .map file -> Float32Array of triangles (9 floats each) in the server frame, exactly as Map::LoadV2 builds its collision
+// mesh: the zone's own triangles, every placed model (rotated, scaled, moved; x/y swapped as the server does), placeable
+// groups, and the terrain tiles. Non-collidable triangles (things you walk through) are skipped, as the server skips them.
+function _meshDecode(file) {
+  if (!file || file.length < 12) throw new Error('short file');
+  const ver = file.readUInt32LE(0);
+  if (ver !== 0x02000000) throw new Error('map version ' + ver.toString(16) + ' not read');
+  const size = file.readUInt32LE(4);
+  const d = zlib.inflateSync(file.subarray(12, 12 + size));
+  let o = 0;
+  const u32 = () => { const v = d.readUInt32LE(o); o += 4; return v; };
+  const f32 = () => { const v = d.readFloatLE(o); o += 4; return v; };
+  const str = () => { const e = d.indexOf(0, o); const s = d.toString('latin1', o, e); o = e + 1; return s; };
+  const vc = u32(), ic = u32(), ncv = u32(), nci = u32(), mc = u32(), pc = u32(), gc = u32(), tc = u32(), qpt = u32(), upv = f32();
+  const out = [];
+  const push = (a, b, c) => out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+  const V = new Float32Array(vc * 3);
+  for (let i = 0; i < vc * 3; i++) V[i] = f32();
+  for (let i = 0; i + 2 < ic; i += 3) {
+    const a = u32() * 3, b = u32() * 3, c = u32() * 3;
+    push([V[a], V[a + 1], V[a + 2]], [V[b], V[b + 1], V[b + 2]], [V[c], V[c + 1], V[c + 2]]);
+  }
+  o += (ic % 3) * 4 + ncv * 12 + nci * 4;
+  const models = new Map();
+  for (let i = 0; i < mc; i++) {
+    const name = str(), nv = u32(), np = u32(), mv = [];
+    for (let j = 0; j < nv; j++) mv.push([f32(), f32(), f32()]);
+    const polys = [];
+    for (let j = 0; j < np; j++) { const p = [u32(), u32(), u32()]; const vis = d[o]; o += 1; if (vis) polys.push(p); }
+    models.set(name, { mv, polys });
+  }
+  for (let i = 0; i < pc; i++) {
+    const name = str(), x = f32(), y = f32(), z = f32(), rx = f32(), ry = f32(), rz = f32(), sx = f32(), sy = f32(), sz = f32();
+    const m = models.get(name);
+    if (!m) continue;
+    for (const p of m.polys) {
+      const t = p.map((k) => {
+        const v = (m.mv[k] || [0, 0, 0]).slice();
+        _meshRot(v, rx, ry, rz); v[0] *= sx; v[1] *= sy; v[2] *= sz; v[0] += x; v[1] += y; v[2] += z;
+        return [v[1], v[0], v[2]];   // x/y swapped, as the server does
+      });
+      push(t[0], t[1], t[2]);
+    }
+  }
+  const DEG = 3.14159 / 180;
+  for (let i = 0; i < gc; i++) {
+    const x = f32(), y = f32(), z = f32(), rx = f32(), ry = f32(), rz = f32(), sx = f32(), sy = f32(), sz = f32();
+    const tx = f32(), ty = f32(), tz = f32(), n = u32();
+    for (let j = 0; j < n; j++) {
+      const name = str(), px = f32(), py = f32(), pz = f32(), prx = f32() * DEG, pry = f32() * DEG, prz = f32() * DEG;
+      const psx = f32(), psy = f32(), psz = f32();
+      const m = models.get(name);
+      if (!m) continue;
+      const corr = [px, py, pz]; _meshRot(corr, rx * DEG, 0, 0);
+      for (const p of m.polys) {
+        const t = p.map((k) => {
+          const v = (m.mv[k] || [0, 0, 0]).slice();
+          v[0] *= psx; v[1] *= psy; v[2] *= psz; v[0] += px; v[1] += py; v[2] += pz;
+          _meshRot(v, rx * DEG, 0, 0); _meshRot(v, 0, ry * DEG, 0);
+          v[0] -= corr[0]; v[1] -= corr[1]; v[2] -= corr[2];
+          _meshRot(v, prx, 0, 0); _meshRot(v, 0, -pry, 0); _meshRot(v, 0, 0, prz);
+          v[0] += corr[0]; v[1] += corr[1]; v[2] += corr[2];
+          _meshRot(v, 0, 0, rz * DEG);
+          v[0] *= sx; v[1] *= sy; v[2] *= sz; v[0] += tx + x; v[1] += ty + y; v[2] += tz + z;
+          return [v[1], v[0], v[2]];
+        });
+        push(t[0], t[1], t[2]);
+      }
+    }
+  }
+  const nq = qpt * qpt, nvq = (qpt + 1) * (qpt + 1);
+  for (let i = 0; i < tc; i++) {
+    const flat = d[o]; o += 1;
+    const x = f32(), y = f32();
+    if (flat) {
+      const z = f32(), w = qpt * upv;
+      const a = [x, y, z], b = [x + w, y, z], c = [x + w, y + w, z], e = [x, y + w, z];
+      push(e, b, c); push(e, a, b);
+      continue;
+    }
+    const flags = d.subarray(o, o + nq); o += nq;
+    const F = new Float32Array(nvq); for (let j = 0; j < nvq; j++) F[j] = f32();
+    let row = -1;
+    for (let q = 0; q < nq; q++) {
+      if (q % qpt === 0) row++;
+      if (flags[q] & 1) continue;
+      const x1 = x + row * upv, y1 = y + (q % qpt) * upv;
+      const a = [x1, y1, F[q + row]], b = [x1 + upv, y1, F[q + row + qpt + 1]];
+      const c = [x1 + upv, y1 + upv, F[q + row + qpt + 2]], e = [x1, y1 + upv, F[q + row + 1]];
+      push(e, b, c); push(e, a, b);
+    }
+  }
+  return Float32Array.from(out);
+}
+// Feature edges of a triangle list (see the block header) -> Float32Array, 6 floats per edge.
+function _meshEdges(tris) {
+  const ids = new Map(), P = [];
+  const vid = (x, y, z) => {
+    const k = Math.round(x * 10) + ',' + Math.round(y * 10) + ',' + Math.round(z * 10);
+    let id = ids.get(k);
+    if (id === undefined) { id = P.length / 3; ids.set(k, id); P.push(x, y, z); }
+    return id;
+  };
+  const edges = new Map();   // a*2^22+b -> { n: [nx,ny,nz] of the first face, keep }
+  const cosMax = Math.cos(MESH_CREASE_DEG * Math.PI / 180);
+  for (let t = 0; t < tris.length; t += 9) {
+    const a = vid(tris[t], tris[t + 1], tris[t + 2]), b = vid(tris[t + 3], tris[t + 4], tris[t + 5]), c = vid(tris[t + 6], tris[t + 7], tris[t + 8]);
+    if (a === b || b === c || a === c) continue;
+    const ux = tris[t + 3] - tris[t], uy = tris[t + 4] - tris[t + 1], uz = tris[t + 5] - tris[t + 2];
+    const vx = tris[t + 6] - tris[t], vy = tris[t + 7] - tris[t + 1], vz = tris[t + 8] - tris[t + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const nl = Math.hypot(nx, ny, nz);
+    if (!(nl > 1e-6)) continue;
+    nx /= nl; ny /= nl; nz /= nl;
+    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+      const key = p < q ? p * 4194304 + q : q * 4194304 + p;
+      const e = edges.get(key);
+      if (!e) { edges.set(key, { nx, ny, nz, faces: 1, crease: false }); continue; }
+      e.faces++;
+      if (Math.abs(e.nx * nx + e.ny * ny + e.nz * nz) < cosMax) e.crease = true;   // abs: a face wound the other way is still flat
+    }
+  }
+  const out = [];
+  for (const [key, e] of edges) {
+    if (e.faces === 2 && !e.crease) continue;
+    const p = Math.floor(key / 4194304) * 3, q = (key % 4194304) * 3;
+    out.push(P[p], P[p + 1], P[p + 2], P[q], P[q + 1], P[q + 2]);
+  }
+  return Float32Array.from(out);
+}
+function _meshGrid(segs) {
+  const grid = new Map();
+  for (let i = 0; i < segs.length; i += 6) {
+    const k = Math.floor((segs[i] + segs[i + 3]) / 2 / MESH_CELL) + ':' + Math.floor((segs[i + 1] + segs[i + 4]) / 2 / MESH_CELL);
+    let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+  }
+  return grid;
+}
+// The zone's edges, decoded once and held for the last MAP_MESH_KEEP zones. null while it is not on disk.
+function _mapMeshFor(short) {
+  const hit = _mapMeshMem.get(short);
+  if (hit) return hit;
+  let file;
+  try { file = fs.readFileSync(path.join(_mapPaths.mesh, short + '.map')); } catch { return null; }
+  const tris = _meshDecode(file), segs = _meshEdges(tris);
+  const m = { segs, grid: _meshGrid(segs), tris: tris.length / 9, edges: segs.length / 6 };
+  _mapMeshMem.set(short, m);
+  while (_mapMeshMem.size > MAP_MESH_KEEP) _mapMeshMem.delete(_mapMeshMem.keys().next().value);
+  return m;
+}
+// The edges within r (flat) of (x, y) whose middle is within dz of z, rounded to whole units: [x1,y1,z1,x2,y2,z2, ...].
+function _mapMeshNear(m, x, y, z, r, dz) {
+  const out = [], c0x = Math.floor((x - r) / MESH_CELL), c1x = Math.floor((x + r) / MESH_CELL);
+  const c0y = Math.floor((y - r) / MESH_CELL), c1y = Math.floor((y + r) / MESH_CELL), S = m.segs;
+  for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+    const a = m.grid.get(cx + ':' + cy);
+    if (!a) continue;
+    for (const i of a) {
+      const mx = (S[i] + S[i + 3]) / 2, my = (S[i + 1] + S[i + 4]) / 2, mz = (S[i + 2] + S[i + 5]) / 2;
+      if (Math.hypot(mx - x, my - y) > r || (z != null && Math.abs(mz - z) > dz)) continue;
+      for (let k = 0; k < 6; k++) out.push(Math.round(S[i + k]));
+      if (out.length >= MESH_MAX_SEGS * 6) return out;
+    }
+  }
+  return out;
+}
+// GET /api/map-mesh?zone=<short>&x=&y=&z=&r= (server frame) -> { ok, zone, status, segs?, edges? }. status: ready | loading |
+// none (no mesh for this zone) | off | error. The radar asks around you and asks again when you have moved.
+function _mapMeshAnswer(q, now) {
+  const zone = String(q.get('zone') || '').toLowerCase();
+  const st = _mapMeshEnsure(zone, now);
+  if (st !== 'ready') return { ok: true, zone, status: st };
+  const x = Number(q.get('x')), y = Number(q.get('y')), zq = q.get('z'), z = zq == null || zq === '' ? null : Number(zq);
+  if (!isFinite(x) || !isFinite(y)) return { ok: false, zone, status: 'error', error: 'x and y' };
+  const r = Math.max(50, Math.min(600, Number(q.get('r')) || 300));
+  let m;
+  try { m = _mapMeshFor(zone); } catch (e) { return { ok: false, zone, status: 'error', error: String(e && e.message) }; }
+  if (!m) return { ok: true, zone, status: 'loading' };
+  return { ok: true, zone, status: 'ready', source: 'EQEmu server map', x, y, z, r, segs: _mapMeshNear(m, x, y, isFinite(z) ? z : null, r, 200), edges: m.edges };
+}
+// ── end Zone meshes ──
 
 // ── Zone data: disk first, the bot second ───────────────────────────────────────────────────────
 const _mapZones = new Map();   // short -> { short, body, byId, etag, fetchedAt, retryAt, none, inflight }
