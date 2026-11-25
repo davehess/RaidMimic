@@ -209,6 +209,12 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-25 — Radar styles (beta, Mimic only; Desk `radar-style`).** The guild lead: *"the whole point is to
+  differentiate that you're blind and give visual hints to what's around you. little pulses on wire mesh or other visual
+  styles would be amazing"*. ⚙ → Radar style: **Pulse** (default; a sonar ring leaves you every 1.8 s and lights the walls
+  as it reaches them), **Sweep** (a beam turns around you every 2.4 s), **Ember** (red, glowing, breathing) and **Plain**
+  (as before). All but Plain tint the window's edges so being blind is obvious, and they animate on the radar's own frame
+  loop, only while the radar is on screen. Pick pending on the Desk.
 - **🧪 2026-11-25 — Radar walls from the zone mesh (beta: agent 4.0.114; Desk `radar-sense` B, DECISIONS §659).** The radar
   draws the server's own 3D shape of the zone as a wireframe: walls, floors, ceilings, stairs and the placed furniture (the
   Plane of Tranquility library's bookcases and desk). The agent downloads EQEmu's `base/<zone>.map` once per zone (about 1 MB)

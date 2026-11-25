@@ -387,6 +387,7 @@
         <div class="grp">Blind</div>
         <label class="row" title="What the Map shows while you are blind (or testing it): the zoomed Map, the radar (the room drawn in lines from behind you, people and mobs seen through walls), or both side by side."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="inset">Radar + mini map</option><option value="split">Map + radar</option><option value="radar">Radar</option><option value="map">Map</option></select></label>
         <label class="row" title="What the radar draws as walls. Zone mesh: the server's own 3D shape of the zone (walls, floors, ceilings, stairs, furniture), downloaded once per zone. Map lines: your map's lines stood up as walls; a line the mapmaker drew for a hill or a path shows as a wall too."><span class="bl">Radar walls</span><select id="cfgRadarWalls"><option value="mesh">Zone mesh</option><option value="lines">Map lines</option></select></label>
+        <label class="row" title="How the radar looks. Pulse: a sonar ring leaves you every two seconds and lights the walls as it reaches them. Sweep: a beam turns around you lighting what it passes. Ember: everything glows red and breathes, brighter near you. Plain: steady walls. All but Plain tint the window's edges so it is plain you are blind."><span class="bl">Radar style</span><select id="cfgRadarStyle"><option value="pulse">Pulse</option><option value="sweep">Sweep</option><option value="ember">Ember</option><option value="plain">Plain</option></select></label>
         <label class="row" title="How long Test blind lasts."><span class="bl">Test length</span><select id="cfgBlindSecs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">2 min</option></select></label>
         <label class="row" title="While a test blind runs, the Map's background goes solid black, the way a real blind blacks out the game, so you see only what Mimic shows. A real blind is not changed by this."><input type="checkbox" id="cfgBlindBlack"><span class="bl">Black out while testing</span></label>
         <div class="row"><button type="button" id="blindTestBtn" title="Blind your character without a spell, for the test length above: everything a real blind opens opens, so you can see it. Click again to end it.">Test blind (30 s)</button></div>
@@ -2321,7 +2322,7 @@
   // Radar walls B (the guild lead, 2026-11-25: "get going on the wireframe"): the server's zone mesh, as the agent's feature
   // edges around you (GET /api/map-mesh, server frame). Asked for MESH_R around you, again once you are MESH_MOVE from where it
   // was asked, or MESH_RETRY_MS after a "loading". ⚙ → Radar walls: Zone mesh (default; map lines until it arrives) or Map lines.
-  var MESH_R = 300, MESH_MOVE = 120, MESH_RETRY_MS = 3000, MESH_ALPHA_STEPS = 6;
+  var MESH_R = 300, MESH_MOVE = 120, MESH_RETRY_MS = 3000, MESH_ALPHA_STEPS = 10;
   S.radarWalls = lsGet('wp-map-radar-walls') === 'lines' ? 'lines' : 'mesh';
   S.mesh = null;   // { zone, x, y, status, segs (screen frame: sx, sy, z per end), at }
   function meshWanted(me, zone, now) {
@@ -2365,9 +2366,43 @@
     var why = st === 'none' ? 'no zone mesh for this zone' : st === 'off' ? 'zone mesh off' : st === 'error' ? 'zone mesh failed' : 'zone mesh loading…';
     return localWalls() ? 'Walls: map lines (' + why + ')' : '';
   }
-  // Draw the mesh edges: the floor you stand on (±BLIND_LEVEL) bright, the rest within RADAR_FLOOR_Z * 2 faint, all fading with
-  // distance; one stroke per brightness step, so ten thousand edges stay cheap.
-  function drawMesh(g, c, segs, ms, sz, w, h, col) {
+  // ── Radar styles (the guild lead, 2026-11-25: "the whole point is to differentiate that you're blind and give visual hints to
+  // what's around you. little pulses on wire mesh or other visual styles would be amazing"). ⚙ → Radar style; each is tried on
+  // beta with Test blind, the pick goes on the Desk (radar-style).
+  //   pulse — sonar: a ring leaves you every PULSE_MS; walls sit nearly dark until it reaches them, flash, then fade.
+  //   sweep — a beam turns around you every SWEEP_MS, lighting the walls it passes, like a radar scope.
+  //   ember — everything glows red and breathes slowly, brighter near you (the "world on fire" sense).
+  //   plain — the walls as drawn before: steady, fading with distance.
+  // Every style but plain tints the window's edges, so a glance says "blind", and animates on its own frame loop (radarTick).
+  var RADAR_STYLES = {
+    pulse: { rgb: '120,200,255', anim: true },
+    sweep: { rgb: '90,255,150', anim: true },
+    ember: { rgb: '255,90,50', anim: true, blur: 6 },
+    plain: { rgb: null, anim: false },
+  };
+  var PULSE_MS = 1800, PULSE_DECAY_MS = 700, SWEEP_MS = 2400, SWEEP_DECAY_MS = 900, RADAR_DARK = 0.07;
+  S.radarStyle = (function () { var v = lsGet('wp-map-radar-style'); return RADAR_STYLES[v] ? v : 'pulse'; })();
+  // How lit a wall is (0..1) at flat distance d from you and screen-frame bearing ang (radians), at time t (ms). Pure.
+  function radarGlow(style, d, ang, t) {
+    if (style === 'pulse') {
+      var v = RADAR_R * 1.15 / PULSE_MS, best = 0;
+      for (var k = 0; k < 2; k++) {   // this ring and the one before it, so a far wall is still fading when the next leaves
+        var dt = ((t % PULSE_MS) + k * PULSE_MS) - d / v;
+        if (dt >= 0) best = Math.max(best, Math.exp(-dt / PULSE_DECAY_MS));
+      }
+      return RADAR_DARK + (1 - RADAR_DARK) * best;
+    }
+    if (style === 'sweep') {
+      var beam = (t % SWEEP_MS) / SWEEP_MS * 2 * Math.PI;
+      var behind = ((beam - ang) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);   // how far the beam has gone past this wall
+      return RADAR_DARK + (1 - RADAR_DARK) * Math.exp(-(behind / (2 * Math.PI) * SWEEP_MS) / SWEEP_DECAY_MS);
+    }
+    if (style === 'ember') return Math.max(0.15, Math.min(1, 0.75 - d / (RADAR_R * 2) + 0.2 * Math.sin(t / 420 - d / 18)));
+    return Math.max(0.12, Math.min(1, 1.1 - d / RADAR_R));
+  }
+  // Draw the mesh edges, lit by radarGlow: the floor you stand on (±BLIND_LEVEL) full strength, the rest within
+  // RADAR_FLOOR_Z * 2 at 40%; one stroke per brightness step, so ten thousand edges stay cheap.
+  function drawMesh(g, c, segs, ms, sz, w, h, col, style, t) {
     var paths = [];
     for (var s = 0; s < MESH_ALPHA_STEPS; s++) paths.push([]);
     for (var i = 0; i + 5 < segs.length; i += 6) {
@@ -2377,10 +2412,13 @@
       if (d > RADAR_R) continue;
       var p = radarSeg(c, [segs[i], segs[i + 1], segs[i + 2]], [segs[i + 3], segs[i + 4], segs[i + 5]], w, h);
       if (!p) continue;
-      var a = (dz <= BLIND_LEVEL ? 0.95 : 0.35) * Math.max(0.12, Math.min(1, 1.1 - d / RADAR_R));
+      var ang = Math.atan2((segs[i + 1] + segs[i + 4]) / 2 - ms.sy, (segs[i] + segs[i + 3]) / 2 - ms.sx);
+      var a = (dz <= BLIND_LEVEL ? 0.95 : 0.4) * radarGlow(style, d, ang, t);
       paths[Math.min(MESH_ALPHA_STEPS - 1, Math.floor(a * MESH_ALPHA_STEPS))].push(p);
     }
-    g.strokeStyle = col; g.lineWidth = 1;
+    var st = RADAR_STYLES[style] || RADAR_STYLES.plain;
+    g.strokeStyle = col; g.lineWidth = style === 'plain' ? 1 : 1.3;
+    if (st.blur) { g.shadowBlur = st.blur; g.shadowColor = col; }
     for (var k = 0; k < MESH_ALPHA_STEPS; k++) {
       if (!paths[k].length) continue;
       g.globalAlpha = (k + 0.5) / MESH_ALPHA_STEPS;
@@ -2388,7 +2426,43 @@
       for (var j = 0; j < paths[k].length; j++) { var q = paths[k][j]; g.moveTo(q[0][0], q[0][1]); g.lineTo(q[1][0], q[1][1]); }
       g.stroke();
     }
+    g.shadowBlur = 0;
   }
+  // On the floor, the sonar ring (pulse) or the beam (sweep), so the motion reads even in an empty room.
+  function drawRadarWave(seg, ms, sz, style, t, col) {
+    if (style === 'pulse') {
+      var r = (t % PULSE_MS) / PULSE_MS * RADAR_R * 1.15, al = Math.max(0, 0.8 * (1 - r / (RADAR_R * 1.15)));
+      for (var a = 0; a < 64; a++) {
+        var t0 = a / 64 * 6.2832, t1 = (a + 1) / 64 * 6.2832;
+        seg([ms.sx + Math.cos(t0) * r, ms.sy + Math.sin(t0) * r, sz], [ms.sx + Math.cos(t1) * r, ms.sy + Math.sin(t1) * r, sz], col, al, 1.5);
+      }
+    } else if (style === 'sweep') {
+      var b = (t % SWEEP_MS) / SWEEP_MS * 2 * Math.PI;
+      for (var n = 0; n < 6; n++) {   // the beam and a short fading tail behind it
+        var bb = b - n * 0.06;
+        seg([ms.sx, ms.sy, sz], [ms.sx + Math.cos(bb) * RADAR_R, ms.sy + Math.sin(bb) * RADAR_R, sz], col, 0.7 * (1 - n / 6), 1.5);
+      }
+    }
+  }
+  // The blind cue: the window's edges tinted the style's colour.
+  function drawRadarVignette(g, w, h, rgb) {
+    var gr = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+    gr.addColorStop(0, 'rgba(' + rgb + ',0)'); gr.addColorStop(1, 'rgba(' + rgb + ',0.28)');
+    g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  }
+  // The radar's own frame loop, only while a style that moves is on screen (the Map's loop runs only while something glides).
+  var radarRaf = 0, radarLast = 0;
+  function radarAnimating() {
+    return !document.hidden && !!S.radarView && S.radarView !== 'map' && !!(RADAR_STYLES[S.radarStyle] || {}).anim;
+  }
+  function radarTick() {
+    radarRaf = 0;
+    if (!radarAnimating()) return;
+    var now = Date.now();
+    if (now - radarLast >= FRAME_MS) { radarLast = now; renderRadar(now); }
+    radarRaf = requestAnimationFrame(radarTick);
+  }
+  function kickRadar() { if (!radarRaf && radarAnimating() && typeof requestAnimationFrame === 'function') radarRaf = requestAnimationFrame(radarTick); }
   var radarEl = document.getElementById('radar'), rctx = radarEl ? radarEl.getContext('2d') : null;
   var paneEl = document.getElementById('mapPane');
   var BLIND_VIEWS = ['inset', 'split', 'radar', 'map'];
@@ -2407,6 +2481,7 @@
     paneEl.classList.toggle('blind-inset', v === 'inset');
     radarEl.hidden = v === 'map';
     resize();
+    kickRadar();   // a radar style that moves keeps drawing on its own loop while this view shows it
   }
   function renderRadar(rt) {
     if (!rctx || !S.radarView || S.radarView === 'map') return;   // only in a blind view that has the radar (syncBlindView)
@@ -2429,7 +2504,9 @@
     // Walls B: the zone mesh when it is here; until then (or with ⚙ → Radar walls: Map lines) the raised map lines below.
     meshFetch(me, S.zone);
     var meshSegs = S.radarWalls === 'mesh' && S.mesh && S.mesh.zone === S.zone ? S.mesh.segs : null;
-    if (meshSegs) drawMesh(g, c, meshSegs, ms, sz, w, h, hexA(CO.wall, 1));
+    var rst = RADAR_STYLES[S.radarStyle] || RADAR_STYLES.plain, rcol = rst.rgb ? 'rgb(' + rst.rgb + ')' : hexA(CO.wall, 1);
+    if (meshSegs) drawMesh(g, c, meshSegs, ms, sz, w, h, rcol, S.radarStyle, rt);
+    if (meshSegs && rst.anim) drawRadarWave(seg, ms, sz, S.radarStyle, rt, rcol);
     // The floor grid at your feet, 10 units apart, 80 each way (the mesh draws the real floor instead).
     var gx = Math.round(ms.sx / 10) * 10, gy = Math.round(ms.sy / 10) * 10, gc = hexA(CO.wall, 0.35);
     for (var k = -80; k <= 80 && !meshSegs; k += 10) {
@@ -2522,6 +2599,7 @@
       }
       g.textAlign = 'left';
     }
+    if (rst.anim) drawRadarVignette(g, w, h, rst.rgb);   // the blind cue (radar styles)
     // The corner: what this is, and the test blind's seconds left.
     g.globalAlpha = 0.85; g.font = RADAR_FONT; g.fillStyle = 'rgba(255,255,255,0.85)';
     g.fillText('Radar · ' + (S.blindTest != null ? 'test blind' : 'blind') + blindLeftTxt(), 12, h - 32);   // under the toolbar's reach
@@ -2543,6 +2621,14 @@
   if (radarWallsSel) {
     radarWallsSel.value = S.radarWalls;
     radarWallsSel.addEventListener('change', function () { S.radarWalls = radarWallsSel.value === 'lines' ? 'lines' : 'mesh'; lsSet('wp-map-radar-walls', S.radarWalls); renderMap(); });
+  }
+  var radarStyleSel = document.getElementById('cfgRadarStyle');
+  if (radarStyleSel) {
+    radarStyleSel.value = S.radarStyle;
+    radarStyleSel.addEventListener('change', function () {
+      S.radarStyle = RADAR_STYLES[radarStyleSel.value] ? radarStyleSel.value : 'pulse';
+      lsSet('wp-map-radar-style', S.radarStyle); renderRadar(Date.now()); kickRadar();
+    });
   }
   var blindSecsSel = document.getElementById('cfgBlindSecs'), blindBlackCb = document.getElementById('cfgBlindBlack');
   if (blindSecsSel) {
@@ -2729,7 +2815,7 @@
     if (PART_TIMERS || raf || document.hidden || typeof requestAnimationFrame !== 'function') return;
     if (anyMoving(Date.now())) raf = requestAnimationFrame(frame);
   }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); kickAnim(); } });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); kickAnim(); kickRadar(); } });
   var POLL_MS = 250;   // positions: Mimic hands the agent a fresh snapshot every 300ms (self/group/raid/target)
   if (PART_TIMERS) POLL_MS = 500;   // the pop-out's list only needs the clock tick
   var inflight = false;

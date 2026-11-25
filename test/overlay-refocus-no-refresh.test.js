@@ -161,7 +161,8 @@ describe('the overlay pages keep their state when they become visible or focused
     }
     expect(listeners).toEqual(['map.html']);
     const map = stripJs(fs.readFileSync(path.join(MIMIC_DIR, 'map.html'), 'utf8'));
-    expect(map).toMatch(/visibilitychange', function \(\) \{ if \(!document\.hidden\) \{ poll\(\); kickAnim\(\); \} \}\)/);
+    // kickRadar: the blind radar's own frame loop (radar styles, 2026-11-25) restarts too; it draws, it does not rebuild.
+    expect(map).toMatch(/visibilitychange', function \(\) \{ if \(!document\.hidden\) \{ poll\(\); kickAnim\(\); kickRadar\(\); \} \}\)/);
   });
 });
 
