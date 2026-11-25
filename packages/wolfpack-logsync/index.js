@@ -38726,6 +38726,7 @@ function startWebDashboard(port) {
       }
       if (req.url === '/api/map-mark' && req.method === 'POST') return _handleMapMark(req, res);
       if (req.url === '/api/map-kill' && req.method === 'POST') return _handleMapKill(req, res);
+      if (req.url === '/api/blind-test' && req.method === 'POST') return _handleBlindTest(req, res);
       if (req.url === '/api/map-watch' && req.method === 'POST') return _handleMapWatch(req, res);
       if (req.url === '/api/map-leg' && req.method === 'POST') return _handleMapLeg(req, res);
       // Kite coach (map.html): one loop summary out, the guild's loops for the zone in.
@@ -58012,10 +58013,12 @@ function _mapAeRampage(name, zoneId, character, now) {
   let hit = _mobInfoByName.get(key);
   if (!hit || (now - hit.at) >= MOB_INFO_TTL_MS) { fetchMobInfo(name, character, zoneId); hit = _mobInfoByName.get(key) || hit; }
   const mob = hit && hit.mob ? hit.mob : null;
-  const ae = mob ? mob.ae_rampage : null, rp = mob ? mob.rampage : null;
+  const ae = mob ? mob.ae_rampage : null, rp = mob ? mob.rampage : null, rc = mob ? mob.reach : null;
   return {
     ae: ae && Number(ae.radius_still) > 0 ? ae : null,
     rampage: rp && Number(rp.range) > 0 ? rp : null,
+    // Its size and how far it hits (bot 4.1.14+: { radius, melee, melee_moving }, utils/aeRampage.js reachInfo), for the radar.
+    reach: rc && Number(rc.radius) > 0 && Number(rc.melee) > 0 ? rc : null,
   };
 }
 // Your pet on the Map (the guild lead, 2026-11-06: "Pet needs to show up on the mimic map and doesn't unless you target them").
@@ -58114,6 +58117,7 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
       const reach = _mapAeRampage(st.target_name, out.zone_id, character, now);
       if (reach.ae) out.target.ae_rampage = reach.ae;
       if (reach.rampage) out.target.rampage = reach.rampage;
+      if (reach.reach) out.target.reach = reach.reach;
     }
   }
   try { out.pet = _mapPetFor(character, st, zone, self, now); } catch { out.pet = null; }
@@ -58171,7 +58175,11 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
   }
   try { out.me = _mapMe(character, st); } catch { out.me = null; }
   // Blind (same flag the HUD reads): the Map zooms in on the nearest walls while it lasts (the guild lead, 2026-11-25).
-  try { const b = _blindState[String(character || '').toLowerCase()]; out.blind = !!(b && b.active); } catch { out.blind = false; }
+  try {
+    const b = _blindState[String(character || '').toLowerCase()];
+    out.blind = !!(b && b.active);
+    if (out.blind && b.source === 'test') out.blind_test = Math.max(0, Math.round((b.expiresAt - now) / 1000));   // seconds left
+  } catch { out.blind = false; }
   const zd = _mapZoneDoc(zone);
   try {   // a corpse in the Extended Target rows (if the bot ever sends one) is proof of death too, same as your own target
     const ecc = typeof _extTargetCache === 'undefined' ? null : _extTargetCache.get(String(character).trim().toLowerCase());
@@ -58408,6 +58416,31 @@ async function _handleMapKill(req, res) {
   if (!b || !b.name) return send(400, { error: 'name is required' });
   const r = _mapKillNow(zone, b, now, ch);
   send(r.ok ? 200 : 400, r);
+}
+// POST /api/blind-test { on, secs? } — blind the active character for a test, without a blind spell (the guild lead,
+// 2026-11-25: "I will need a button to test blind mode on beta for this without being blinded"). It sets the same per-character
+// blind state a real blind does (source 'test'), so Mimic forces the same overlays open, the HUD draws its ring and the Map
+// goes to its blind view, and it ends by the same expiry. No callout is spoken. `on: false` ends a test blind early (a real
+// blind is never ended from here). secs 5..120, default 30.
+async function _handleBlindTest(req, res) {
+  const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+  if (!_localOriginOk(req)) return send(403, { error: 'forbidden origin' });
+  let b = null;
+  try { b = JSON.parse((await _readBody(req, 512)) || '{}'); } catch (e) { return send(400, { error: 'bad body' }); }
+  send(200, _blindTestSet(b, Date.now()));
+}
+function _blindTestSet(b, now) {
+  const ch = _mapActiveCharacter(now);
+  if (!ch) return { ok: false, error: 'no character in game' };
+  const cl = String(ch).toLowerCase(), s = _blindState[cl];
+  if (b && b.on === false) {
+    if (s && s.active && s.source === 'test') { s.active = false; s.endedAt = now; }
+    return { ok: true, character: ch, active: !!(_blindState[cl] && _blindState[cl].active) };
+  }
+  if (s && s.active && s.source !== 'test') return { ok: false, error: 'already blind for real', character: ch };
+  const secs = Math.max(5, Math.min(120, Math.round(Number(b && b.secs) || 30)));
+  _blindState[cl] = { active: true, source: 'test', since: now, expiresAt: now + secs * 1000, target: _zealTargetForChar(cl) || null, selfHits: 0 };
+  return { ok: true, character: ch, active: true, until: now + secs * 1000 };
 }
 // POST /api/map-watch { zone?, point_id, named, on } - the click menu's "Watch for <named>" (see "Watched spots").
 async function _handleMapWatch(req, res) {

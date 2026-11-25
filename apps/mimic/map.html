@@ -41,6 +41,11 @@
   #cfg .foot{margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:6px;color:var(--wp-dim);font-size:9.5px}
   #stage{position:absolute;inset:0}
   #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* Blind view: the radar beside the Map (split) or over it (radar). See renderRadar. */
+  #radar{position:absolute;top:0;right:0;width:50%;height:100%;display:block;background:rgb(0 0 0);pointer-events:none;border-left:1px solid rgba(255,255,255,0.18)}
+  #radar[hidden]{display:none}
+  #mapPane.blind-split #stage{right:50%}
+  #mapPane.blind-radar #radar{width:100%;border-left:0}
   #hits{position:absolute;inset:0;pointer-events:none}
   body.dragging #hits{display:none}
   /* A spawn dot's click target: a real button, so the preload's hover handshake arms the click-through window. */
@@ -306,6 +311,7 @@
         <div id="locBar"></div>
         <div id="kiteChip" hidden></div>
       </div>
+      <canvas id="radar" hidden></canvas>
       <div id="tools">
         <button class="tb grip" id="toolsGrip" type="button" title="Drag the buttons anywhere on the map; let go near an edge and they lock to it (on the left or right edge they stand upright).">⠿</button>
         <button class="tb on" id="followBtn" type="button" title="Keep the map centred on you. Dragging the map turns it off.">Follow me</button>
@@ -370,6 +376,9 @@
         <div class="grp">Heights</div>
         <label class="row" title="Walls this far above or below you stay bright; the rest fade. Height is in game units: you are about 6 tall, one floor is roughly 30 to 60, so ±100 is about your floor and the ones next to it."><span class="bl" id="levelsVal">Levels</span><input id="levels" type="range" min="0" max="7" step="1"></label>
         <label class="row" title="Spawn points this far above or below you are shown; the rest are hidden. Same height units as Levels: ±25 is about your own floor, ±100 a floor or two either way."><span class="bl" id="spawnVal">Spawn height</span><input id="spawnLevels" type="range" min="0" max="7" step="1"></label>
+        <div class="grp">Blind</div>
+        <label class="row" title="What the Map shows while you are blind (or testing it): the zoomed Map, the radar (the room drawn in lines from behind you, people and mobs seen through walls), or both side by side."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="split">Map + radar</option><option value="radar">Radar</option><option value="map">Map</option></select></label>
+        <div class="row"><button type="button" id="blindTestBtn" title="Blind your character for 30 seconds without a spell: everything a real blind opens opens, so you can see it. Click again to end it.">Test blind (30 s)</button></div>
         <div class="grp">Show</div>
         <label class="row" title="Which way each raider faces. Arrow: a small arrowhead in their class colour, the point is the way they look. Slice: a pizza slice of a circle opening the way they look. Off: plain dots. Yours is the same, a little bigger, with a white rim."><span class="bl">Facing</span><select id="cfgFacing"><option value="arrow">Arrow</option><option value="slice">Slice</option><option value="off">Off</option></select></label>
         <label class="row" title="North: north is at the top. Your heading: the map turns so the way you face is the top, with you in the middle. Text never turns. The same switch as the toolbar's North up / Heading up."><span class="bl">Map up</span><select id="cfgOrient"><option value="north">North</option><option value="heading">Your heading</option></select></label>
@@ -962,6 +971,16 @@
     var ch = Number(a.chance) > 0 ? Number(a.chance) : 20;
     return { r: r, label: 'Rampage · ' + (Math.round(r * 10) / 10),
       tip: 'Hits ONE person: the first on its rampage list who isn\'t the tank, inside this ring · ' + ch + '% per round' };
+  }
+  // Your target's size and melee reach (bot 4.1.14 mob info `reach`, carried on the Map's target by the agent): { radius, melee,
+  // label } in game units, or null for no reach, a player, a corpse or nonsense. `melee` is how far from its centre it hits a
+  // player while it stands (the server's combat range: 0.75 x both bodies' radii, at least 14, +2 standing, at most 75).
+  function targetReach(t) {
+    var a = t && t.reach, r = a ? Number(a.radius) : 0, m = a ? Number(a.melee) : 0;
+    if (!(r > 0) || !(m > 0) || m > AGGRO_MAX || r > AGGRO_MAX) return null;
+    if (t.type != null && t.type !== 1) return null;
+    if (t.hp_pct === 0 || /'s corpse\d*$/i.test(String(t.name))) return null;
+    return { radius: r, melee: m, label: 'size ' + (Math.round(r * 10) / 10) + ' · hits at ' + (Math.round(m * 10) / 10) };
   }
   // Mezzes and lulls on the rings (the guild lead, 2026-10-13: "add zzz's if it's mezzed" · "if it's truly pacified make
   // the circle light pink and have it fill in the outside like a clock wipe more red until the pacify wears off. bard
@@ -2012,6 +2031,38 @@
     });
     return out;
   }
+  // ── Radar sense (the guild lead, 2026-11-25: "I'd like to see a 'radar sense' mode when blind"; Decision Desk radar-sense, A) ──
+  // A chase camera of our own: while you are blind the game screen is black, so it need not match EverQuest's camera. It sits
+  // RADAR_BACK behind you and RADAR_UP above, looking the way you face (Zeal's heading; north when there is none), tipped down
+  // by RADAR_PITCH. Points are in the SCREEN frame (toScreen: sx east, sy south) plus z up, the frame the walls are kept in.
+  // radarCam(me, heading) -> the camera; radarPt(cam, sx, sy, z, w, h) -> [px, py, depth] or null behind the near plane;
+  // radarSeg clips a segment to the near plane first, so a wall you stand beside is still drawn up to the edge.
+  var RADAR_BACK = 42, RADAR_UP = 20, RADAR_PITCH = 0.22, RADAR_FOV = 1.1, RADAR_NEAR = 2;
+  function radarCam(me, heading) {
+    var s = toScreen(me.x, me.y), f = heading != null && isFinite(heading) ? headingVec(heading) : { dx: 0, dy: -1 };
+    return { x: s.sx - f.dx * RADAR_BACK, y: s.sy - f.dy * RADAR_BACK, z: (me.z == null ? 0 : Number(me.z)) + RADAR_UP,
+      fx: f.dx, fy: f.dy, rx: -f.dy, ry: f.dx, cp: Math.cos(RADAR_PITCH), sp: Math.sin(RADAR_PITCH) };
+  }
+  function radarCamSpace(c, sx, sy, z) {
+    var dx = sx - c.x, dy = sy - c.y, dz = z - c.z;
+    var a = dx * c.fx + dy * c.fy, b = dx * c.rx + dy * c.ry;
+    return { right: b, depth: a * c.cp - dz * c.sp, up: a * c.sp + dz * c.cp };
+  }
+  function radarProj(q, w, h) {
+    var f = (h / 2) / Math.tan(RADAR_FOV / 2);
+    return [w / 2 + q.right / q.depth * f, h / 2 - q.up / q.depth * f, q.depth];
+  }
+  function radarPt(c, sx, sy, z, w, h) {
+    var q = radarCamSpace(c, sx, sy, z);
+    return q.depth < RADAR_NEAR ? null : radarProj(q, w, h);
+  }
+  function radarSeg(c, a, b, w, h) {   // a, b = [sx, sy, z]; -> [[px, py, depth], [px, py, depth]] or null
+    var p = radarCamSpace(c, a[0], a[1], a[2]), q = radarCamSpace(c, b[0], b[1], b[2]);
+    if (p.depth < RADAR_NEAR && q.depth < RADAR_NEAR) return null;
+    var cut = function (u, v) { var t = (RADAR_NEAR - u.depth) / (v.depth - u.depth); return { right: u.right + (v.right - u.right) * t, up: u.up + (v.up - u.up) * t, depth: RADAR_NEAR }; };
+    if (p.depth < RADAR_NEAR) p = cut(p, q); else if (q.depth < RADAR_NEAR) q = cut(q, p);
+    return [radarProj(p, w, h), radarProj(q, w, h)];
+  }
   // ── end pure helpers ──
 
   // ── state ──
@@ -2249,6 +2300,162 @@
     if (!(ns > 0) || (b.set && Math.abs(ns / S.view.scale - 1) < 0.15)) return;
     S.view.scale = ns; b.set = true;
   }
+  // ── The radar (Decision Desk radar-sense, A: "map lines raised"). While blind, ⚙ → Blind view shows the zoomed Map, the radar,
+  // or both side by side (Map + radar, the default while it is being tried). The radar is the room from radarCam (behind you,
+  // the way you face): your own map lines stood up RADAR_WALL_H tall (map lines carry no height; 20 is a guess), your floor
+  // (±BLIND_LEVEL) bright and the floors within RADAR_FLOOR_Z faint, a grid at your feet, everything fading with distance.
+  // People, mobs, your target with its body and melee ring, and the targeter lines are drawn over the walls: a sense, not a view.
+  // Only what is within RADAR_R of you is drawn. Ceilings, stairs and ramps are not in the map lines, so they are not here.
+  var RADAR_WALL_H = 20, RADAR_R = 160, RADAR_FLOOR_Z = 60, RADAR_FONT = '600 12px system-ui, sans-serif';
+  var radarEl = document.getElementById('radar'), rctx = radarEl ? radarEl.getContext('2d') : null;
+  var paneEl = document.getElementById('mapPane');
+  S.blindView = (function () { var v = lsGet('wp-map-blind-view'); return v === 'map' || v === 'radar' ? v : 'split'; })();
+  function syncBlindView() {
+    if (PART_TIMERS || !radarEl) return;
+    var v = S.blind ? S.blindView : 'map';
+    if (S.radarView === v) return;
+    S.radarView = v;
+    paneEl.classList.toggle('blind-split', v === 'split');
+    paneEl.classList.toggle('blind-radar', v === 'radar');
+    radarEl.hidden = v === 'map';
+    resize();
+  }
+  function renderRadar(rt) {
+    if (!rctx || !S.radarView || S.radarView === 'map') return;   // only in a blind view that has the radar (syncBlindView)
+    var dpr = window.devicePixelRatio || 1, w = Math.max(1, radarEl.clientWidth), h = Math.max(1, radarEl.clientHeight);
+    if (radarEl.width !== Math.floor(w * dpr) || radarEl.height !== Math.floor(h * dpr)) { radarEl.width = Math.floor(w * dpr); radarEl.height = Math.floor(h * dpr); }
+    var g = rctx;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.globalAlpha = 1; g.setLineDash([]); g.fillStyle = 'rgb(0,0,0)'; g.fillRect(0, 0, w, h);
+    var P = S.p;
+    if (!P || !P.self) { g.fillStyle = 'rgba(255,255,255,0.7)'; g.font = RADAR_FONT; g.fillText('Radar: waiting for your position', 12, 22); return; }
+    var CO = S.cfg.col, me = drawn('self', P.self, rt), c = radarCam(me, me.heading), sz = me.z == null ? 0 : Number(me.z);
+    var ms = toScreen(me.x, me.y), foc = (h / 2) / Math.tan(RADAR_FOV / 2);
+    var fade = function (d) { return Math.max(0.12, Math.min(1, 1.1 - d / RADAR_R)); };
+    var seg = function (a, b, style, alpha, width) {
+      var s = radarSeg(c, a, b, w, h);
+      if (!s) return;
+      g.globalAlpha = alpha * fade((s[0][2] + s[1][2]) / 2); g.strokeStyle = style; g.lineWidth = width;
+      g.beginPath(); g.moveTo(s[0][0], s[0][1]); g.lineTo(s[1][0], s[1][1]); g.stroke();
+    };
+    // The floor grid at your feet, 10 units apart, 80 each way.
+    var gx = Math.round(ms.sx / 10) * 10, gy = Math.round(ms.sy / 10) * 10, gc = hexA(CO.wall, 0.35);
+    for (var k = -80; k <= 80; k += 10) {
+      seg([gx + k, gy - 80, sz], [gx + k, gy + 80, sz], gc, 1, 1);
+      seg([gx - 80, gy + k, sz], [gx + 80, gy + k, sz], gc, 1, 1);
+    }
+    // Walls: your own map files (the Map's local walls). Ours alone carry no floor heights per line, so they are not raised.
+    if (localWalls()) {
+      for (var gi = 0; gi < S.local.groups.length; gi++) {
+        var G = S.local.groups[gi];
+        for (var i = 0, j = 0; i < G.xy.length; i += 4, j++) {
+          var x1 = G.xy[i], y1 = G.xy[i + 1], x2 = G.xy[i + 2], y2 = G.xy[i + 3], z = G.z[j], dz = z - sz;
+          if (Math.abs(dz) > RADAR_FLOOR_Z || Math.hypot((x1 + x2) / 2 - ms.sx, (y1 + y2) / 2 - ms.sy) > RADAR_R) continue;
+          var mine = Math.abs(dz) <= BLIND_LEVEL, col = hexA(CO.wall, 1), al = mine ? 0.95 : 0.3, top = z + RADAR_WALL_H;
+          seg([x1, y1, z], [x2, y2, z], col, al, 1.2);
+          seg([x1, y1, top], [x2, y2, top], col, al, 1.2);
+          seg([x1, y1, z + RADAR_WALL_H / 2], [x2, y2, z + RADAR_WALL_H / 2], col, al * 0.6, 1);
+          seg([x1, y1, z], [x1, y1, top], col, al, 1);
+          seg([x2, y2, z], [x2, y2, top], col, al, 1);
+        }
+      }
+    } else {
+      g.globalAlpha = 0.8; g.fillStyle = 'rgba(255,255,255,0.8)'; g.font = RADAR_FONT;
+      g.fillText('No map file for this zone: no walls on the radar', 12, h - 14);
+    }
+    // A body: a rounded box RADIUS wide and TALL high, standing at (sx, sy, z).
+    var body = function (sx, sy, z, radius, tall, style, label) {
+      var p0 = radarPt(c, sx, sy, z, w, h), p1 = radarPt(c, sx, sy, z + tall, w, h);
+      if (!p0 || !p1) return null;
+      var half = Math.max(2, radius * foc / p0[2]);
+      g.globalAlpha = fade(p0[2]) < 0.4 ? 0.6 : 1; g.strokeStyle = style; g.lineWidth = 1.5;
+      g.beginPath();
+      if (g.roundRect) g.roundRect(p0[0] - half, p1[1], half * 2, p0[1] - p1[1], half); else g.rect(p0[0] - half, p1[1], half * 2, p0[1] - p1[1]);
+      g.stroke();
+      if (label) { g.font = RADAR_FONT; g.fillStyle = style; g.textAlign = 'center'; g.fillText(label, p0[0], p1[1] - 4); g.textAlign = 'left'; }
+      return p1;
+    };
+    var at = {};   // lowercase name -> drawn spot, for the targeter lines
+    [['g:', P.group], ['r:', P.raid]].forEach(function (src) {
+      (src[1] || []).forEach(function (m) {
+        var key = String(m.name || '').toLowerCase();
+        if (!key || m.x == null || at[key] || m.name === P.self.name) return;
+        var d = drawn(src[0] + m.name, m, rt), s = toScreen(d.x, d.y);
+        at[key] = { sx: s.sx, sy: s.sy, z: d.z == null ? sz : Number(d.z) };
+        body(s.sx, s.sy, at[key].z, 2.5, 6, CO.raid, m.name);
+      });
+    });
+    body(ms.sx, ms.sy, sz, 2.5, 6, 'rgba(255,255,255,0.95)', null);
+    // Other raiders' targets: the same dashed lines and colours as the Map (P.aims).
+    g.setLineDash([5, 4]);
+    (Array.isArray(P.aims) ? P.aims : []).forEach(function (a) {
+      var from = at[String(a.by).toLowerCase()];
+      if (!from || a.x == null) return;
+      var ma = toScreen(a.x, a.y), mz = a.z == null ? sz : Number(a.z);
+      seg([from.sx, from.sy, from.z + 4], [ma.sx, ma.sy, mz + 4], AIM_COL[a.kind] || AIM_COL.idle, a.kind === 'friendly' ? 0.4 : 0.9, 1.2);
+      var mp = radarPt(c, ma.sx, ma.sy, mz + 4, w, h);
+      if (mp) { g.globalAlpha = 0.9; g.fillStyle = AIM_COL[a.kind] || AIM_COL.idle; g.beginPath(); g.arc(mp[0], mp[1], 3, 0, 6.2832); g.fill(); }
+    });
+    g.setLineDash([]);
+    // Your target: where it is, its body (how big it is), its melee ring on the floor (how far it hits), and its name, health,
+    // distance and reach. Behind you or off the side, an arrow at the bottom edge says which way.
+    var T = P.target;
+    if (T && T.x != null) {
+      var td = drawn(targetKey(T), T, rt), ts = toScreen(td.x, td.y), tz = td.z == null || !zKnown(td.z) ? sz : Number(td.z);
+      var rch = targetReach(T), rad = rch ? rch.radius : 3, tcol = AGGRO_TARGET_COL || CO.target;
+      if (rch) {
+        g.setLineDash([4, 3]);
+        for (var a2 = 0; a2 < 48; a2++) {
+          var t0 = a2 / 48 * 6.2832, t1 = (a2 + 1) / 48 * 6.2832;
+          seg([ts.sx + Math.cos(t0) * rch.melee, ts.sy + Math.sin(t0) * rch.melee, tz], [ts.sx + Math.cos(t1) * rch.melee, ts.sy + Math.sin(t1) * rch.melee, tz], RING.wait, 1, 1.4);
+        }
+        g.setLineDash([]);
+      }
+      var tp = body(ts.sx, ts.sy, tz, rad, Math.max(6, rad * 2), tcol, null);
+      var rg = targetRange(me, td);
+      // Two lines, kept inside the view: name and health, then distance, size and reach.
+      var l1 = T.name + (T.hp_pct != null ? ' · ' + T.hp_pct + '%' : '');
+      var l2 = (rg ? rangeText(rg) + ' away' : '') + (rch ? (rg ? ' · ' : '') + rch.label : '');
+      g.globalAlpha = 1; g.font = RADAR_FONT; g.textAlign = 'center';
+      var tw = Math.max(g.measureText(l1).width, g.measureText(l2).width) / 2 + 6;
+      var put = function (text, x, y) {
+        x = Math.max(tw, Math.min(w - tw, x));
+        g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(text, x, y); g.fillStyle = tcol; g.fillText(text, x, y);
+      };
+      var inView = tp && tp[0] > 0 && tp[0] < w && tp[1] > 0 && tp[1] < h;
+      if (inView) { put(l1, tp[0], Math.max(30, tp[1] - 22)); if (l2) put(l2, tp[0], Math.max(46, tp[1] - 6)); }
+      else {
+        var q = radarCamSpace(c, ts.sx, ts.sy, tz), side = q.depth < RADAR_NEAR ? '▼ behind you: ' : (q.right < 0 ? '◀ ' : '▶ ');
+        put(side + l1, w / 2, h - 56); if (l2) put(l2, w / 2, h - 40);
+      }
+      g.textAlign = 'left';
+    }
+    // The corner: what this is, and the test blind's seconds left.
+    g.globalAlpha = 0.85; g.font = RADAR_FONT; g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillText('Radar' + (S.blindTest != null ? ' · test blind · ' + S.blindTest + ' s' : ''), 12, h - 32);   // under the toolbar's reach
+    g.globalAlpha = 1;
+  }
+  // ⚙ → Blind: the view, and the test blind (agent POST /api/blind-test, which blinds the active character for 30 s without a
+  // spell, so every overlay a real blind opens opens). The button reads "End test blind" while one runs.
+  var blindViewSel = document.getElementById('cfgBlindView'), blindTestBtn = document.getElementById('blindTestBtn');
+  if (blindViewSel) {
+    blindViewSel.value = S.blindView;
+    blindViewSel.addEventListener('change', function () {
+      S.blindView = blindViewSel.value === 'map' || blindViewSel.value === 'radar' ? blindViewSel.value : 'split';
+      lsSet('wp-map-blind-view', S.blindView); syncBlindView(); renderMap();
+    });
+  }
+  function syncBlindTestBtn() {
+    if (!blindTestBtn) return;
+    blindTestBtn.textContent = S.blindTest != null ? 'End test blind (' + S.blindTest + ' s)' : 'Test blind (30 s)';
+  }
+  if (blindTestBtn) blindTestBtn.addEventListener('click', function () {
+    var on = S.blindTest == null;
+    fetch('http://127.0.0.1:' + PORT + '/api/blind-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on, secs: 30 }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j && !j.ok && j.error) blindTestBtn.textContent = j.error; else poll(); })
+      .catch(function () { blindTestBtn.textContent = 'The agent did not answer'; });
+  });
   function spawnRange() { return LEVEL_STEPS[S.spawnLevels] || 0; }
   function pointBounds() {
     var b = null;
@@ -2303,6 +2510,8 @@
     noteClearKey();   // a new zone or character: read the keep-clear areas again
     noteCharPrefs();  // FB-129: a new character gets their own zoom / pan mode / settings back
     noteBlind(!!p.blind);   // blinded: follow you, zoom to the nearest walls, show the Engaged list (back as it was after)
+    S.blindTest = p.blind && p.blind_test != null ? p.blind_test : null;   // a test blind's seconds left (⚙ → Test blind)
+    syncBlindView(); syncBlindTestBtn();   // ⚙ → Blind view: the radar beside or over the Map while blind
     noteHunt(p);     // Targeted named mobs: load this character's list, record a named target, refresh the highlighted ids
     S.timerBy = {}; S.candBy = {}; S.seenBy = {};
     S.watchBy = p.watched && typeof p.watched === 'object' ? p.watched : {};   // spots marked "watch for <named>": { <point_id>: { named, by } }
@@ -3198,6 +3407,7 @@
   function renderMap(animating) {
     renderMapInner(animating);
     paintHoles();
+    renderRadar(Date.now());   // nothing unless blind with ⚙ → Blind view on Radar or Map + radar
   }
   // Keep-clear areas: the pane's own background steps aside while any exist and the canvas paints it instead (behind
   // everything, at the strength the pane would have had), then the areas are cut out of the whole picture - background,
@@ -3686,6 +3896,17 @@
         // And its regular Rampage reach, the same way (S.rampRing is its hover tooltip).
         var rr = SH.rampage ? rampageRing(P.target) : null;
         if (rr) { rampageDraw(tq[0], tq[1], rr); S.rampRing = { x: td.x, y: td.y, r: rr.r, tip: rr.tip }; }
+        // How big it is and how far it hits (the guild lead, 2026-11-25: "show where the mob is with the target info, how large
+        // it is and its attack range"): its body, faint and filled, and a dashed ring at its melee reach (reach, bot 4.1.14+).
+        // Drawn only when the ring would be at least a few pixels: zoomed out they are noise.
+        var rch = targetReach(P.target);
+        if (rch && rch.melee * v.scale >= 6) {
+          ctx.save();
+          ctx.beginPath(); ctx.arc(tq[0], tq[1], rch.radius * v.scale, 0, 6.2832); ctx.fillStyle = hexA(CO.target, 0.18); ctx.fill();
+          ctx.beginPath(); ctx.setLineDash([4, 3]); ctx.arc(tq[0], tq[1], rch.melee * v.scale, 0, 6.2832);
+          ctx.lineWidth = 1.4; ctx.strokeStyle = RING.wait; ctx.stroke();
+          ctx.restore();
+        }
         // Pinned: a thin line from the target to the spawn point it is tied to. A point that shares its route with
         // others (route twins, e.g. Plane of Valor's five golem roamers) is a guess between them: faint dashed lines
         // to every one of them instead of one confident line (the guild lead, 2026-10-13: "Why is this non-pathing mob

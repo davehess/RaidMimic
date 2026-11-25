@@ -199,6 +199,13 @@ next touch one rather than assuming a missing row means a missing doc.
 - **Security hardening (2026-11-10) — phase 2: guild-scoped read policies** (migration `20261110120000_guild_scoped_reads.sql`, APPLIED 2026-11-10 after a dry run of the whole migration plus `supabase/tests/two_guild_rls.sql` in one rolled-back transaction passed): `public.my_guild_ids()` (the caller's guilds, once per query) + `public.is_member_of(guild)` + `public.home_guild_id()`; the 46 member-only read policies on guild_id tables check the row's own guild, and the 9 public read policies on guild_id tables serve home-guild rows only. `supabase/tests/two_guild_rls.sql` (run by hand, rolls back) + `test/guild-scoped-reads.test.js` guard it. After applying: a real Wolf Pack login still reads 45,410 encounters and 621 characters; a 7-day /who read of 17,104 rows takes 66 ms with the guild set computed once (`loops=1`).
 - **Security hardening (2026-11-10) — standard browser security headers on every route** (`web/next.config.js` `headers()`, web 2.1.124): nosniff, strict-origin-when-cross-origin referrer, HSTS (1 year, no preload), a Permissions-Policy denying camera/microphone/geolocation/payment, same-origin framing only, and a report-only CSP to be tightened from what it flags. `test/security-headers.test.js` guards the set.
 
+- **🧪 2026-11-25 — Radar sense while blind (beta: agent 4.0.111; bot 4.1.14 on main; Desk `radar-sense` A).** Blinded (or
+  ⚙ → Test blind, 30 s, no spell needed), the Map window shows the Map and a radar side by side by default (⚙ → Blind view: Map +
+  radar / Radar / Map). The radar is the room from behind you, the way you face: your map lines raised into walls, a grid at your
+  feet, raiders, mobs and the targeter lines seen through walls, and your target with its body (size) and a dashed ring where it
+  can hit you, plus name, health, distance and reach. The 2D Map draws the same body and ring. Limits: wall heights are a guess
+  (20), no ceilings, stairs or ramps (option B on the Desk would bring them), no walls in a zone with no map file.
+
 - **🧪 2026-11-25 — Blind Map and targeter lines (beta: agent 4.0.110; bot 4.1.13 on main).** Blinded, the Map opens (Window or
   Full), follows you and zooms so the nearest wall on your floor is in view, floors above and below faint, the Engaged list out;
   it all goes back after. Every raider running Mimic gets a dashed line to their NPC target: red hurt, faint green friendly by your

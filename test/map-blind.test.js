@@ -46,7 +46,7 @@ describe('main.js: the Map opens for the blind', () => {
 describe('agent: the map feed says blind', () => {
   it('reads the per-character blind state', () => {
     const pay = sliceBlock(AGENT, 'function _mapStatePayload(', 'const zd = _mapZoneDoc(zone);');
-    expect(pay).toMatch(/_blindState\[String\(character \|\| ''\)\.toLowerCase\(\)\]; out\.blind = !!\(b && b\.active\)/);
+    expect(pay).toMatch(/const b = _blindState\[String\(character \|\| ''\)\.toLowerCase\(\)\];\s*out\.blind = !!\(b && b\.active\);/);
   });
 });
 
