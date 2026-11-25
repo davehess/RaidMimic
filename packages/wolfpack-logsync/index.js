@@ -7431,10 +7431,11 @@ function _chManaFromRest(rest) {
   return (v != null && v <= 100) ? v : null;
 }
 // "CH" is case-sensitive, as in the original; "Complete Heal" is not (spelled with classes: no inline flags).
-const _CHW = '(?:CH|C\\.H\\.|CHeal|[Cc][Oo][Mm][Pp][Ll][Ee][Tt][Ee]\\s+[Hh][Ee][Aa][Ll](?:[Ii][Nn][Gg])?)(?![A-Za-z])';
+// "Cheal" too (the guild lead's screenshot, 2026-11-25: "555 Cheal on --- <target> 35% mana remaining"); still a capital C.
+const _CHW = '(?:CH|C\\.H\\.|C[Hh][Ee][Aa][Ll]|[Cc][Oo][Mm][Pp][Ll][Ee][Tt][Ee]\\s+[Hh][Ee][Aa][Ll](?:[Ii][Nn][Gg])?)(?![A-Za-z])';
 const _CH_TAG = '(?:[^\\s\\d#]\\S{0,5}\\s+)?';                  // "D&D ", "WP ", "[CH] "
 const _CH_SEP = '[\\s:\\-—–>→|<\\[\\](){}=,.]*';
-const _CH_TGT = '(?:on\\s+)?([A-Z][a-z`]{2,14})(?![A-Za-z`])(.*)$';
+const _CH_TGT = '(?:on[\\s:\\-—–>→]+)?([A-Z][a-z`]{2,14})(?![A-Za-z`])(.*)$';   // "on Name", and "on --- Name" (2026-11-25)
 // slot, then CH:   "D&D 333 CH - Name - 61%", "#3 CH Name", "3. CH: Name (61%)"
 const _CH_CALL_SLOT_FIRST = new RegExp('^' + _CH_TAG + '#?(\\d{1,3})(?!\\d)[.):]?' + _CH_SEP + _CHW + _CH_SEP + _CH_TGT);
 // CH, then slot:   "CH3 Name 61%", "CH 3 - Name", "WP CH#3 Name"
