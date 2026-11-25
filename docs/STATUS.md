@@ -199,6 +199,10 @@ next touch one rather than assuming a missing row means a missing doc.
 - **Security hardening (2026-11-10) — phase 2: guild-scoped read policies** (migration `20261110120000_guild_scoped_reads.sql`, APPLIED 2026-11-10 after a dry run of the whole migration plus `supabase/tests/two_guild_rls.sql` in one rolled-back transaction passed): `public.my_guild_ids()` (the caller's guilds, once per query) + `public.is_member_of(guild)` + `public.home_guild_id()`; the 46 member-only read policies on guild_id tables check the row's own guild, and the 9 public read policies on guild_id tables serve home-guild rows only. `supabase/tests/two_guild_rls.sql` (run by hand, rolls back) + `test/guild-scoped-reads.test.js` guard it. After applying: a real Wolf Pack login still reads 45,410 encounters and 621 characters; a 7-day /who read of 17,104 rows takes 66 ms with the guild set computed once (`loops=1`).
 - **Security hardening (2026-11-10) — standard browser security headers on every route** (`web/next.config.js` `headers()`, web 2.1.124): nosniff, strict-origin-when-cross-origin referrer, HSTS (1 year, no preload), a Permissions-Policy denying camera/microphone/geolocation/payment, same-origin framing only, and a report-only CSP to be tightened from what it flags. `test/security-headers.test.js` guards the set.
 
+- **🧪 2026-11-25 — CH chain metronome (Mimic beta).** The guild lead: *"a metronome for the CH overlay so that I can set what
+  the delay is and a metronome watching for the previous number"*. ⚙ → Metronome, after #N, wait S s: N's call starts a
+  click each second and a GO at the end. Not heard in a real raid yet.
+
 - **🧪 2026-11-25 — UI Studio: resize by dragging any edge or corner (Mimic beta).** The guild lead: *"it would be cool to resize
   UI in UI studio by drag/pull"*. Resizing existed (one bottom-right grip, shown only on the selected window); now every
   resizable window shows eight grips on hover. Asked alongside: UI too small at 3840×2160. The client draws windows at fixed

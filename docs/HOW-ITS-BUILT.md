@@ -3150,6 +3150,9 @@ Tests: `test/mechanic-capture.test.js` (includes an assertion that the timed
 indexes are byte-for-byte unaffected).
 
 ### CH chain tracker
+**♩ Metronome** (2026-11-25, Mimic beta, `chchain.html` `metroPhase` / `metroUpdate`): ⚙ → Metronome, after #N, wait S s
+(saved per machine). When slot N's call lands it clicks each second of the wait (WebAudio) and shows GO with a high tone; a
+call older than the wait + 1 s when first seen starts nothing. Test `test/chchain-metronome.test.js`.
 Parses shout/raid callouts: numbered calls (`_CH_CALL_RX`), GO cues
 (`_CH_GO_RX` — stamps `lastGo` so the overlay flashes GO! on that slot),
 personal heal macros (`_CH_PERSONAL_RX` — **never take a slot**, CH-equivalent
