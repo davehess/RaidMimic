@@ -143,7 +143,7 @@ describe('map.html: the radar draws the mesh', () => {
   });
   it('renderRadar draws the mesh when it is here, else the grid and the raised map lines', () => {
     const r = sliceBlock(MAP, 'function renderRadar(rt) {', 'var body = function (sx, sy, z, radius, tall, style, label) {');
-    expect(r).toMatch(/meshFetch\(me, S\.zone\);\s*var meshSegs = S\.radarWalls === 'mesh' && S\.mesh && S\.mesh\.zone === S\.zone \? S\.mesh\.segs : null;\s*if \(meshSegs\) drawMesh\(/);
+    expect(r).toMatch(/meshFetch\(me, S\.zone\);\s*var meshSegs = S\.radarWalls === 'mesh' && S\.mesh && S\.mesh\.zone === S\.zone \? S\.mesh\.segs : null;\s*var rst = [^\n]*\n\s*if \(meshSegs\) drawMesh\(/);
     expect(r).toMatch(/for \(var k = -80; k <= 80 && !meshSegs; k \+= 10\)/);
     expect(r).toMatch(/if \(!meshSegs && localWalls\(\)\) \{/);
     expect(r).toMatch(/\} else if \(!meshSegs\) \{\s*g\.globalAlpha = 0\.8;[^\n]*\n\s*g\.fillText\('No map file for this zone/);
@@ -160,8 +160,45 @@ describe('map.html: the radar draws the mesh', () => {
     expect(f({ radarWalls: 'lines' }, () => true)(null)).toBe('Walls: map lines');
   });
   it('one stroke per brightness step', () => {
-    const d = sliceBlock(MAP, '  function drawMesh(g, c, segs, ms, sz, w, h, col) {', '\n  }\n');
+    const d = sliceBlock(MAP, '  function drawMesh(g, c, segs, ms, sz, w, h, col, style, t) {', '\n  }\n');
     expect(d).toMatch(/paths\[Math\.min\(MESH_ALPHA_STEPS - 1, Math\.floor\(a \* MESH_ALPHA_STEPS\)\)\]\.push\(p\);/);
     expect(d.match(/g\.stroke\(\)/g)).toHaveLength(1);
+  });
+});
+
+// Radar styles (the guild lead, 2026-11-25: "the whole point is to differentiate that you're blind and give visual hints to
+// what's around you. little pulses on wire mesh or other visual styles would be amazing"). radarGlow runs as shipped.
+describe('map.html: radar styles', () => {
+  const block = sliceBlock(MAP, '  var PULSE_MS = 1800,', "    return Math.max(0.12, Math.min(1, 1.1 - d / RADAR_R));\n  }");
+  const glow = new Function('lsGet', 'S', 'RADAR_STYLES', 'RADAR_R', block + '\nreturn { radarGlow, PULSE_MS, SWEEP_MS, RADAR_DARK };')(
+    () => null, {}, { pulse: {}, sweep: {}, ember: {}, plain: {} }, 160);
+  const g = glow.radarGlow;
+  it('pulse: a wall is dark before the ring reaches it, bright as it passes, fading after', () => {
+    const v = 160 * 1.15 / glow.PULSE_MS, d = 80, hit = d / v;   // ms after the ring leaves that it reaches d
+    expect(g('pulse', d, 0, hit - 200)).toBeLessThan(0.2);   // only the last ring's tail, 1.6 s old
+    expect(g('pulse', d, 0, hit + 10)).toBeGreaterThan(0.9);
+    expect(g('pulse', d, 0, hit + 700)).toBeLessThan(g('pulse', d, 0, hit + 100));
+    const at30 = 30 / v;   // the ring is 30 out: the wall at 10 was just lit, the one at 150 has the last ring's tail
+    expect(g('pulse', 10, 0, at30)).toBeGreaterThan(g('pulse', 150, 0, at30));
+  });
+  it('sweep: the wall the beam is on is bright, the one opposite is dark', () => {
+    const t = glow.SWEEP_MS / 4;   // beam at 90 degrees
+    expect(g('sweep', 50, Math.PI / 2, t)).toBeGreaterThan(0.9);
+    expect(g('sweep', 50, -Math.PI / 2, t)).toBeLessThan(0.35);   // half a turn old
+  });
+  it('ember breathes and stays lit; plain is steady and fades with distance', () => {
+    const a = g('ember', 40, 0, 0), b = g('ember', 40, 0, 1300);
+    expect(a).not.toBeCloseTo(b, 2);
+    expect(Math.min(a, b)).toBeGreaterThanOrEqual(0.15);
+    expect(g('plain', 20, 0, 0)).toBe(g('plain', 20, 1, 9999));
+    expect(g('plain', 20, 0, 0)).toBeGreaterThan(g('plain', 150, 0, 0));
+  });
+  it('⚙ → Radar style, remembered, pulse by default; the moving styles run their own frame loop and tint the edges', () => {
+    expect(MAP).toMatch(/<select id="cfgRadarStyle"><option value="pulse">Pulse<\/option><option value="sweep">Sweep<\/option><option value="ember">Ember<\/option><option value="plain">Plain<\/option><\/select>/);
+    expect(MAP).toMatch(/S\.radarStyle = \(function \(\) \{ var v = lsGet\('wp-map-radar-style'\); return RADAR_STYLES\[v\] \? v : 'pulse'; \}\)\(\);/);
+    expect(MAP).toMatch(/return !document\.hidden && !!S\.radarView && S\.radarView !== 'map' && !!\(RADAR_STYLES\[S\.radarStyle\] \|\| \{\}\)\.anim;/);
+    expect(MAP).toMatch(/radarEl\.hidden = v === 'map';\s*resize\(\);\s*kickRadar\(\);/);
+    expect(MAP).toMatch(/if \(rst\.anim\) drawRadarVignette\(g, w, h, rst\.rgb\);/);
+    expect(MAP).toMatch(/if \(meshSegs\) drawMesh\(g, c, meshSegs, ms, sz, w, h, rcol, S\.radarStyle, rt\);/);
   });
 });

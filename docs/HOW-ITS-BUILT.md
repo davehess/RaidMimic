@@ -6364,6 +6364,10 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   `map.html`: `meshFetch` (asks within 300, again after moving 120), `meshToScreen`, `drawMesh` (one stroke per brightness step),
   `radarWallsTxt`; ⚙ → Radar walls (`wp-map-radar-walls`: mesh default, lines). The web replay has its own reader of the same
   files (`web/lib/zoneMap/slice.ts` `parseEqemuMap`, zone triangles only). Tests: `test/radar-mesh.test.js`.
+  Radar styles (Desk `radar-style`): `RADAR_STYLES` (pulse / sweep / ember / plain, `wp-map-radar-style`), `radarGlow(style, d,
+  ang, t)` (pure: how lit a wall is), `drawMesh` buckets by it, `drawRadarWave` (the sonar ring / the beam on the floor),
+  `drawRadarVignette` (tinted edges, the blind cue), `radarTick` / `kickRadar` (own requestAnimationFrame loop at FRAME_MS,
+  only while `radarAnimating()`).
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
