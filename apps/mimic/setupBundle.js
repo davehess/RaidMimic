@@ -85,6 +85,9 @@ const SHARED = [
   ['chchain_ddr', 'chchain', 'ddr', FLAG],
   ['chchain_lead_auto', 'chchain', 'leadAuto', FLAG],
   ['chchain_lead_sec', 'chchain', 'leadSec', NUM(0, 10)],
+  ['chchain_metro_on', 'chchain', 'metroOn', FLAG],              // ♩ metronome (2026-11-25)
+  ['chchain_metro_after', 'chchain', 'metroAfter', INT(1, 99)],
+  ['chchain_metro_wait', 'chchain', 'metroWait', NUM(0, 15)],
   ['wp:tick:detail', 'zeal', 'detail', FLAG],
   ['wpTargetMana', 'mobinfo', 'mana', ENUM(['on', 'off'])],
   ['wpTargetFqv', 'mobinfo', 'sub', WORD],
