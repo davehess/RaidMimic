@@ -374,13 +374,16 @@ describe('the Map page in Window and Full mode', () => {
 describe('main.js: Full mode is a screen-sized, click-through cover like the Canvas', () => {
   const js = stripJs(MAIN);
   it('the Canvas\'s exemptions now cover a Full-mode Map too: rescue, auto-arrange, screen change, move-to-screen, hover brighten', () => {
-    const { _coversScreen } = new Function('let _mapFull = false; function _set(v){ _mapFull = v; }\n'
+    const { _coversScreen } = new Function('let _mapFull = false, _mapBlindCover = null; function _set(v){ _mapFull = v; }\n'
       + sliceBlock(MAIN, 'function _coversScreen(key) {', '\n') + '\nreturn { _coversScreen, _set };')();
     expect(_coversScreen('canvas')).toBe(true);
     expect(_coversScreen('map')).toBe(false);                    // Window mode: an ordinary overlay
     expect(_coversScreen('hud')).toBe(false);
-    const f = new Function('let _mapFull = true;\n' + sliceBlock(MAIN, 'function _coversScreen(key) {', '\n') + '\nreturn _coversScreen;')();
+    const f = new Function('let _mapFull = true, _mapBlindCover = null;\n' + sliceBlock(MAIN, 'function _coversScreen(key) {', '\n') + '\nreturn _coversScreen;')();
     expect(f('map')).toBe(true);
+    // The blind radar's cover over EverQuest (2026-11-26) counts as covering too: click-through, exempt like Full.
+    const b = new Function('let _mapFull = false, _mapBlindCover = { x: 0, y: 0, width: 760, height: 480 };\n' + sliceBlock(MAIN, 'function _coversScreen(key) {', '\n') + '\nreturn _coversScreen;')();
+    expect(b('map')).toBe(true);
     for (const needle of [
       /function _boundsKeyForEntry\(key, win\) \{\s*if \(_coversScreen\(key\)\) return null;/,
       /if \(_coversScreen\(key\) \|\| !win \|\| win\.isDestroyed\(\)\) continue;/,                       // _rescueOffscreenOverlays
@@ -401,8 +404,9 @@ describe('main.js: Full mode is a screen-sized, click-through cover like the Can
     expect(js).toMatch(/const shouldShow = _blindForceOpen\('map'\) \|\| \(_mapFull\s*\? !!cfg\.showMap && \(unlocked \|\| \(!cfg\.hideOverlays && _eqGateOk\(cfg\)\)\)/);
   });
   it('only Window mode saves the Map\'s bounds (the cover must never overwrite the window\'s own spot)', () => {
-    expect(js).toMatch(/mapWindow\.on\('moved',\s+\(\) => \{ if \(!_mapFull\) _persistBounds\('mapBounds', mapWindow\); _mapGeomPush\(\); \}\);/);
-    expect(js).toMatch(/mapWindow\.on\('resize', \(\) => \{ if \(!_mapFull\) _persistBounds\('mapBounds', mapWindow\); _mapGeomPush\(\); \}\);/);
+    // …nor the blind radar's cover over EverQuest (2026-11-26, _mapBlindCover), for the same reason.
+    expect(js).toMatch(/mapWindow\.on\('moved',\s+\(\) => \{ if \(!_mapFull && !_mapBlindCover\) _persistBounds\('mapBounds', mapWindow\); _mapGeomPush\(\); \}\);/);
+    expect(js).toMatch(/mapWindow\.on\('resize', \(\) => \{ if \(!_mapFull && !_mapBlindCover\) _persistBounds\('mapBounds', mapWindow\); _mapGeomPush\(\); \}\);/);
   });
   it('a screen change re-covers EverQuest\'s client area without a question (it is a cover, not a placed window)', () => {
     expect(sliceBlock(js, 'async function _askAboutDisplays() {', 'const eqWin = _eqMainWindow();')).toMatch(/await _eqWindowGeometry\(0\);[\s\S]*await _fitMapFull\(false\);/);

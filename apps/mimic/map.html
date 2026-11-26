@@ -385,7 +385,7 @@
         <label class="row" title="Walls this far above or below you stay bright; the rest fade. Height is in game units: you are about 6 tall, one floor is roughly 30 to 60, so ±100 is about your floor and the ones next to it."><span class="bl" id="levelsVal">Levels</span><input id="levels" type="range" min="0" max="7" step="1"></label>
         <label class="row" title="Spawn points this far above or below you are shown; the rest are hidden. Same height units as Levels: ±25 is about your own floor, ±100 a floor or two either way."><span class="bl" id="spawnVal">Spawn height</span><input id="spawnLevels" type="range" min="0" max="7" step="1"></label>
         <div class="grp">Blind</div>
-        <label class="row" title="What the Map shows while you are blind (or testing it): the zoomed Map, the radar (the room drawn in lines from behind you, people and mobs seen through walls), or both side by side."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="inset">Radar + mini map</option><option value="split">Map + radar</option><option value="radar">Radar</option><option value="map">Map</option></select></label>
+        <label class="row" title="What the Map shows while you are blind (or testing it). The radar is off until you pick it: Map only is the zoomed Map. With the radar on, the Map window grows to cover EverQuest's window while you are blind (clicks pass through to the game) and goes back after."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="map">Map only (radar off)</option><option value="inset">Radar + mini map</option><option value="split">Map + radar</option><option value="radar">Radar</option></select></label>
         <label class="row" title="What the radar draws as walls. Zone mesh: the server's own 3D shape of the zone (walls, floors, ceilings, stairs, furniture), downloaded once per zone. Map lines: your map's lines stood up as walls; a line the mapmaker drew for a hill or a path shows as a wall too."><span class="bl">Radar walls</span><select id="cfgRadarWalls"><option value="mesh">Zone mesh</option><option value="lines">Map lines</option></select></label>
         <label class="row" title="How the radar looks. Pulse: a sonar ring leaves you every two seconds and lights the walls as it reaches them. Sweep: a beam turns around you lighting what it passes. Ember: everything glows red and breathes, brighter near you. Plain: steady walls. All but Plain tint the window's edges so it is plain you are blind."><span class="bl">Radar style</span><select id="cfgRadarStyle"><option value="pulse">Pulse</option><option value="sweep">Sweep</option><option value="ember">Ember</option><option value="plain">Plain</option></select></label>
         <label class="row" title="How long Test blind lasts."><span class="bl">Test length</span><select id="cfgBlindSecs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">2 min</option></select></label>
@@ -2380,18 +2380,41 @@
     ember: { rgb: '255,90,50', anim: true, blur: 6 },
     plain: { rgb: null, anim: false },
   };
-  var PULSE_MS = 1800, PULSE_DECAY_MS = 700, SWEEP_MS = 2400, SWEEP_DECAY_MS = 900, RADAR_DARK = 0.07;
+  // The pick (Desk radar-style, 2026-11-26): Pulse, with the note "not a full fade out, it should be faded and highlight with the
+  // pulses. if you're in active combat give more frequent pulses, like the characters actual heartbeat and pulse when in danger".
+  // So walls rest at RADAR_DARK (faded, never gone) and the ring highlights them; the ring's rhythm is radarBeat's.
+  var PULSE_MS = 1800, PULSE_DECAY_MS = 700, SWEEP_MS = 2400, SWEEP_DECAY_MS = 900, RADAR_DARK = 0.3;
+  var PULSE_FIGHT_MS = 1100, DANGER_HP = 40, HEART_MIN_MS = 500, HEART_MAX_MS = 900, HEART_DUB = 0.28, PING_MS = 450;
+  var RING_SPEED = RADAR_R * 1.15 / PULSE_MS;   // units per ms; the ring travels at one speed, only how often it leaves changes
   S.radarStyle = (function () { var v = lsGet('wp-map-radar-style'); return RADAR_STYLES[v] ? v : 'pulse'; })();
-  // How lit a wall is (0..1) at flat distance d from you and screen-frame bearing ang (radians), at time t (ms). Pure.
-  function radarGlow(style, d, ang, t) {
-    if (style === 'pulse') {
-      var v = RADAR_R * 1.15 / PULSE_MS, best = 0;
-      for (var k = 0; k < 2; k++) {   // this ring and the one before it, so a far wall is still fading when the next leaves
-        var dt = ((t % PULSE_MS) + k * PULSE_MS) - d / v;
-        if (dt >= 0) best = Math.max(best, Math.exp(-dt / PULSE_DECAY_MS));
-      }
-      return RADAR_DARK + (1 - RADAR_DARK) * best;
+  // The rhythm from the agent's map feed `pulse` ({ hp, fight }, sent while blind): calm, one ring every PULSE_MS; in a fight,
+  // one every PULSE_FIGHT_MS; hurt to DANGER_HP% or below, a heartbeat — two rings (lub, dub) per beat, the beat quickening
+  // from HEART_MAX_MS at DANGER_HP% to HEART_MIN_MS at 0%. Pure.
+  function radarBeat(pulse) {
+    var hp = pulse && pulse.hp != null && isFinite(pulse.hp) ? Number(pulse.hp) : null;
+    if (hp != null && hp <= DANGER_HP) {
+      var period = Math.round(HEART_MIN_MS + (HEART_MAX_MS - HEART_MIN_MS) * Math.max(0, hp) / DANGER_HP);
+      return { name: 'danger', period: period, rings: [0, Math.round(period * HEART_DUB)], hp: hp };
     }
+    if (pulse && pulse.fight) return { name: 'fight', period: PULSE_FIGHT_MS, rings: [0], hp: hp };
+    return { name: 'calm', period: PULSE_MS, rings: [0], hp: hp };
+  }
+  // How long ago (ms) the latest ring reached flat distance d, at time t; Infinity when none has yet. Pure.
+  function ringAge(d, t, beat) {
+    var b = beat || radarBeat(null), best = Infinity, base = t - (t % b.period);
+    for (var k = 0; k < 3; k++) {
+      for (var i = 0; i < b.rings.length; i++) {
+        var emit = base - k * b.period + b.rings[i];
+        if (emit > t) continue;
+        var age = t - emit - d / RING_SPEED;
+        if (age >= 0 && age < best) best = age;
+      }
+    }
+    return best;
+  }
+  // How lit a wall is (0..1) at flat distance d from you and screen-frame bearing ang (radians), at time t (ms). Pure.
+  function radarGlow(style, d, ang, t, beat) {
+    if (style === 'pulse') return RADAR_DARK + (1 - RADAR_DARK) * Math.exp(-ringAge(d, t, beat) / PULSE_DECAY_MS);
     if (style === 'sweep') {
       var beam = (t % SWEEP_MS) / SWEEP_MS * 2 * Math.PI;
       var behind = ((beam - ang) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);   // how far the beam has gone past this wall
@@ -2402,7 +2425,7 @@
   }
   // Draw the mesh edges, lit by radarGlow: the floor you stand on (±BLIND_LEVEL) full strength, the rest within
   // RADAR_FLOOR_Z * 2 at 40%; one stroke per brightness step, so ten thousand edges stay cheap.
-  function drawMesh(g, c, segs, ms, sz, w, h, col, style, t) {
+  function drawMesh(g, c, segs, ms, sz, w, h, col, style, t, beat) {
     var paths = [];
     for (var s = 0; s < MESH_ALPHA_STEPS; s++) paths.push([]);
     for (var i = 0; i + 5 < segs.length; i += 6) {
@@ -2413,7 +2436,7 @@
       var p = radarSeg(c, [segs[i], segs[i + 1], segs[i + 2]], [segs[i + 3], segs[i + 4], segs[i + 5]], w, h);
       if (!p) continue;
       var ang = Math.atan2((segs[i + 1] + segs[i + 4]) / 2 - ms.sy, (segs[i] + segs[i + 3]) / 2 - ms.sx);
-      var a = (dz <= BLIND_LEVEL ? 0.95 : 0.4) * radarGlow(style, d, ang, t);
+      var a = (dz <= BLIND_LEVEL ? 0.95 : 0.4) * radarGlow(style, d, ang, t, beat);
       paths[Math.min(MESH_ALPHA_STEPS - 1, Math.floor(a * MESH_ALPHA_STEPS))].push(p);
     }
     var st = RADAR_STYLES[style] || RADAR_STYLES.plain;
@@ -2429,12 +2452,17 @@
     g.shadowBlur = 0;
   }
   // On the floor, the sonar ring (pulse) or the beam (sweep), so the motion reads even in an empty room.
-  function drawRadarWave(seg, ms, sz, style, t, col) {
+  function drawRadarWave(seg, ms, sz, style, t, col, beat) {
     if (style === 'pulse') {
-      var r = (t % PULSE_MS) / PULSE_MS * RADAR_R * 1.15, al = Math.max(0, 0.8 * (1 - r / (RADAR_R * 1.15)));
-      for (var a = 0; a < 64; a++) {
-        var t0 = a / 64 * 6.2832, t1 = (a + 1) / 64 * 6.2832;
-        seg([ms.sx + Math.cos(t0) * r, ms.sy + Math.sin(t0) * r, sz], [ms.sx + Math.cos(t1) * r, ms.sy + Math.sin(t1) * r, sz], col, al, 1.5);
+      var b = beat || radarBeat(null), base = t - (t % b.period), rmax = RADAR_R * 1.15;
+      for (var k = 0; k < 3; k++) for (var i = 0; i < b.rings.length; i++) {   // every ring still on its way out
+        var r = (t - (base - k * b.period + b.rings[i])) * RING_SPEED;
+        if (r < 0 || r > rmax) continue;
+        var al = Math.max(0, 0.8 * (1 - r / rmax));
+        for (var a = 0; a < 64; a++) {
+          var t0 = a / 64 * 6.2832, t1 = (a + 1) / 64 * 6.2832;
+          seg([ms.sx + Math.cos(t0) * r, ms.sy + Math.sin(t0) * r, sz], [ms.sx + Math.cos(t1) * r, ms.sy + Math.sin(t1) * r, sz], col, al, 1.5);
+        }
       }
     } else if (style === 'sweep') {
       var b = (t % SWEEP_MS) / SWEEP_MS * 2 * Math.PI;
@@ -2466,7 +2494,8 @@
   var radarEl = document.getElementById('radar'), rctx = radarEl ? radarEl.getContext('2d') : null;
   var paneEl = document.getElementById('mapPane');
   var BLIND_VIEWS = ['inset', 'split', 'radar', 'map'];
-  function blindViewOf(v) { return BLIND_VIEWS.indexOf(v) >= 0 ? v : 'inset'; }
+  // The radar is opt-in (Desk radar-sense, 2026-11-26: "Only when I switch it on"): an unset or unknown choice is Map only.
+  function blindViewOf(v) { return BLIND_VIEWS.indexOf(v) >= 0 ? v : 'map'; }
   S.blindView = blindViewOf(lsGet('wp-map-blind-view'));
   S.blindSecs = (function () { var n = Number(lsGet('wp-map-blind-secs')); return [10, 30, 60, 120].indexOf(n) >= 0 ? n : 30; })();
   S.blindBlack = lsGet('wp-map-blind-black') === '1';
@@ -2480,6 +2509,9 @@
     paneEl.classList.toggle('blind-radar', v === 'radar');
     paneEl.classList.toggle('blind-inset', v === 'inset');
     radarEl.hidden = v === 'map';
+    // The radar fills EverQuest's window (Desk radar-sense, 2026-11-26: "Should show full window (or at least full EQ Window
+    // position size"): Mimic grows the Map window over EverQuest, click-through, while the radar shows, and puts it back after.
+    try { if (window.mimic && window.mimic.mapBlindCover) window.mimic.mapBlindCover(v !== 'map'); } catch (e) {}
     resize();
     kickRadar();   // a radar style that moves keeps drawing on its own loop while this view shows it
   }
@@ -2505,8 +2537,21 @@
     meshFetch(me, S.zone);
     var meshSegs = S.radarWalls === 'mesh' && S.mesh && S.mesh.zone === S.zone ? S.mesh.segs : null;
     var rst = RADAR_STYLES[S.radarStyle] || RADAR_STYLES.plain, rcol = rst.rgb ? 'rgb(' + rst.rgb + ')' : hexA(CO.wall, 1);
-    if (meshSegs) drawMesh(g, c, meshSegs, ms, sz, w, h, rcol, S.radarStyle, rt);
-    if (meshSegs && rst.anim) drawRadarWave(seg, ms, sz, S.radarStyle, rt, rcol);
+    var beat = radarBeat(P.pulse);
+    if (beat.name === 'danger') rcol = 'rgb(255,110,110)';   // hurt: the walls and the rings go red with the heartbeat
+    if (meshSegs) drawMesh(g, c, meshSegs, ms, sz, w, h, rcol, S.radarStyle, rt, beat);
+    if (meshSegs && rst.anim) drawRadarWave(seg, ms, sz, S.radarStyle, rt, rcol, beat);
+    // Pings (Desk radar-style: "Yes, mobs and raiders ping"): a small ring on the floor under someone when the pulse reaches them.
+    var ping = function (psx, psy, pz) {
+      if (S.radarStyle !== 'pulse') return;
+      var age = ringAge(Math.hypot(psx - ms.sx, psy - ms.sy), rt, beat);
+      if (!(age < PING_MS)) return;
+      var pr = 1.5 + age / PING_MS * 7, pa = 0.9 * (1 - age / PING_MS);
+      for (var pk = 0; pk < 16; pk++) {
+        var u0 = pk / 16 * 6.2832, u1 = (pk + 1) / 16 * 6.2832;
+        seg([psx + Math.cos(u0) * pr, psy + Math.sin(u0) * pr, pz], [psx + Math.cos(u1) * pr, psy + Math.sin(u1) * pr, pz], rcol, pa, 1.5);
+      }
+    };
     // The floor grid at your feet, 10 units apart, 80 each way (the mesh draws the real floor instead).
     var gx = Math.round(ms.sx / 10) * 10, gy = Math.round(ms.sy / 10) * 10, gc = hexA(CO.wall, 0.35);
     for (var k = -80; k <= 80 && !meshSegs; k += 10) {
@@ -2552,6 +2597,7 @@
         var d = drawn(src[0] + m.name, m, rt), s = toScreen(d.x, d.y);
         at[key] = { sx: s.sx, sy: s.sy, z: d.z == null ? sz : Number(d.z) };
         body(s.sx, s.sy, at[key].z, 2.5, 6, CO.raid, m.name);
+        ping(s.sx, s.sy, at[key].z);
       });
     });
     body(ms.sx, ms.sy, sz, 2.5, 6, 'rgba(255,255,255,0.95)', null);
@@ -2564,6 +2610,7 @@
       seg([from.sx, from.sy, from.z + 4], [ma.sx, ma.sy, mz + 4], AIM_COL[a.kind] || AIM_COL.idle, a.kind === 'friendly' ? 0.4 : 0.9, 1.2);
       var mp = radarPt(c, ma.sx, ma.sy, mz + 4, w, h);
       if (mp) { g.globalAlpha = 0.9; g.fillStyle = AIM_COL[a.kind] || AIM_COL.idle; g.beginPath(); g.arc(mp[0], mp[1], 3, 0, 6.2832); g.fill(); }
+      g.setLineDash([]); ping(ma.sx, ma.sy, mz); g.setLineDash([5, 4]);
     });
     g.setLineDash([]);
     // Your target: where it is, its body (how big it is), its melee ring on the floor (how far it hits), and its name, health,
@@ -2581,6 +2628,7 @@
         g.setLineDash([]);
       }
       var tp = body(ts.sx, ts.sy, tz, rad, Math.max(6, rad * 2), tcol, null);
+      ping(ts.sx, ts.sy, tz);
       var rg = targetRange(me, td);
       // Two lines, kept inside the view: name and health, then distance, size and reach.
       var l1 = T.name + (T.hp_pct != null ? ' · ' + T.hp_pct + '%' : '');
@@ -2599,10 +2647,11 @@
       }
       g.textAlign = 'left';
     }
-    if (rst.anim) drawRadarVignette(g, w, h, rst.rgb);   // the blind cue (radar styles)
+    if (rst.anim) drawRadarVignette(g, w, h, beat.name === 'danger' ? '255,60,60' : rst.rgb);   // the blind cue; red when hurt
     // The corner: what this is, and the test blind's seconds left.
     g.globalAlpha = 0.85; g.font = RADAR_FONT; g.fillStyle = 'rgba(255,255,255,0.85)';
-    g.fillText('Radar · ' + (S.blindTest != null ? 'test blind' : 'blind') + blindLeftTxt(), 12, h - 32);   // under the toolbar's reach
+    g.fillText('Radar · ' + (S.blindTest != null ? 'test blind' : 'blind') + blindLeftTxt()
+      + (beat.name === 'danger' ? ' · ♥ ' + Math.round(beat.hp) + '% health' : beat.name === 'fight' ? ' · in combat' : ''), 12, h - 32);   // under the toolbar's reach
     g.globalAlpha = 0.6;
     g.fillText(radarWallsTxt(meshSegs), 12, h - 16);
     g.globalAlpha = 1;

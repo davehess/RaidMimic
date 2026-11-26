@@ -1617,6 +1617,8 @@ contextBridge.exposeInMainWorld('mimic', {
   setMapMode:         (mode)       => ipcRenderer.invoke('map-mode-set', mode),
   onMapMode:          (cb)         => ipcRenderer.on('map-mode', (_e, m) => cb(m)),
   onMapGeom:          (cb)         => ipcRenderer.on('map-geom', (_e, b) => cb(b)),
+  // Blind radar (2026-11-26): mapBlindCover(on) grows the Map window over EverQuest's window, click-through, while the radar shows.
+  mapBlindCover:      (on)         => ipcRenderer.invoke('map-blind-cover', !!on),
   // Mini map (2026-11-09): mapMiniSize(on) shrinks the Map window to a small square (the old size is kept) or gives the size back;
   // onMapMiniToggle hears the ✥ right-click menu's "Mini map" row.
   mapMiniSize:        (on)         => ipcRenderer.invoke('map-mini-size', !!on),
