@@ -209,6 +209,12 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-26 — Radar picks built (beta: agent 4.0.115; Desk `radar-style` A + `radar-sense` notes, DECISIONS §660).**
+  Pulse is the style. Walls rest faded (never gone) and each ring highlights them. The rhythm follows you: one ring every
+  1.8 s calm, every 1.1 s in a fight, and at 40% health or below a two-ring heartbeat that quickens to every 0.5 s at 0%,
+  with the walls, rings and window edges turning red. Raiders, your target and the mobs other raiders are on flash a small
+  ring when the pulse reaches them. The radar is off until you pick it (⚙ → Blind view, default "Map only (radar off)"). With
+  it on, a Window-mode Map grows over EverQuest's window while you are blind, click-through, and goes back after.
 - **🧪 2026-11-25 — Radar styles (beta, Mimic only; Desk `radar-style`).** The guild lead: *"the whole point is to
   differentiate that you're blind and give visual hints to what's around you. little pulses on wire mesh or other visual
   styles would be amazing"*. ⚙ → Radar style: **Pulse** (default; a sonar ring leaves you every 1.8 s and lights the walls

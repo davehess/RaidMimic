@@ -220,6 +220,7 @@ let popRaidWindow = null;
 let meWindow = null;
 let mapWindow = null;       // the spawn map (Mimic 2.9, beta) - map.html, key 'map', cfg.showMap
 let _mapFull = false;       // the Map in Full mode (cfg.mapMode === 'full'): screen-sized and click-through like the canvas
+let _mapBlindCover = null;  // while the blind radar covers EverQuest: the Window-mode rectangle to go back to (_setMapBlindCover)
 let mapTimersWindow = null; // the Map's respawn-timers list popped out - map.html?part=timers, key 'maptimers', cfg.showMapTimers
 let canvasWindow = null;    // the Timers canvas — one screen-sized window of placed panels
 let _canvasArrange = false; // arranging it from the tray / dashboard (not persisted)
@@ -3281,6 +3282,7 @@ function _pollBlindState() {
         _blindActive = false;
         appendAgentLog(`[blind] leaving blind mode (was ${_blindSource})\n`);
         _blindSource = null;
+        try { _setMapBlindCover(false); } catch { /* the page normally says so itself; this is the backstop */ }
         // Restore the user's normal visibility prefs for the forced overlays.
         applyMobInfoVisibility();
         applyCharmVisibility();
@@ -5325,7 +5327,7 @@ function _displayPlanText(plan, eqKnown) {
 }
 // An overlay that covers its whole screen and is click-through always: the Timers canvas, and the Map while it is in Full
 // mode. Rescue, auto-arrange, the screen-change question, the move-to-screen menu and the hover brighten all pass it by.
-function _coversScreen(key) { return key === 'canvas' || (key === 'map' && _mapFull); }
+function _coversScreen(key) { return key === 'canvas' || (key === 'map' && (_mapFull || !!_mapBlindCover)); }
 function _boundsKeyForEntry(key, win) {
   if (_coversScreen(key)) return null;               // it re-covers its own screen (the Canvas, and the Map in Full mode)
   return _boundsKeyForWindow(win) || (key === 'dock' ? 'dockBounds' : null);
@@ -8737,8 +8739,8 @@ function createMapOverlay() {
   mapWindow.setVisibleOnAllWorkspaces(true);
   mapWindow.loadFile('map.html');
   // In Full mode the window is the screen-sized cover, not the user's window: only Window mode saves its bounds.
-  mapWindow.on('moved',  () => { if (!_mapFull) _persistBounds('mapBounds', mapWindow); _mapGeomPush(); });
-  mapWindow.on('resize', () => { if (!_mapFull) _persistBounds('mapBounds', mapWindow); _mapGeomPush(); });
+  mapWindow.on('moved',  () => { if (!_mapFull && !_mapBlindCover) _persistBounds('mapBounds', mapWindow); _mapGeomPush(); });
+  mapWindow.on('resize', () => { if (!_mapFull && !_mapBlindCover) _persistBounds('mapBounds', mapWindow); _mapGeomPush(); });
   mapWindow.once('ready-to-show', () => {
     mapWindow.webContents.send('agent-port', agentPort);
     applyMapVisibility();
@@ -8812,6 +8814,25 @@ async function _setMapMode(mode) {
   try { pushStatus(); buildTrayMenu(); } catch { /* tray not up yet */ }
   return _mapFull ? 'full' : 'window';
 }
+// The blind radar covers EverQuest (the guild lead, 2026-11-26, Desk radar-sense: "Should show full window (or at least full EQ
+// Window position size"). While the radar shows, a Map in Window mode grows to EverQuest's client area (_mapFullRect), turns
+// click-through (_coversScreen) and saves nothing; it goes back to the rectangle it had when the radar closes or blind ends.
+// Full mode already covers EverQuest, so it is left alone.
+function _setMapBlindCover(on) {
+  if (!_live(mapWindow)) { _mapBlindCover = null; return false; }
+  if (on && !_mapFull && !_mapBlindCover) {
+    _mapBlindCover = mapWindow.getBounds();
+    try { mapWindow.setBounds(_mapFullRect()); } catch { /* mid-close */ }
+  } else if (!on && _mapBlindCover) {
+    const back = _mapBlindCover;
+    _mapBlindCover = null;
+    try { mapWindow.setBounds(back); } catch { /* mid-close */ }
+  } else return !!_mapBlindCover;
+  applyOverlayInteractivity();
+  _mapGeomPush(true);
+  return !!_mapBlindCover;
+}
+ipcMain.handle('map-blind-cover', (_e, on) => _setMapBlindCover(!!on && _blindActive));
 ipcMain.handle('map-mode-get', () => { try { return loadConfig().mapMode === 'full' ? 'full' : 'window'; } catch { return 'window'; } });
 ipcMain.handle('map-mode-set', (_e, mode) => _setMapMode(mode === 'full' ? 'full' : 'window'));
 // The Map's mini mode (2026-11-09): a small square window so the round map fits. Going in keeps the size it had in

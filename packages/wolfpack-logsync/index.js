@@ -58460,6 +58460,12 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     if (out.blind && b.source === 'test') out.blind_test = Math.max(0, Math.round((b.expiresAt - now) / 1000));   // seconds left
     const bl = out.blind ? _blindLeft(b, now) : null;
     if (bl) { out.blind_left = bl.left; out.blind_est = bl.est; }
+    // The radar's heartbeat (the guild lead, 2026-11-26, Desk radar-style: "if you're in active combat give more frequent pulses,
+    // like the characters actual heartbeat and pulse when in danger"): your health and whether a fight is on, while blind only.
+    if (out.blind) {
+      const et = stats.currentEncounterThreat;
+      out.pulse = { hp: st.self_hp_pct != null ? Number(st.self_hp_pct) : null, fight: !!(et && !et.flushedAt && et.startedAt) };
+    }
   } catch { out.blind = false; }
   const zd = _mapZoneDoc(zone);
   try {   // a corpse in the Extended Target rows (if the bot ever sends one) is proof of death too, same as your own target

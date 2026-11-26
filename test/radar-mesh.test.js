@@ -143,7 +143,7 @@ describe('map.html: the radar draws the mesh', () => {
   });
   it('renderRadar draws the mesh when it is here, else the grid and the raised map lines', () => {
     const r = sliceBlock(MAP, 'function renderRadar(rt) {', 'var body = function (sx, sy, z, radius, tall, style, label) {');
-    expect(r).toMatch(/meshFetch\(me, S\.zone\);\s*var meshSegs = S\.radarWalls === 'mesh' && S\.mesh && S\.mesh\.zone === S\.zone \? S\.mesh\.segs : null;\s*var rst = [^\n]*\n\s*if \(meshSegs\) drawMesh\(/);
+    expect(r).toMatch(/meshFetch\(me, S\.zone\);\s*var meshSegs = S\.radarWalls === 'mesh' && S\.mesh && S\.mesh\.zone === S\.zone \? S\.mesh\.segs : null;\s*var rst = [^\n]*\n[^\n]*\n[^\n]*\n\s*if \(meshSegs\) drawMesh\(/);
     expect(r).toMatch(/for \(var k = -80; k <= 80 && !meshSegs; k \+= 10\)/);
     expect(r).toMatch(/if \(!meshSegs && localWalls\(\)\) \{/);
     expect(r).toMatch(/\} else if \(!meshSegs\) \{\s*g\.globalAlpha = 0\.8;[^\n]*\n\s*g\.fillText\('No map file for this zone/);
@@ -160,7 +160,7 @@ describe('map.html: the radar draws the mesh', () => {
     expect(f({ radarWalls: 'lines' }, () => true)(null)).toBe('Walls: map lines');
   });
   it('one stroke per brightness step', () => {
-    const d = sliceBlock(MAP, '  function drawMesh(g, c, segs, ms, sz, w, h, col, style, t) {', '\n  }\n');
+    const d = sliceBlock(MAP, '  function drawMesh(g, c, segs, ms, sz, w, h, col, style, t, beat) {', '\n  }\n');
     expect(d).toMatch(/paths\[Math\.min\(MESH_ALPHA_STEPS - 1, Math\.floor\(a \* MESH_ALPHA_STEPS\)\)\]\.push\(p\);/);
     expect(d.match(/g\.stroke\(\)/g)).toHaveLength(1);
   });
@@ -170,21 +170,43 @@ describe('map.html: the radar draws the mesh', () => {
 // what's around you. little pulses on wire mesh or other visual styles would be amazing"). radarGlow runs as shipped.
 describe('map.html: radar styles', () => {
   const block = sliceBlock(MAP, '  var PULSE_MS = 1800,', "    return Math.max(0.12, Math.min(1, 1.1 - d / RADAR_R));\n  }");
-  const glow = new Function('lsGet', 'S', 'RADAR_STYLES', 'RADAR_R', block + '\nreturn { radarGlow, PULSE_MS, SWEEP_MS, RADAR_DARK };')(
+  const glow = new Function('lsGet', 'S', 'RADAR_STYLES', 'RADAR_R', block + '\nreturn { radarGlow, radarBeat, ringAge, PULSE_MS, SWEEP_MS, RADAR_DARK, RING_SPEED };')(
     () => null, {}, { pulse: {}, sweep: {}, ember: {}, plain: {} }, 160);
-  const g = glow.radarGlow;
-  it('pulse: a wall is dark before the ring reaches it, bright as it passes, fading after', () => {
-    const v = 160 * 1.15 / glow.PULSE_MS, d = 80, hit = d / v;   // ms after the ring leaves that it reaches d
-    expect(g('pulse', d, 0, hit - 200)).toBeLessThan(0.2);   // only the last ring's tail, 1.6 s old
-    expect(g('pulse', d, 0, hit + 10)).toBeGreaterThan(0.9);
-    expect(g('pulse', d, 0, hit + 700)).toBeLessThan(g('pulse', d, 0, hit + 100));
+  const g = glow.radarGlow, calm = glow.radarBeat(null);
+  // The pick (Desk radar-style, 2026-11-26): "not a full fade out, it should be faded and highlight with the pulses".
+  it('pulse: a wall rests faded, never gone; lit as the ring passes; fading back after', () => {
+    const v = glow.RING_SPEED, d = 80, hit = d / v;   // ms after the ring leaves that it reaches d
+    expect(glow.RADAR_DARK).toBeGreaterThanOrEqual(0.25);
+    expect(g('pulse', d, 0, hit - 200, calm)).toBeGreaterThanOrEqual(glow.RADAR_DARK);
+    expect(g('pulse', d, 0, hit - 200, calm)).toBeLessThan(0.45);   // only the last ring's tail, 1.6 s old
+    expect(g('pulse', d, 0, hit + 10, calm)).toBeGreaterThan(0.9);
+    expect(g('pulse', d, 0, hit + 700, calm)).toBeLessThan(g('pulse', d, 0, hit + 100, calm));
     const at30 = 30 / v;   // the ring is 30 out: the wall at 10 was just lit, the one at 150 has the last ring's tail
-    expect(g('pulse', 10, 0, at30)).toBeGreaterThan(g('pulse', 150, 0, at30));
+    expect(g('pulse', 10, 0, at30, calm)).toBeGreaterThan(g('pulse', 150, 0, at30, calm));
   });
-  it('sweep: the wall the beam is on is bright, the one opposite is dark', () => {
+  // "if you're in active combat give more frequent pulses, like the characters actual heartbeat and pulse when in danger".
+  it('the beat: calm every 1.8 s, faster in a fight, a two-ring heartbeat when hurt that quickens as health drops', () => {
+    expect(glow.radarBeat(null)).toMatchObject({ name: 'calm', period: 1800, rings: [0] });
+    expect(glow.radarBeat({ hp: 90, fight: false })).toMatchObject({ name: 'calm', period: 1800 });
+    expect(glow.radarBeat({ hp: 90, fight: true })).toMatchObject({ name: 'fight', period: 1100, rings: [0] });
+    const h40 = glow.radarBeat({ hp: 40, fight: true }), h10 = glow.radarBeat({ hp: 10, fight: false }), h0 = glow.radarBeat({ hp: 0 });
+    expect(h40).toMatchObject({ name: 'danger', period: 900 });
+    expect(h40.rings).toHaveLength(2);
+    expect(h10.period).toBeLessThan(h40.period);
+    expect(h0.period).toBe(500);
+  });
+  it('ringAge follows the beat: a fight lights a wall again sooner than calm; the heartbeat lights it twice per beat', () => {
+    const d = 40, t = 3000;
+    const calmAge = glow.ringAge(d, t, calm), fight = glow.radarBeat({ fight: true });
+    expect(glow.ringAge(d, t, fight)).toBeLessThan(calmAge + 1);
+    const heart = glow.radarBeat({ hp: 20 }), arrive = d / glow.RING_SPEED;
+    const lub = 10 * heart.period + arrive, dub = lub + heart.rings[1];
+    expect(glow.ringAge(d, lub + 5, heart)).toBeCloseTo(5, 0);
+    expect(glow.ringAge(d, dub + 5, heart)).toBeCloseTo(5, 0);  });
+  it('sweep: the wall the beam is on is bright, the one opposite is faded', () => {
     const t = glow.SWEEP_MS / 4;   // beam at 90 degrees
     expect(g('sweep', 50, Math.PI / 2, t)).toBeGreaterThan(0.9);
-    expect(g('sweep', 50, -Math.PI / 2, t)).toBeLessThan(0.35);   // half a turn old
+    expect(g('sweep', 50, -Math.PI / 2, t)).toBeLessThan(0.55);   // half a turn old
   });
   it('ember breathes and stays lit; plain is steady and fades with distance', () => {
     const a = g('ember', 40, 0, 0), b = g('ember', 40, 0, 1300);
@@ -197,8 +219,36 @@ describe('map.html: radar styles', () => {
     expect(MAP).toMatch(/<select id="cfgRadarStyle"><option value="pulse">Pulse<\/option><option value="sweep">Sweep<\/option><option value="ember">Ember<\/option><option value="plain">Plain<\/option><\/select>/);
     expect(MAP).toMatch(/S\.radarStyle = \(function \(\) \{ var v = lsGet\('wp-map-radar-style'\); return RADAR_STYLES\[v\] \? v : 'pulse'; \}\)\(\);/);
     expect(MAP).toMatch(/return !document\.hidden && !!S\.radarView && S\.radarView !== 'map' && !!\(RADAR_STYLES\[S\.radarStyle\] \|\| \{\}\)\.anim;/);
-    expect(MAP).toMatch(/radarEl\.hidden = v === 'map';\s*resize\(\);\s*kickRadar\(\);/);
-    expect(MAP).toMatch(/if \(rst\.anim\) drawRadarVignette\(g, w, h, rst\.rgb\);/);
-    expect(MAP).toMatch(/if \(meshSegs\) drawMesh\(g, c, meshSegs, ms, sz, w, h, rcol, S\.radarStyle, rt\);/);
+    expect(MAP).toMatch(/radarEl\.hidden = v === 'map';\s*try \{ if \(window\.mimic && window\.mimic\.mapBlindCover\) window\.mimic\.mapBlindCover\(v !== 'map'\); \} catch \(e\) \{\}\s*resize\(\);\s*kickRadar\(\);/);
+    expect(MAP).toMatch(/if \(rst\.anim\) drawRadarVignette\(g, w, h, beat\.name === 'danger' \? '255,60,60' : rst\.rgb\);/);
+    expect(MAP).toMatch(/var beat = radarBeat\(P\.pulse\);/);
+    expect(MAP).toMatch(/if \(meshSegs\) drawMesh\(g, c, meshSegs, ms, sz, w, h, rcol, S\.radarStyle, rt, beat\);/);
+  });
+  it('pings: raiders, your target and the mobs other raiders are on', () => {
+    const r = sliceBlock(MAP, 'function renderRadar(rt) {', "g.fillText('Radar · '");
+    expect(r).toMatch(/body\(s\.sx, s\.sy, at\[key\]\.z, 2\.5, 6, CO\.raid, m\.name\);\s*ping\(s\.sx, s\.sy, at\[key\]\.z\);/);
+    expect(r).toMatch(/ping\(ma\.sx, ma\.sy, mz\);/);
+    expect(r).toMatch(/var tp = body\(ts\.sx, ts\.sy, tz,[^\n]*\n\s*ping\(ts\.sx, ts\.sy, tz\);/);
+    expect(r).toMatch(/if \(S\.radarStyle !== 'pulse'\) return;\s*var age = ringAge\(Math\.hypot\(psx - ms\.sx, psy - ms\.sy\), rt, beat\);\s*if \(!\(age < PING_MS\)\) return;/);
+  });
+});
+
+// The radar is opt-in and covers EverQuest (Desk radar-sense, 2026-11-26: "Only when I switch it on"; "Should show full window
+// (or at least full EQ Window position size").
+describe('the radar covers EverQuest while it shows', () => {
+  const MAIN = stripJs(readSource(path.join(ROOT, 'apps', 'mimic', 'main.js')));
+  const PRE = stripJs(readSource(path.join(ROOT, 'apps', 'mimic', 'preload.js')));
+  it('the agent sends health and fight state with a blind', () => {
+    expect(AGENT).toMatch(/if \(out\.blind\) \{\s*const et = stats\.currentEncounterThreat;\s*out\.pulse = \{ hp: st\.self_hp_pct != null \? Number\(st\.self_hp_pct\) : null, fight: !!\(et && !et\.flushedAt && et\.startedAt\) \};/);
+  });
+  it('main grows a Window-mode Map to EverQuest, click-through, saves nothing, and puts it back', () => {
+    const f = sliceBlock(MAIN, 'function _setMapBlindCover(on) {', '\n}');
+    expect(f).toMatch(/if \(on && !_mapFull && !_mapBlindCover\) \{\s*_mapBlindCover = mapWindow\.getBounds\(\);\s*try \{ mapWindow\.setBounds\(_mapFullRect\(\)\); \}/);
+    expect(f).toMatch(/const back = _mapBlindCover;\s*_mapBlindCover = null;\s*try \{ mapWindow\.setBounds\(back\); \}/);
+    expect(MAIN).toMatch(/function _coversScreen\(key\) \{ return key === 'canvas' \|\| \(key === 'map' && \(_mapFull \|\| !!_mapBlindCover\)\); \}/);
+    expect(MAIN).toMatch(/mapWindow\.on\('moved',  \(\) => \{ if \(!_mapFull && !_mapBlindCover\) _persistBounds/);
+    expect(MAIN).toMatch(/ipcMain\.handle\('map-blind-cover', \(_e, on\) => _setMapBlindCover\(!!on && _blindActive\)\);/);
+    expect(MAIN).toMatch(/_blindSource = null;\s*try \{ _setMapBlindCover\(false\); \}/);
+    expect(PRE).toMatch(/mapBlindCover: +\(on\) +=> ipcRenderer\.invoke\('map-blind-cover', !!on\),/);
   });
 });

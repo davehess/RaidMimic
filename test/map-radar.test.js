@@ -136,11 +136,12 @@ describe('bot: mob info carries reach', () => {
 });
 
 describe('map.html wiring', () => {
-  it('⚙ → Blind view: Radar + mini map (the default), Map + radar, Radar, Map; remembered', () => {
-    expect(MAP).toMatch(/<select id="cfgBlindView"><option value="inset">Radar \+ mini map<\/option><option value="split">Map \+ radar<\/option><option value="radar">Radar<\/option><option value="map">Map<\/option><\/select>/);
-    const pick = new Function(sliceBlock(MAP, "  var BLIND_VIEWS = ['inset', 'split', 'radar', 'map'];", "return BLIND_VIEWS.indexOf(v) >= 0 ? v : 'inset'; }") + '\nreturn blindViewOf;')();
+  // The radar is opt-in (Desk radar-sense, 2026-11-26: "Only when I switch it on").
+  it('⚙ → Blind view: Map only (radar off, the default), Radar + mini map, Map + radar, Radar; remembered', () => {
+    expect(MAP).toMatch(/<select id="cfgBlindView"><option value="map">Map only \(radar off\)<\/option><option value="inset">Radar \+ mini map<\/option><option value="split">Map \+ radar<\/option><option value="radar">Radar<\/option><\/select>/);
+    const pick = new Function(sliceBlock(MAP, "  var BLIND_VIEWS = ['inset', 'split', 'radar', 'map'];", "return BLIND_VIEWS.indexOf(v) >= 0 ? v : 'map'; }") + '\nreturn blindViewOf;')();
     expect(['inset', 'split', 'radar', 'map'].map(pick)).toEqual(['inset', 'split', 'radar', 'map']);
-    expect([null, '', 'x'].map(pick)).toEqual(['inset', 'inset', 'inset']);
+    expect([null, '', 'x'].map(pick)).toEqual(['map', 'map', 'map']);
     expect(MAP).toMatch(/S\.blindView = blindViewOf\(lsGet\('wp-map-blind-view'\)\);/);
   });
   it('the layouts: split halves the Map, radar covers it, inset puts the Map in the corner over the radar; only while blind', () => {

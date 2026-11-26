@@ -6368,6 +6368,12 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   ang, t)` (pure: how lit a wall is), `drawMesh` buckets by it, `drawRadarWave` (the sonar ring / the beam on the floor),
   `drawRadarVignette` (tinted edges, the blind cue), `radarTick` / `kickRadar` (own requestAnimationFrame loop at FRAME_MS,
   only while `radarAnimating()`).
+  Picks built 2026-11-26 (agent 4.0.115): `RADAR_DARK` 0.3 (faded, never gone); `radarBeat(P.pulse)` (calm 1.8 s / fight
+  1.1 s / at ≤ 40% health a two-ring heartbeat, 0.9 s down to 0.5 s) from the agent's map feed `pulse` ({ hp, fight }, sent
+  while blind); `ringAge(d, t, beat)` drives the walls, the floor rings (`drawRadarWave`) and `ping` (raiders, target, aimed
+  mobs); red walls and edges when hurt. Blind view default `map` ("Map only (radar off)"). The cover: page
+  `window.mimic.mapBlindCover(on)` → `map-blind-cover` IPC → main `_setMapBlindCover` (Window-mode Map to `_mapFullRect()`,
+  click-through via `_coversScreen`, bounds not persisted while `_mapBlindCover`, restored on close and on blind end).
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
