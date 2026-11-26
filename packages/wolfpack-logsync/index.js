@@ -6166,6 +6166,29 @@ function _zealHasBuff(cl, spell, now) {
   }
   return null;
 }
+// While blind, what your own swings are doing, for the Map's cue (the guild lead, 2026-11-26: "for blind mode we need to know
+// if we're hitting, too far, turned away from the target and to turn left or right"). The server's own strings
+// (EQMacEmu zone/string_ids.h): CANT_SEE_TARGET 108, CANT_HIT_THEM 123, TARGET_TOO_FAR 124. Your melee lines are the
+// client's "You <verb> <target> for N points of damage." and "You try to <verb> <target>, but <miss|it parries|...>!".
+// Facing has no message: the Map works it out from your heading. Only while that character is blind; nothing otherwise.
+const _blindSwing = {};   // charLower -> { kind: 'hit'|'miss'|'far'|'cant_hit'|'no_los', at }
+const _BLIND_SWING_RX = [
+  [/\] Your target is too far away, get closer!$/, 'far'],
+  [/\] You can't hit them from here\.$/, 'cant_hit'],
+  [/\] You cannot see your target\.$/, 'no_los'],
+  [/\] You try to [a-z]+ .+, but .+!$/, 'miss'],
+  [/\] You [a-z]+ .+ for \d+ points? of damage\.$/, 'hit'],
+];
+function noteBlindSwing(line, character) {
+  const cl = String(character || '').toLowerCase(), s = _blindState[cl];
+  if (!s || !s.active || !line || line.indexOf('] You') === -1 && line.indexOf('] Your target') === -1) return;
+  for (const [rx, kind] of _BLIND_SWING_RX) {
+    if (!rx.test(line)) continue;
+    const ts = parseEqTimestamp(line);
+    _blindSwing[cl] = { kind, at: ts ? ts.getTime() : Date.now() };
+    return;
+  }
+}
 // The blind's countdown for the HUD and the Map (the guild lead, 2026-11-25: "Also a timer on the blind"): whole seconds
 // left by its expiry, and est = that end is the 30 s fallback, not the spell's own duration. null when not blind.
 function _blindLeft(b, now) {
@@ -58465,6 +58488,8 @@ function _mapStatePayload(have, now, haveLocal, haveRoute) {
     if (out.blind) {
       const et = stats.currentEncounterThreat;
       out.pulse = { hp: st.self_hp_pct != null ? Number(st.self_hp_pct) : null, fight: !!(et && !et.flushedAt && et.startedAt) };
+      const sw = _blindSwing[String(character || '').toLowerCase()];   // your last swing or range message, and how long ago
+      if (sw && now - sw.at < 6000) out.swing = { kind: sw.kind, age_ms: Math.max(0, now - sw.at) };
     }
   } catch { out.blind = false; }
   const zd = _mapZoneDoc(zone);
@@ -68275,6 +68300,7 @@ async function main() {
         // always runs (no _sourceExcluded gate — blindness is a UI thing,
         // not stat data we'd ever want suppressed).
         noteBlindLine(line, b.character);
+        noteBlindSwing(line, b.character);   // while blind only: are you hitting, too far, unable to see? (the Map's cue)
         // PBAOE song mob counter (melody overlay swarm badge) — same UI-only
         // reasoning as blindness; exits on a Map miss for non-melody chars.
         noteSongAoeLine(line, b.character);

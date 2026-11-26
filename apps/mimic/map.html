@@ -54,6 +54,13 @@
   /* ⚙ → Blind → Black out: a test blind darkens the pane the way a real blind darkens the game (the guild lead, 2026-11-25:
      "seems like it's going translucent for me"). */
   #mapPane.blind-black{background:rgb(0 0 0)}
+  /* The blind cue (blindCue): one big line at the top of the Map while blind, in every Blind view. Read at a glance. */
+  .bcue{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:4;pointer-events:none;white-space:nowrap;
+    font:700 20px/1.2 system-ui,sans-serif;letter-spacing:.02em;padding:6px 14px;border-radius:6px;background:rgb(0 0 0 / .74);
+    border:1px solid currentColor;color:var(--wp-text)}
+  .bcue.ok{color:var(--wp-green)} .bcue.warn{color:var(--wp-gold)} .bcue.bad{color:var(--wp-red)} .bcue.turn{color:var(--wp-blue)}
+  .bcue.dim{color:var(--wp-dim);border-color:transparent}
+  .bcue[hidden]{display:none}
   #hits{position:absolute;inset:0;pointer-events:none}
   body.dragging #hits{display:none}
   /* A spawn dot's click target: a real button, so the preload's hover handshake arms the click-through window. */
@@ -320,6 +327,7 @@
         <div id="kiteChip" hidden></div>
       </div>
       <canvas id="radar" hidden></canvas>
+      <div id="blindCue" class="bcue" hidden></div>
       <div id="tools">
         <button class="tb grip" id="toolsGrip" type="button" title="Drag the buttons anywhere on the map; let go near an edge and they lock to it (on the left or right edge they stand upright).">⠿</button>
         <button class="tb on" id="followBtn" type="button" title="Keep the map centred on you. Dragging the map turns it off.">Follow me</button>
@@ -993,6 +1001,49 @@
     if (t.type != null && t.type !== 1) return null;
     if (t.hp_pct === 0 || /'s corpse\d*$/i.test(String(t.name))) return null;
     return { radius: r, melee: m, label: 'size ' + (Math.round(r * 10) / 10) + ' · hits at ' + (Math.round(m * 10) / 10) };
+  }
+  // ── Blind cue (the guild lead, 2026-11-26: "for blind mode we need to know if we're hitting, too far, turned away from the
+  // target and to turn left or right, and show the motion arrows towards the mob"). One line, most urgent first:
+  //   can't see the target (the server said so) · turn left/right (your heading is more than BLIND_FACE_DEG off it, or the
+  //   server said "You can't hit them from here." and you are turned at all) · too far (past its reach, or the server said
+  //   so) · can't hit from here · hitting / missing (your last swing) · in range.
+  // Facing has no server message, so it is your Zeal heading against the bearing to the target, in the screen frame the
+  // radar uses: positive = turn right. BLIND_FACE_DEG is a judgement, not a server number. Pure.
+  var BLIND_FACE_DEG = 45, BLIND_MSG_MS = 2500, BLIND_SWING_MS = 2000, BLIND_REACH_DEFAULT = 14;
+  function blindCue(me, heading, t, reach, swing) {
+    if (!t || t.x == null || !me || me.x == null) return { kind: 'none', tone: 'dim', text: 'NO TARGET' };
+    var ms = toScreen(me.x, me.y), ts = toScreen(t.x, t.y), vx = ts.sx - ms.sx, vy = ts.sy - ms.sy;
+    var dist = Math.round(Math.hypot(vx, vy)), r = reach && reach.melee > 0 ? reach.melee : BLIND_REACH_DEFAULT, turn = null;
+    if (heading != null && isFinite(heading) && dist > 0) {
+      var f = headingVec(heading), dot = vx * f.dx + vy * f.dy, right = vx * -f.dy + vy * f.dx;
+      turn = Math.round(Math.atan2(right, dot) * 180 / Math.PI);
+    }
+    var sw = swing && swing.age_ms != null ? swing : null, recent = function (k, ms2) { return sw && sw.kind === k && sw.age_ms < ms2; };
+    var base = { dist: dist, reach: Math.round(r * 10) / 10, turn: turn, inReach: dist <= r };
+    var out = function (kind, tone, text) { base.kind = kind; base.tone = tone; base.text = text; return base; };
+    if (recent('no_los', BLIND_MSG_MS)) return out('no_los', 'bad', '✕ CAN’T SEE YOUR TARGET');
+    if (turn != null && (Math.abs(turn) > BLIND_FACE_DEG || (recent('cant_hit', BLIND_MSG_MS) && Math.abs(turn) > 10))) {
+      return out('turn', 'turn', turn > 0 ? 'TURN RIGHT ' + Math.abs(turn) + '° ▶' : '◀ TURN LEFT ' + Math.abs(turn) + '°');
+    }
+    if (dist > r || recent('far', BLIND_MSG_MS)) return out('far', 'warn', '▲ TOO FAR · ' + dist + ' away, reach ' + Math.round(r));
+    if (recent('cant_hit', BLIND_MSG_MS)) return out('cant_hit', 'warn', 'CAN’T HIT FROM HERE');
+    if (recent('hit', BLIND_SWING_MS)) return out('hit', 'ok', '● HITTING');
+    if (recent('miss', BLIND_SWING_MS)) return out('miss', 'warn', '○ MISSING');
+    return out('in', 'ok', '● IN RANGE');
+  }
+  // Moving chevrons from (x0, y0) toward (x1, y1), in whatever space `line` draws: SPACING apart, sliding at SPEED per second,
+  // stopping STOP short of the end. line(ax, ay, bx, by) draws one stroke. Pure but for the strokes.
+  function chevrons(x0, y0, x1, y1, t, spacing, speed, stop, size, line) {
+    var dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) - stop;
+    if (!(len > spacing)) return 0;
+    var ux = dx / (len + stop), uy = dy / (len + stop), px = -uy, py = ux, off = (t / 1000 * speed) % spacing, n = 0;
+    for (var s = off + spacing * 0.5; s < len; s += spacing) {
+      var cx = x0 + ux * s, cy = y0 + uy * s;
+      line(cx - ux * size + px * size, cy - uy * size + py * size, cx, cy);
+      line(cx - ux * size - px * size, cy - uy * size - py * size, cx, cy);
+      n++;
+    }
+    return n;
   }
   // Mezzes and lulls on the rings (the guild lead, 2026-10-13: "add zzz's if it's mezzed" · "if it's truly pacified make
   // the circle light pink and have it fill in the outside like a clock wipe more red until the pacify wears off. bard
@@ -2076,6 +2127,19 @@
     return [radarProj(p, w, h), radarProj(q, w, h)];
   }
   // ── end pure helpers ──
+  // The blind cue on the page (blindCue above is the pure part). cueCol: its colour for canvas drawing, looked up at draw
+  // time because RING is defined further down.
+  function cueCol(tone) {
+    return { ok: RING.up, warn: RING.window, bad: RING.wait, turn: 'rgb(120,200,255)' }[tone] || 'rgba(201,209,217,0.5)';
+  }
+  var blindCueEl = document.getElementById('blindCue');
+  function syncBlindCue(p) {
+    if (!blindCueEl) return;
+    if (!p || !p.blind || PART_TIMERS) { blindCueEl.hidden = true; S.cue = null; return; }
+    var me = p.self, t = p.target && p.target.x != null ? p.target : null;
+    S.cue = blindCue(me, me && me.heading, t, t ? targetReach(t) : null, p.swing);
+    blindCueEl.textContent = S.cue.text; blindCueEl.className = 'bcue ' + S.cue.tone; blindCueEl.hidden = false;
+  }
 
   // ── state ──
   var S = {
@@ -2629,6 +2693,11 @@
       }
       var tp = body(ts.sx, ts.sy, tz, rad, Math.max(6, rad * 2), tcol, null);
       ping(ts.sx, ts.sy, tz);
+      // Moving arrows on the floor from you to the target, stopping at its reach, coloured like the cue (blindCue).
+      if (S.cue && S.cue.kind !== 'none') {
+        chevrons(ms.sx, ms.sy, ts.sx, ts.sy, rt, 6, 14, rch ? rch.melee : 4, 2.2,
+          function (ax, ay, bx, by) { seg([ax, ay, sz + 0.5], [bx, by, sz + 0.5], cueCol(S.cue.tone), 0.95, 2.2); });
+      }
       var rg = targetRange(me, td);
       // Two lines, kept inside the view: name and health, then distance, size and reach.
       var l1 = T.name + (T.hp_pct != null ? ' · ' + T.hp_pct + '%' : '');
@@ -2757,6 +2826,7 @@
     noteBlind(!!p.blind);   // blinded: follow you, zoom to the nearest walls, show the Engaged list (back as it was after)
     S.blindTest = p.blind && p.blind_test != null ? p.blind_test : null;   // a test blind's seconds left (⚙ → Test blind)
     S.blindLeft = p.blind && p.blind_left != null ? p.blind_left : null; S.blindEst = !!p.blind_est;   // the radar's countdown
+    syncBlindCue(p);   // hitting / too far / turn left or right, at the top of the Map while blind
     syncBlindView(); syncBlindTestBtn();   // ⚙ → Blind view: the radar beside or over the Map while blind
     noteHunt(p);     // Targeted named mobs: load this character's list, record a named target, refresh the highlighted ids
     S.timerBy = {}; S.candBy = {}; S.seenBy = {};
@@ -2812,7 +2882,7 @@
   }
   // Where to draw a reported thing right now: its glide, or the reported spot when it has no track.
   function drawn(key, m, now) { var tr = S.trk[key]; return tr ? trackAt(tr, now) : m; }
-  function anyMoving(now) { for (var k in S.trk) if (trackMoving(S.trk[k], now)) return true; return rotSettling(now) || !!pulseAt(S.pulse, now); }
+  function anyMoving(now) { for (var k in S.trk) if (trackMoving(S.trk[k], now)) return true; return rotSettling(now) || !!pulseAt(S.pulse, now) || !!(S.blind && S.cue && S.cue.kind !== 'none'); }   // blind: the arrows move
   // Animation: a frame loop that runs only while something is gliding (no idle CPU), at most ~30 frames a second.
   var raf = 0, lastFrame = 0, lastHits = 0;
   var FRAME_MS = 33, HITS_MS = 200, lastAge = 0;
@@ -4151,6 +4221,14 @@
           ctx.beginPath(); ctx.arc(tq[0], tq[1], rch.radius * v.scale, 0, 6.2832); ctx.fillStyle = hexA(CO.target, 0.18); ctx.fill();
           ctx.beginPath(); ctx.setLineDash([4, 3]); ctx.arc(tq[0], tq[1], rch.melee * v.scale, 0, 6.2832);
           ctx.lineWidth = 1.4; ctx.strokeStyle = RING.wait; ctx.stroke();
+          ctx.restore();
+        }
+        // Blind: moving arrows from you to the target, coloured like the cue, stopping at its reach (blindCue).
+        if (S.blind && S.cue && S.cue.kind !== 'none' && P.self && P.self.x != null) {
+          var bsd = drawn('self', P.self, rt), bsq = wpt(bsd.x, bsd.y);
+          ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = cueCol(S.cue.tone);
+          chevrons(bsq[0], bsq[1], tq[0], tq[1], rt, 18, 40, 10 + (rch ? rch.melee * v.scale : 8), 6,
+            function (ax, ay, bx, by) { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); });
           ctx.restore();
         }
         // Pinned: a thin line from the target to the spawn point it is tied to. A point that shares its route with

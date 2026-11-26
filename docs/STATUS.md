@@ -209,6 +209,13 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-26 — Blind combat cue (beta: agent 4.0.116).** The guild lead: *"for blind mode we need to know if we're
+  hitting, too far, turned away from the target and to turn left or right, and show the motion arrows towards the mob"*.
+  While blind, one big line at the top of the Map in every Blind view, most urgent first: can't see your target · turn
+  left / right N° (heading more than 45° off, or the server's "You can't hit them from here." with any turn) · too far (N away,
+  reach R) · can't hit from here · hitting / missing (your last swing) · in range. Moving arrows run from you to the target,
+  coloured like the line, on the blind Map and on the radar. The agent reads your own swings and the server's messages
+  (EQMacEmu string ids 108, 123, 124) only while you are blind. Not on the HUD ring yet.
 - **🧪 2026-11-26 — Radar picks built (beta: agent 4.0.115; Desk `radar-style` A + `radar-sense` notes, DECISIONS §660).**
   Pulse is the style. Walls rest faded (never gone) and each ring highlights them. The rhythm follows you: one ring every
   1.8 s calm, every 1.1 s in a fight, and at 40% health or below a two-ring heartbeat that quickens to every 0.5 s at 0%,
