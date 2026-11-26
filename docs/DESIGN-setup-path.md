@@ -44,6 +44,26 @@ was two read-only passes over the beta checkout (file:line in each section).
   status, corpse) on the account.
 - **Showing it:** new installs go through it; existing players get the new questions once, without redoing the rest.
 
+## Every choice shows a sample
+
+The guild lead, 2026-11-26: *"we should see samples of the overlays and options when mousing over each option"*. A
+requirement for every option below.
+- **Interaction:** pointing at an overlay or an option (or focusing it with the keyboard, or tapping it) fills a preview
+  pane. The pane shows what you would see, one line on what it shows, and the zone and mobs the sample came from.
+- **Samples must be real.** They are recorded from the real overlay pages with a stand-in agent feeding real game data:
+  real zone meshes, real spawn points and catalog mobs, real timers. This is how the 2026-11-26 beta clip of the blind radar
+  was made, in Plane of Torment at a real Boruk/Kaniz camp.
+- **Sources today:** the website has animated demos of only four overlays (Tank, Command Center, CH chain, loot; React, in
+  `web/components/about/OverlayDemo.tsx`). The other 17 overlays and every blind and radar option need new recordings.
+- **How (Desk follow-up `setup-samples`):**
+  - Short looping clips (recommended).
+  - Still pictures.
+  - The live overlay running demo data inside the preview.
+  - Clips and stills come from one script that drives each page with a stand-in agent. It is rerun when an overlay changes
+    and ships with Mimic, a few MB in all.
+  - Live previews need every overlay to accept a demo feed.
+- **Cost on top of any option:** clips or stills ~2 days, mostly the stand-in feeds for 21 overlays. Live ~4 days.
+
 ## Options (Desk `setup-path`)
 
 | | What it is | Build | Maintenance | Runtime | Change |
