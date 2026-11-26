@@ -6374,6 +6374,12 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   mobs); red walls and edges when hurt. Blind view default `map` ("Map only (radar off)"). The cover: page
   `window.mimic.mapBlindCover(on)` → `map-blind-cover` IPC → main `_setMapBlindCover` (Window-mode Map to `_mapFullRect()`,
   click-through via `_coversScreen`, bounds not persisted while `_mapBlindCover`, restored on close and on blind end).
+  Blind combat cue (agent 4.0.116): agent `noteBlindSwing` (`_BLIND_SWING_RX`: your melee hit/miss lines and string ids 108
+  "You cannot see your target.", 123 "You can't hit them from here.", 124 "Your target is too far away, get closer!"; only
+  while blind) → map feed `swing` { kind, age_ms } for 6 s. `map.html` `blindCue(me, heading, target, reach, swing)` (pure;
+  turn from your heading in the radar's own right-hand frame, `BLIND_FACE_DEG` 45), `syncBlindCue` fills `#blindCue` each
+  poll, `chevrons()` draws the moving arrows on the 2D Map (renderMapInner's target block) and the radar floor; `anyMoving`
+  keeps the Map animating while blind. Tests: `test/blind-cue.test.js`.
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
