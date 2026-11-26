@@ -64,6 +64,33 @@ requirement for every option below.
   - Live previews need every overlay to accept a demo feed.
 - **Cost on top of any option:** clips or stills ~2 days, mostly the stand-in feeds for 21 overlays. Live ~4 days.
 
+## Every step says where to change it later, and the path teaches the handles
+
+The guild lead, 2026-11-26: *"also tell them where the settings are if they want to change it later (teach them about the
+drag icon and the right click spots"*. The walkthrough today never mentions the ✥ or the right-click menu.
+- **A teaching step, right after the overlays are chosen.** It shows one real overlay with its four handles numbered:
+  1. ✥ drag to move; overlays let clicks through to EverQuest, and the ✥ is the part you can grab.
+  2. Right-click the ✥ for its menu. The real items, from preload.js: Setup ALL overlays, Setup THIS overlay, Hide this
+     overlay, Stay on top, Background, Lock size, Auto-arrange overlays, Move to another screen.
+  3. ⚙ for that overlay's own options.
+  4. ✕ hides it; the dashboard's Overlays tab brings it back.
+
+  The player tries them on a live overlay before moving on.
+- **Every question step ends with "Change this later:"** and the exact place:
+
+  | Setting | Where |
+  |---|---|
+  | Which overlays show | Dashboard → Overlays tab, the tray, or ✕ on the overlay |
+  | Placement and size | ✥ drag, or right-click the ✥ → Setup THIS / Setup ALL |
+  | Blind | Map ⚙ → Blind, and Dashboard → Voice → Built-in callouts → Blind alerts |
+  | Updates | The dashboard header's Stable / Beta, or the tray |
+  | Notifications | Once the setting exists |
+  | The whole path | Tray or dashboard → Setup walkthrough |
+
+  The last step repeats the full list.
+- When a setting moves, its "Change this later" line moves in the same change: one list in code, read by the steps and
+  the summary.
+
 ## Options (Desk `setup-path`)
 
 | | What it is | Build | Maintenance | Runtime | Change |
