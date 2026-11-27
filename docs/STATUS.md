@@ -209,6 +209,12 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-27 — Radar line-up and solid while blind (beta, Mimic only).** Tested over the game, the wireframe did not
+  sit on the real walls (*"definitely some alignment issues"*), and Black out still showed the game. Mimic cannot read
+  EverQuest's camera (Zeal sends no zoom, angle or field of view), so ⚙ → Line up the radar gives the radar's camera
+  distance, height, tilt and field of view, set during a see-through Test blind and saved. The radar is now solid in a real
+  blind and in a test with Black out; Mimic's opacity setting had been fading it. Not yet measured: whether one setting
+  holds as the player zooms the EverQuest camera in and out.
 - **🧪 2026-11-26 — Blind combat cue (beta: agent 4.0.116).** The guild lead: *"for blind mode we need to know if we're
   hitting, too far, turned away from the target and to turn left or right, and show the motion arrows towards the mob"*.
   While blind, one big line at the top of the Map in every Blind view, most urgent first: can't see your target · turn
