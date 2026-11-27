@@ -209,3 +209,32 @@ describe('the blind countdown and the HUD on top', () => {
     expect(MAIN).toMatch(/_reapDisabledOverlays\(\);\s*try \{ if \(_live\(meWindow\) && meWindow\.isVisible\(\)\) meWindow\.moveTop\(\); \}/);
   });
 });
+
+// Lining the radar up, and keeping it solid while blind (the guild lead, 2026-11-27, testing it over the game: "definitely
+// some alignment issues"). Mimic cannot read EverQuest's camera, so ⚙ → Line up the radar sets the radar's own.
+describe('the radar camera, lined up by hand, and solid while blind', () => {
+  const block = sliceBlock(MAP, '  var RADAR_CAM_DEFAULT = { back: 42, up: 20, tilt: 13, fov: 63 };',
+    '    RADAR_BACK = cam.back; RADAR_UP = cam.up; RADAR_PITCH = cam.tilt * Math.PI / 180; RADAR_FOV = cam.fov * Math.PI / 180;\n  }');
+  const f = new Function(block + '\nreturn { radarCamOf, applyRadarCam, get: function () { return [RADAR_BACK, RADAR_UP, RADAR_PITCH, RADAR_FOV]; } };');
+  it('radarCamOf keeps every value in range and fills the rest from the defaults', () => {
+    const { radarCamOf } = f.call({});
+    expect(radarCamOf(null)).toEqual({ back: 42, up: 20, tilt: 13, fov: 63 });
+    expect(radarCamOf({ back: 999, up: -5, tilt: 'x', fov: 10 })).toEqual({ back: 120, up: 0, tilt: 13, fov: 30 });
+  });
+  it('the defaults are the camera the radar always had', () => {
+    const g = new Function('var RADAR_BACK, RADAR_UP, RADAR_PITCH, RADAR_FOV;\n' + block +
+      '\napplyRadarCam(radarCamOf(null)); return [RADAR_BACK, RADAR_UP, RADAR_PITCH, RADAR_FOV];')();
+    expect(g[0]).toBe(42); expect(g[1]).toBe(20);
+    // within a degree of the old 0.22 / 1.1 rad (the sliders move in whole degrees)
+    expect(Math.abs(g[2] - 0.22)).toBeLessThan(Math.PI / 180); expect(Math.abs(g[3] - 1.1)).toBeLessThan(Math.PI / 180);
+  });
+  it('saved and shown in ⚙ → Line up the radar', () => {
+    expect(MAP).toMatch(/S\.radarCam = radarCamOf\(\(function \(\) \{ try \{ return JSON\.parse\(lsGet\('wp-map-radar-cam'\) \|\| 'null'\); \}/);
+    for (const id of ['radarCamBack', 'radarCamUp', 'radarCamTilt', 'radarCamFov', 'radarCamReset']) expect(MAP).toContain('id="' + id + '"');
+  });
+  it('solid in a real blind or a blacked-out test; a see-through test keeps your opacity', () => {
+    const sync = sliceBlock(MAP, 'function syncBlindView() {', 'resize();');
+    expect(sync).toMatch(/document\.body\.classList\.toggle\('wp-radar-solid', !!\(S\.blind && v !== 'map' && \(S\.blindTest == null \|\| S\.blindBlack\)\)\);/);
+    expect(stripCss(MAP)).toMatch(/body\.wp-radar-solid>#wrap\{opacity:1 !important\}/);
+  });
+});

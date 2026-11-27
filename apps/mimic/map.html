@@ -54,6 +54,8 @@
   /* ⚙ → Blind → Black out: a test blind darkens the pane the way a real blind darkens the game (the guild lead, 2026-11-25:
      "seems like it's going translucent for me"). */
   #mapPane.blind-black{background:rgb(0 0 0)}
+  /* Solid while blind (syncBlindView): beats the preload's opacity rule for the Map's top-level wrap. */
+  body.wp-radar-solid>#wrap{opacity:1 !important}
   /* The blind cue (blindCue): one big line at the top of the Map while blind, in every Blind view. Read at a glance. */
   .bcue{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:4;pointer-events:none;white-space:nowrap;
     font:700 20px/1.2 system-ui,sans-serif;letter-spacing:.02em;padding:6px 14px;border-radius:6px;background:rgb(0 0 0 / .74);
@@ -396,6 +398,11 @@
         <label class="row" title="What the Map shows while you are blind (or testing it). The radar is off until you pick it: Map only is the zoomed Map. With the radar on, the Map window grows to cover EverQuest's window while you are blind (clicks pass through to the game) and goes back after."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="map">Map only (radar off)</option><option value="inset">Radar + mini map</option><option value="split">Map + radar</option><option value="radar">Radar</option></select></label>
         <label class="row" title="What the radar draws as walls. Zone mesh: the server's own 3D shape of the zone (walls, floors, ceilings, stairs, furniture), downloaded once per zone. Map lines: your map's lines stood up as walls; a line the mapmaker drew for a hill or a path shows as a wall too."><span class="bl">Radar walls</span><select id="cfgRadarWalls"><option value="mesh">Zone mesh</option><option value="lines">Map lines</option></select></label>
         <label class="row" title="How the radar looks. Pulse: a sonar ring leaves you every two seconds and lights the walls as it reaches them. Sweep: a beam turns around you lighting what it passes. Ember: everything glows red and breathes, brighter near you. Plain: steady walls. All but Plain tint the window's edges so it is plain you are blind."><span class="bl">Radar style</span><select id="cfgRadarStyle"><option value="pulse">Pulse</option><option value="sweep">Sweep</option><option value="ember">Ember</option><option value="plain">Plain</option></select></label>
+        <div class="row" title="Line the radar up with your own EverQuest camera: run Test blind without Black out, so the game shows through, and move these until the walls sit on the real ones. Mimic cannot read EverQuest's camera, so this is how it learns yours. Saved for next time."><span class="bl">Line up the radar</span><button type="button" id="radarCamReset" class="rs" title="Back to the defaults">↺</button></div>
+        <label class="row" title="How far behind you the radar's camera sits."><span class="bl">Distance</span><input id="radarCamBack" type="range" min="5" max="120" step="1"><span class="val" id="radarCamBackVal"></span></label>
+        <label class="row" title="How high above you the radar's camera sits."><span class="bl">Height</span><input id="radarCamUp" type="range" min="0" max="80" step="1"><span class="val" id="radarCamUpVal"></span></label>
+        <label class="row" title="How far the radar's camera looks down."><span class="bl">Tilt</span><input id="radarCamTilt" type="range" min="0" max="45" step="1"><span class="val" id="radarCamTiltVal"></span></label>
+        <label class="row" title="How wide the radar sees, top to bottom."><span class="bl">Field of view</span><input id="radarCamFov" type="range" min="30" max="110" step="1"><span class="val" id="radarCamFovVal"></span></label>
         <label class="row" title="How long Test blind lasts."><span class="bl">Test length</span><select id="cfgBlindSecs"><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="120">2 min</option></select></label>
         <label class="row" title="While a test blind runs, the Map's background goes solid black, the way a real blind blacks out the game, so you see only what Mimic shows. A real blind is not changed by this."><input type="checkbox" id="cfgBlindBlack"><span class="bl">Black out while testing</span></label>
         <div class="row"><button type="button" id="blindTestBtn" title="Blind your character without a spell, for the test length above: everything a real blind opens opens, so you can see it. Click again to end it.">Test blind (30 s)</button></div>
@@ -2567,6 +2574,10 @@
     if (PART_TIMERS || !radarEl) return;
     paneEl.classList.toggle('blind-black', !!(S.blindBlack && S.blindTest != null));
     var v = S.blind ? S.blindView : 'map';
+    // Solid while blind: Mimic's opacity setting fades everything a page draws (preload's --wp-content-alpha), so the radar
+    // showed the game through it even with Black out ticked (2026-11-27 screenshots). A real blind, or a test with Black out,
+    // draws the radar solid; a test without Black out keeps your opacity, which is how you line the radar up.
+    document.body.classList.toggle('wp-radar-solid', !!(S.blind && v !== 'map' && (S.blindTest == null || S.blindBlack)));
     if (S.radarView === v) return;
     S.radarView = v;
     paneEl.classList.toggle('blind-split', v === 'split');
@@ -2740,6 +2751,39 @@
     radarWallsSel.value = S.radarWalls;
     radarWallsSel.addEventListener('change', function () { S.radarWalls = radarWallsSel.value === 'lines' ? 'lines' : 'mesh'; lsSet('wp-map-radar-walls', S.radarWalls); renderMap(); });
   }
+  // ⚙ → Line up the radar (the guild lead, 2026-11-27, testing it over the game: "definitely some alignment issues"). Mimic
+  // cannot read EverQuest's camera (Zeal sends no zoom, angle or field of view), so the radar's own chase camera is set by
+  // hand: run Test blind without Black out and move the sliders until the walls sit on the real ones. radarCamOf keeps every
+  // value in range (a hand-edited or old saved value cannot break the drawing); RADAR_BACK and the rest are what radarCam reads.
+  var RADAR_CAM_DEFAULT = { back: 42, up: 20, tilt: 13, fov: 63 };   // tilt and fov in degrees (0.22 rad, 1.1 rad)
+  function radarCamOf(v) {
+    var o = v && typeof v === 'object' ? v : {}, d = RADAR_CAM_DEFAULT;
+    var n = function (x, lo, hi, def) { x = Number(x); return isFinite(x) ? Math.max(lo, Math.min(hi, x)) : def; };
+    return { back: n(o.back, 5, 120, d.back), up: n(o.up, 0, 80, d.up), tilt: n(o.tilt, 0, 45, d.tilt), fov: n(o.fov, 30, 110, d.fov) };
+  }
+  function applyRadarCam(cam) {
+    RADAR_BACK = cam.back; RADAR_UP = cam.up; RADAR_PITCH = cam.tilt * Math.PI / 180; RADAR_FOV = cam.fov * Math.PI / 180;
+  }
+  S.radarCam = radarCamOf((function () { try { return JSON.parse(lsGet('wp-map-radar-cam') || 'null'); } catch (e) { return null; } })());
+  applyRadarCam(S.radarCam);
+  [['back', 'radarCamBack', ''], ['up', 'radarCamUp', ''], ['tilt', 'radarCamTilt', '°'], ['fov', 'radarCamFov', '°']].forEach(function (r) {
+    var el = document.getElementById(r[1]), val = document.getElementById(r[1] + 'Val');
+    if (!el) return;
+    var show = function () { el.value = S.radarCam[r[0]]; if (val) val.textContent = S.radarCam[r[0]] + r[2]; };
+    show();
+    el.addEventListener('input', function () {
+      S.radarCam[r[0]] = Number(el.value); S.radarCam = radarCamOf(S.radarCam); applyRadarCam(S.radarCam); show();
+      lsSet('wp-map-radar-cam', JSON.stringify(S.radarCam)); renderRadar(Date.now());
+    });
+    var reset = document.getElementById('radarCamReset');
+    if (reset && !reset.dataset.wired) {
+      reset.dataset.wired = '1';
+      reset.addEventListener('click', function () {
+        S.radarCam = radarCamOf(null); applyRadarCam(S.radarCam); lsSet('wp-map-radar-cam', JSON.stringify(S.radarCam));
+        ['radarCamBack', 'radarCamUp', 'radarCamTilt', 'radarCamFov'].forEach(function (id) { var e = document.getElementById(id); if (e) e.dispatchEvent(new Event('input')); });
+      });
+    }
+  });
   var radarStyleSel = document.getElementById('cfgRadarStyle');
   if (radarStyleSel) {
     radarStyleSel.value = S.radarStyle;

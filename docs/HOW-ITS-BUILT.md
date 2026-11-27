@@ -6380,6 +6380,9 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   turn from your heading in the radar's own right-hand frame, `BLIND_FACE_DEG` 45), `syncBlindCue` fills `#blindCue` each
   poll, `chevrons()` draws the moving arrows on the 2D Map (renderMapInner's target block) and the radar floor; `anyMoving`
   keeps the Map animating while blind. Tests: `test/blind-cue.test.js`.
+  Radar line-up (2026-11-27): ⚙ → Line up the radar (`radarCamBack/Up/Tilt/Fov`, `wp-map-radar-cam`, `radarCamOf` clamps,
+  `applyRadarCam` sets `RADAR_BACK/UP/PITCH/FOV`; defaults 42 / 20 / 13° / 63°). `body.wp-radar-solid>#wrap` beats the preload's
+  `--wp-content-alpha` opacity rule in a real blind or a blacked-out test.
 - **Right-click a spawn = off / on** (2026-10-23, Mimic beta, `map.html` `spawnToggle` / `toggleSpawn` / `rowToggle`): a dot or a
   side-list row with a running timer is cleared (`/api/map-mark` kind `clear`); anything else is killed now (`/api/map-kill` by name
   when a mob is seen alive there, else `/api/map-mark` kind `killed`). The dot's handler stops propagation so the stage's
