@@ -20,6 +20,24 @@ const MIMIC_ACTIVE_DAYS = 7;           // uploaded at all in the last week
 const CLASS_AVG_NIGHTS  = NIGHTS_BACK; // how many raid nights "our average" covers
 const CLASS_AVG_DAYS    = 70;          // how far back the OpenDKP raids are read to find them
 
+// Tonight's Raid-Helper event from the rh_events mirror: the one starting closest to now, within 18 h, that the LATEST
+// sync still saw. The mirror only adds and updates, never deletes, so an event removed from Raid-Helper keeps its last
+// copy forever; the sync stops refreshing it, which is how it is told apart. (The guild lead, 2026-11-27, after the
+// Thanksgiving checklist: "we don't have a raid planned tonight where are these numbers from" — it was Thursday's
+// event, removed from Raid-Helper after 2026-11-13, with its 10 signups from that day.) Syncs run every 30 min, so
+// anything not refreshed within RH_LISTED_GRACE_MS of the newest sync is gone upstream. Pure.
+const RH_LISTED_GRACE_MS = 2 * 3600_000;
+function pickTonightsEvent(rows, latestSyncMs, now) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter(e => e.start_time && Math.abs(new Date(e.start_time).getTime() - now) < 18 * 3600_000)
+    .filter(e => latestSyncMs == null || !e.synced_at || Date.parse(e.synced_at) >= latestSyncMs - RH_LISTED_GRACE_MS)
+    .sort((a, b) => Math.abs(new Date(a.start_time) - now) - Math.abs(new Date(b.start_time) - now))[0] || null;
+}
+// No raid tonight: no live Raid-Helper event and no planned targets. Both posts stay quiet then.
+function noRaidTonight(data) {
+  return !data.event && !(data.planned && Array.isArray(data.planned.bossIds) && data.planned.bossIds.length);
+}
+
 async function gather(client) {
   delete require.cache[require.resolve('../data/bosses.json')];
   const bosses = require('../data/bosses.json');
@@ -35,11 +53,11 @@ async function gather(client) {
 
   // ── signups (tonight's RaidHelper event) ──────────────────────────────────
   const evRows = await supabase.select('rh_events',
-    `guild_id=eq.${encodeURIComponent(guildId)}&order=start_time.desc&limit=10&select=id,title,start_time,description`)
+    `guild_id=eq.${encodeURIComponent(guildId)}&order=start_time.desc&limit=10&select=id,title,start_time,description,synced_at`)
     .catch(() => null);
-  const soon = (Array.isArray(evRows) ? evRows : [])
-    .filter(e => e.start_time && Math.abs(new Date(e.start_time).getTime() - now) < 18 * 3600_000)
-    .sort((a, b) => Math.abs(new Date(a.start_time) - now) - Math.abs(new Date(b.start_time) - now))[0] || null;
+  const lastSync = await supabase.select('rh_events',
+    `guild_id=eq.${encodeURIComponent(guildId)}&order=synced_at.desc&limit=1&select=synced_at`).catch(() => null);
+  const soon = pickTonightsEvent(evRows, Array.isArray(lastSync) && lastSync[0] ? Date.parse(lastSync[0].synced_at) : null, now);
 
   let signupRows = [];
   if (soon) {
@@ -221,6 +239,7 @@ async function postPreRaidChecklist(client) {
     return { ok: false, reason: 'no officer channel configured — run `/preraid here:true` in the officer channel once' };
   }
   const data = await gather(client);
+  if (noRaidTonight(data)) return { ok: false, noRaid: true, reason: 'no raid tonight (no Raid-Helper event, no planned targets)' };
   const ch = await client.channels.fetch(chId).catch(() => null);
   if (!ch) return { ok: false, reason: 'officer channel not reachable' };
   await ch.send({ embeds: [renderEmbed(data)] });
@@ -276,7 +295,7 @@ async function postMiddayRaidInfo(client) {
   const chId = process.env.RAID_CHAT_CHANNEL_ID || process.env.TIMER_CHANNEL_ID;
   if (!chId) return { ok: false, reason: 'no raid channel configured' };
   const data = await gather(client);
-  if (!data.event && !data.planned) return { ok: false, reason: 'no raid event found for today' };
+  if (noRaidTonight(data)) return { ok: false, noRaid: true, reason: 'no raid event found for today' };
   const ch = await client.channels.fetch(chId).catch(() => null);
   if (!ch) return { ok: false, reason: 'raid channel not reachable' };
   await ch.send({ embeds: [renderRaidInfoEmbed(data)] });
@@ -316,4 +335,5 @@ module.exports = {
 
   gather, renderEmbed, postPreRaidChecklist,
   renderRaidInfoEmbed, postMiddayRaidInfo,
+  pickTonightsEvent, noRaidTonight,
 };
