@@ -29,6 +29,9 @@ let _supabaseEnabled    = false;
 // changesSince() uses semver-aware compare, so two-digit minor/patch (e.g.
 // "2.5.39") sorts correctly above "2.5.9".
 const CHANGELOGS = {
+  '4.1.15': [
+    'Fix: the pre-raid checklist and the midday raid post no longer go out on a night with no raid. They used to read an old copy of a Raid-Helper event that had been removed (Thanksgiving showed 10 signups from two weeks earlier).',
+  ],
   '4.1.14': [
     'Internal: mob info says how big each mob is and how far it can hit you, for Mimic\'s map and its blind radar.',
   ],
