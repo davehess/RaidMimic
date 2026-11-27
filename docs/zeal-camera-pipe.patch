@@ -1,0 +1,20 @@
+--- a/Zeal/named_pipe.cpp
++++ b/Zeal/named_pipe.cpp
+@@ -337,6 +337,20 @@
+       player_data["heading"] = Zeal::Game::get_self()->Heading;
+       player_data["autoattack"] = (bool)(*(BYTE *)0x7f6ffe);
+       player_data["spawn_id"] = Zeal::Game::get_self()->SpawnId;
++      // The render camera (CameraInfo, game_addresses.h 0x63B928), so an overlay can draw the world from the same
++      // eye the player sees: where it is, which way it looks, how wide, and which view mode is on. Read-only.
++      if (Zeal::GameStructures::CameraInfo *cam = Zeal::Game::get_camera()) {
++        nlohmann::json camera = nlohmann::json::object();
++        camera["location"] = toJson(cam->Position);
++        camera["heading"] = cam->Heading;
++        camera["pitch"] = cam->Pitch;
++        camera["fov"] = cam->FieldOfView;       // 0.5 x the t3dSetCameraLens value (see CameraMods::synchronize_fov)
++        camera["aspect"] = cam->AspectRatio;
++        camera["view"] = *Zeal::Game::camera_view;   // GameEnums::CameraView
++        player_data["camera"] = camera;
++      }
+       // Spawn id of the current target and pet. Both keys are omitted when
+       // there is no target / no pet, so a consumer tests for presence rather
