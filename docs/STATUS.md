@@ -209,6 +209,15 @@ next touch one rather than assuming a missing row means a missing doc.
   pixel sizes and its resolution list is built in, so the answers are 1920×1080 (exactly half: the screen doubles it) or Zeal's
   big-fonts mode with a 2× skin (none found for Quarm). Not built: a true-size preview with real chat from the log.
 
+- **🧪 2026-11-28 — Radar surfaces, first 3D-elements step (beta: agent 4.0.117; rendered on Plane of Tranquility's mesh in a test harness, not yet seen in game).** The radar can
+  now fill the zone mesh in as shaded floors and walls instead of only drawing its edges: ⚙ → Mesh look, Lines (still the
+  default), Surfaces or Both. Flat shading from a light at the camera, floors and walls tinted a little differently in the radar
+  style's colour (floors darker, so rocks and walls stand off them), far surfaces fading into the dark. Painted by each triangle's
+  farthest corner, so big ground triangles don't cover the rocks on them. At most 3,000 triangles are drawn a frame; a triangle
+  crossing the camera's near plane is dropped, not clipped, so the ground right under you can be missing. The mesh's winding is not
+  reliable, so ceilings are told from floors by height, not by which way a triangle faces. Not built: pulse lighting on the
+  surfaces, culling by facing, per-model colours. Needs a look in a real blind test before a pick goes on the Desk.
+
 - **🧪 2026-11-27 — Radar line-up and solid while blind (beta, Mimic only).** Tested over the game, the wireframe did not
   sit on the real walls (*"definitely some alignment issues"*), and Black out still showed the game. Mimic cannot read
   EverQuest's camera (Zeal sends no zoom, angle or field of view), so ⚙ → Line up the radar gives the radar's camera

@@ -397,6 +397,7 @@
         <div class="grp">Blind</div>
         <label class="row" title="What the Map shows while you are blind (or testing it). The radar is off until you pick it: Map only is the zoomed Map. With the radar on, the Map window grows to cover EverQuest's window while you are blind (clicks pass through to the game) and goes back after."><span class="bl">Blind view</span><select id="cfgBlindView"><option value="map">Map only (radar off)</option><option value="inset">Radar + mini map</option><option value="split">Map + radar</option><option value="radar">Radar</option></select></label>
         <label class="row" title="What the radar draws as walls. Zone mesh: the server's own 3D shape of the zone (walls, floors, ceilings, stairs, furniture), downloaded once per zone. Map lines: your map's lines stood up as walls; a line the mapmaker drew for a hill or a path shows as a wall too."><span class="bl">Radar walls</span><select id="cfgRadarWalls"><option value="mesh">Zone mesh</option><option value="lines">Map lines</option></select></label>
+        <label class="row" title="How the zone mesh is drawn. Lines: its edges only. Surfaces: floors and walls filled and shaded, fading into the dark with distance. Both: surfaces with the lines over them. Only applies with Radar walls set to Zone mesh."><span class="bl">Mesh look</span><select id="cfgRadarLook"><option value="lines">Lines</option><option value="surfaces">Surfaces</option><option value="both">Both</option></select></label>
         <label class="row" title="How the radar looks. Pulse: a sonar ring leaves you every two seconds and lights the walls as it reaches them. Sweep: a beam turns around you lighting what it passes. Ember: everything glows red and breathes, brighter near you. Plain: steady walls. All but Plain tint the window's edges so it is plain you are blind."><span class="bl">Radar style</span><select id="cfgRadarStyle"><option value="pulse">Pulse</option><option value="sweep">Sweep</option><option value="ember">Ember</option><option value="plain">Plain</option></select></label>
         <div class="row" title="Line the radar up with your own EverQuest camera: run Test blind without Black out, so the game shows through, and move these until the walls sit on the real ones. Mimic cannot read EverQuest's camera, so this is how it learns yours. Saved for next time."><span class="bl">Line up the radar</span><button type="button" id="radarCamReset" class="rs" title="Back to the defaults">↺</button></div>
         <label class="row" title="How far behind you the radar's camera sits."><span class="bl">Distance</span><input id="radarCamBack" type="range" min="5" max="120" step="1"><span class="val" id="radarCamBackVal"></span></label>
@@ -2133,6 +2134,69 @@
     if (p.depth < RADAR_NEAR) p = cut(p, q); else if (q.depth < RADAR_NEAR) q = cut(q, p);
     return [radarProj(p, w, h), radarProj(q, w, h)];
   }
+  // Radar surfaces (the zone mesh's triangles, filled and flat-shaded under the edges; ⚙ → Mesh look: Lines / Surfaces / Both).
+  // Triangles are in the SCREEN frame like the edges. The mesh's winding is not trustworthy (placed models, terrain tiles and
+  // zone triangles are wound by different rules), so a triangle is lit from both sides and "floor" or "ceiling" comes from where
+  // it sits, not from which way it faces: a roughly horizontal triangle above the camera is a ceiling.
+  var SURF_AMBIENT = 0.35, SURF_FLOOR_NZ = 0.7, SURF_WALL_NZ = 0.35, SURF_EDGE_ON = 0.04, SURF_STEPS = 16;
+  // Within the style's own colour. Floors darker than walls, so rocks, pillars and walls stand off the ground they rest on.
+  var SURF_TINT = { floor: [0.6, 0.65, 0.75], wall: [0.8, 0.9, 1], ceil: [0.65, 0.7, 0.8] };
+  function surfNormal(t, i) {   // unit normal of the triangle at t[i..i+8], or null for a sliver with no area
+    var ux = t[i + 3] - t[i], uy = t[i + 4] - t[i + 1], uz = t[i + 5] - t[i + 2];
+    var vx = t[i + 6] - t[i], vy = t[i + 7] - t[i + 1], vz = t[i + 8] - t[i + 2];
+    var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    return l > 1e-6 ? [nx / l, ny / l, nz / l] : null;
+  }
+  // 'floor' | 'wall' | 'ceil' from the normal's up component (either sign) and the middle's height above the camera.
+  function surfClass(nz, dzCam) {
+    var up = Math.abs(nz);
+    if (up >= SURF_FLOOR_NZ) return dzCam > 0 ? 'ceil' : 'floor';
+    return up < SURF_WALL_NZ ? 'wall' : (dzCam > 0 ? 'ceil' : 'floor');   // a ramp or stair face reads as the ground it is
+  }
+  // Brightness 0..1: ambient plus the light from the camera, which is the cosine between the normal and the way to the camera.
+  function surfShade(n, vx, vy, vz) {
+    var l = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+    return SURF_AMBIENT + (1 - SURF_AMBIENT) * Math.abs((n[0] * vx + n[1] * vy + n[2] * vz) / l);
+  }
+  function surfFog(depth, range) { return Math.max(0, Math.min(1, 1 - depth / range)); }   // 1 near, 0 at range and beyond
+  // 'rgb(r,g,b)' for a surface: the style's colour, tinted by class, scaled by shade and by fog (the fog is the black behind it,
+  // so far surfaces sink into the background). Shade and fog are stepped so the same few strings repeat.
+  function surfColor(rgb, cls, shade, fog, gain) {
+    var k = (Math.round(shade * SURF_STEPS) / SURF_STEPS) * (Math.round(fog * SURF_STEPS) / SURF_STEPS) * (gain == null ? 1 : gain), t = SURF_TINT[cls] || SURF_TINT.floor;
+    return 'rgb(' + Math.round(rgb[0] * t[0] * k) + ',' + Math.round(rgb[1] * t[1] * k) + ',' + Math.round(rgb[2] * t[2] * k) + ')';
+  }
+  // The server-frame triangles of an answer to the screen frame (x and y negated, z kept), once per answer.
+  function surfToScreen(tris) {
+    var out = new Float32Array(tris.length);
+    for (var i = 0; i + 2 < tris.length; i += 3) { out[i] = -tris[i]; out[i + 1] = -tris[i + 1]; out[i + 2] = tris[i + 2]; }
+    return out;
+  }
+  // Which triangles to draw, and in what order. tris = screen-frame triangles; c = radarCam; project(sx, sy, z) -> [px, py, depth] or
+  // null behind the near plane (radarPt in the page); o = { sx, sy (your spot), sz, range (flat), dz (height band around sz),
+  // max (most to draw), minArea (px²) }. Drops what is out of range or height, partly behind the camera, edge-on to it, or tiny on
+  // screen; keeps the nearest `max`; returns them far to near (painter's order) as { p: [x0,y0,x1,y1,x2,y2], depth, cls, shade }.
+  function surfSelect(tris, c, project, o) {
+    var out = [];
+    for (var i = 0; i + 8 < tris.length; i += 9) {
+      var mx = (tris[i] + tris[i + 3] + tris[i + 6]) / 3, my = (tris[i + 1] + tris[i + 4] + tris[i + 7]) / 3, mz = (tris[i + 2] + tris[i + 5] + tris[i + 8]) / 3;
+      if (Math.abs(mz - o.sz) > o.dz || Math.hypot(mx - o.sx, my - o.sy) > o.range) continue;
+      var a = project(tris[i], tris[i + 1], tris[i + 2]), b = a && project(tris[i + 3], tris[i + 4], tris[i + 5]), d = b && project(tris[i + 6], tris[i + 7], tris[i + 8]);
+      if (!d) continue;
+      var area = Math.abs((b[0] - a[0]) * (d[1] - a[1]) - (d[0] - a[0]) * (b[1] - a[1])) / 2;
+      if (area < o.minArea) continue;
+      var n = surfNormal(tris, i);
+      if (!n) continue;
+      var vx = c.x - mx, vy = c.y - my, vz = c.z - mz, vl = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+      if (Math.abs((n[0] * vx + n[1] * vy + n[2] * vz) / vl) < SURF_EDGE_ON) continue;   // seen edge-on: nothing to fill
+      out.push({ p: [a[0], a[1], b[0], b[1], d[0], d[1]], depth: (a[2] + b[2] + d[2]) / 3, far: Math.max(a[2], b[2], d[2]),
+        cls: surfClass(n[2], mz - c.z), shade: surfShade(n, vx, vy, vz) });
+    }
+    out.sort(function (u, v) { return u.depth - v.depth; });   // near first, to keep the nearest `max`
+    if (out.length > o.max) out.length = o.max;
+    // Painted by each triangle's FARTHEST corner, not its middle: a big ground triangle running out to the horizon has a near
+    // middle and would otherwise be painted over the rocks standing on it (seen on Plane of Tranquility's terrain, 2026-11-28).
+    return out.sort(function (u, v) { return v.far - u.far || v.depth - u.depth; });
+  }
   // ── end pure helpers ──
   // The blind cue on the page (blindCue above is the pure part). cueCol: its colour for canvas drawing, looked up at draw
   // time because RING is defined further down.
@@ -2393,9 +2457,12 @@
   // Radar walls B (the guild lead, 2026-11-25: "get going on the wireframe"): the server's zone mesh, as the agent's feature
   // edges around you (GET /api/map-mesh, server frame). Asked for MESH_R around you, again once you are MESH_MOVE from where it
   // was asked, or MESH_RETRY_MS after a "loading". ⚙ → Radar walls: Zone mesh (default; map lines until it arrives) or Map lines.
-  var MESH_R = 300, MESH_MOVE = 120, MESH_RETRY_MS = 3000, MESH_ALPHA_STEPS = 10;
+  // ⚙ → Mesh look: the mesh as Lines (the default), filled Surfaces, or Both. Surfaces ask the agent for the nearest triangles too
+  // (tris=1, at most 6,000), and draw at most SURF_MAX of them, under the lines, on the pane's solid black.
+  var MESH_R = 300, MESH_MOVE = 120, MESH_RETRY_MS = 3000, MESH_ALPHA_STEPS = 10, SURF_MAX = 3000, SURF_MIN_AREA = 2, SURF_GAIN = 0.55;
   S.radarWalls = lsGet('wp-map-radar-walls') === 'lines' ? 'lines' : 'mesh';
-  S.mesh = null;   // { zone, x, y, status, segs (screen frame: sx, sy, z per end), at }
+  S.radarLook = (function () { var v = lsGet('wp-map-radar-look'); return v === 'surfaces' || v === 'both' ? v : 'lines'; })();
+  S.mesh = null;   // { zone, x, y, status, segs (screen frame: sx, sy, z per end), tris (screen frame, 9 per triangle; Surfaces/Both only), at }
   function meshWanted(me, zone, now) {
     var m = S.mesh;
     if (!zone || me.x == null) return false;
@@ -2417,21 +2484,22 @@
     var now = Date.now();
     if (S.radarWalls !== 'mesh' || !meshWanted(me, zone, now)) return;
     var keep = S.mesh && S.mesh.zone === zone ? S.mesh : null;
-    S.mesh = { zone: zone, x: me.x, y: me.y, status: keep ? keep.status : 'loading', segs: keep ? keep.segs : null, at: now, busy: true };
+    S.mesh = { zone: zone, x: me.x, y: me.y, status: keep ? keep.status : 'loading', segs: keep ? keep.segs : null, tris: keep ? keep.tris : null, at: now, busy: true };
     var ask = S.mesh;
     fetch('http://127.0.0.1:' + PORT + '/api/map-mesh?zone=' + encodeURIComponent(zone) + '&x=' + Math.round(me.x) + '&y=' + Math.round(me.y)
-      + (me.z != null ? '&z=' + Math.round(Number(me.z)) : '') + '&r=' + MESH_R)
+      + (me.z != null ? '&z=' + Math.round(Number(me.z)) : '') + '&r=' + MESH_R + (S.radarLook !== 'lines' ? '&tris=1' : ''))
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (S.mesh !== ask) return;
         ask.busy = false; ask.at = Date.now(); ask.status = j && j.status || 'error';
         if (j && j.status === 'ready' && Array.isArray(j.segs)) ask.segs = meshToScreen(j.segs);
+        if (j && j.status === 'ready') ask.tris = Array.isArray(j.tris) ? surfToScreen(j.tris) : null;   // an older agent sends none: the lines stay
       })
       .catch(function () { if (S.mesh === ask) { ask.busy = false; ask.at = Date.now(); ask.status = 'loading'; } });
   }
   // The radar corner's second line: which walls it draws, and why not the mesh. '' when the "no map file" line says it already.
   function radarWallsTxt(meshSegs) {
-    if (meshSegs) return 'Walls: zone mesh (EQEmu server map)';
+    if (meshSegs) return 'Walls: zone mesh (EQEmu server map)' + (S.radarLook === 'surfaces' || S.radarLook === 'both' ? ', ' + S.radarLook : '');
     if (S.radarWalls === 'lines') return localWalls() ? 'Walls: map lines' : '';
     var st = S.mesh && S.mesh.zone === S.zone ? S.mesh.status : 'loading';
     var why = st === 'none' ? 'no zone mesh for this zone' : st === 'off' ? 'zone mesh off' : st === 'error' ? 'zone mesh failed' : 'zone mesh loading…';
@@ -2493,6 +2561,18 @@
     }
     if (style === 'ember') return Math.max(0.15, Math.min(1, 0.75 - d / (RADAR_R * 2) + 0.2 * Math.sin(t / 420 - d / 18)));
     return Math.max(0.12, Math.min(1, 1.1 - d / RADAR_R));
+  }
+  // The filled surfaces (see surfSelect): far to near, one flat fill each, in the style's colour (rgb = [r, g, b]). Fills are opaque
+  // and fogged toward the pane's black, so no blending; a hairline of the same colour hides the seams between neighbours.
+  function drawSurfaces(g, c, tris, ms, sz, w, h, rgb) {
+    var list = surfSelect(tris, c, function (sx, sy, z) { return radarPt(c, sx, sy, z, w, h); },
+      { sx: ms.sx, sy: ms.sy, sz: sz, range: RADAR_R, dz: RADAR_FLOOR_Z * 2, max: SURF_MAX, minArea: SURF_MIN_AREA });
+    g.globalAlpha = 1; g.lineWidth = 0.6; g.lineJoin = 'round';
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i], col = surfColor(rgb, s.cls, s.shade, surfFog(s.depth, RADAR_R * 1.15), SURF_GAIN), p = s.p;
+      g.fillStyle = col; g.strokeStyle = col;
+      g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(p[2], p[3]); g.lineTo(p[4], p[5]); g.closePath(); g.fill(); g.stroke();
+    }
   }
   // Draw the mesh edges, lit by radarGlow: the floor you stand on (±BLIND_LEVEL) full strength, the rest within
   // RADAR_FLOOR_Z * 2 at 40%; one stroke per brightness step, so ten thousand edges stay cheap.
@@ -2614,7 +2694,9 @@
     var rst = RADAR_STYLES[S.radarStyle] || RADAR_STYLES.plain, rcol = rst.rgb ? 'rgb(' + rst.rgb + ')' : hexA(CO.wall, 1);
     var beat = radarBeat(P.pulse);
     if (beat.name === 'danger') rcol = 'rgb(255,110,110)';   // hurt: the walls and the rings go red with the heartbeat
-    if (meshSegs) drawMesh(g, c, meshSegs, ms, sz, w, h, rcol, S.radarStyle, rt, beat);
+    var surfs = meshSegs && S.radarLook !== 'lines' && S.mesh.tris ? S.mesh.tris : null;   // Surfaces/Both, once the agent has sent them
+    if (surfs) drawSurfaces(g, c, surfs, ms, sz, w, h, beat.name === 'danger' ? [255, 110, 110] : rst.rgb ? rst.rgb.split(',').map(Number) : hexRgb(CO.wall));
+    if (meshSegs && !(surfs && S.radarLook === 'surfaces')) drawMesh(g, c, meshSegs, ms, sz, w, h, rcol, S.radarStyle, rt, beat);
     if (meshSegs && rst.anim) drawRadarWave(seg, ms, sz, S.radarStyle, rt, rcol, beat);
     // Pings (Desk radar-style: "Yes, mobs and raiders ping"): a small ring on the floor under someone when the pulse reaches them.
     var ping = function (psx, psy, pz) {
@@ -2750,6 +2832,16 @@
   if (radarWallsSel) {
     radarWallsSel.value = S.radarWalls;
     radarWallsSel.addEventListener('change', function () { S.radarWalls = radarWallsSel.value === 'lines' ? 'lines' : 'mesh'; lsSet('wp-map-radar-walls', S.radarWalls); renderMap(); });
+  }
+  var radarLookSel = document.getElementById('cfgRadarLook');
+  if (radarLookSel) {
+    radarLookSel.value = S.radarLook;
+    radarLookSel.addEventListener('change', function () {
+      S.radarLook = radarLookSel.value === 'surfaces' || radarLookSel.value === 'both' ? radarLookSel.value : 'lines';
+      lsSet('wp-map-radar-look', S.radarLook);
+      if (S.mesh && !S.mesh.busy) S.mesh.x = -1e9;   // far from where it was asked: meshFetch asks again now, with or without the triangles
+      renderMap();
+    });
   }
   // ⚙ → Line up the radar (the guild lead, 2026-11-27, testing it over the game: "definitely some alignment issues"). Mimic
   // cannot read EverQuest's camera (Zeal sends no zoom, angle or field of view), so the radar's own chase camera is set by

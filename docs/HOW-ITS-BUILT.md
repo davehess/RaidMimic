@@ -6364,6 +6364,11 @@ on the site at **wolfpack.quest/roadmap** (source: `web/lib/roadmapData.ts`).*
   `map.html`: `meshFetch` (asks within 300, again after moving 120), `meshToScreen`, `drawMesh` (one stroke per brightness step),
   `radarWallsTxt`; ⚙ → Radar walls (`wp-map-radar-walls`: mesh default, lines). The web replay has its own reader of the same
   files (`web/lib/zoneMap/slice.ts` `parseEqemuMap`, zone triangles only). Tests: `test/radar-mesh.test.js`.
+  Radar surfaces (agent 4.0.117, first "3D elements" step): `GET /api/map-mesh?…&tris=1` also returns the nearest ≤ 6,000 triangles
+  (`_meshTriGrid` / `_mapMeshTrisNear`, built on the first ask per zone; 0.1 precision; `tris`, `trisTotal`); without `tris=1` the
+  answer is unchanged. `map.html` pure helpers `surfNormal` / `surfClass` (floor, wall, ceil) / `surfShade` (light from the camera)
+  / `surfFog` / `surfColor` / `surfSelect` (cull, sort far to near, cap) and `drawSurfaces` (≤ 3,000 fills, under the lines);
+  ⚙ → Mesh look (`wp-map-radar-look`: lines default, surfaces, both). Tests: `test/radar-surfaces.test.js`.
   Radar styles (Desk `radar-style`): `RADAR_STYLES` (pulse / sweep / ember / plain, `wp-map-radar-style`), `radarGlow(style, d,
   ang, t)` (pure: how lit a wall is), `drawMesh` buckets by it, `drawRadarWave` (the sonar ring / the beam on the floor),
   `drawRadarVignette` (tinted edges, the blind cue), `radarTick` / `kickRadar` (own requestAnimationFrame loop at FRAME_MS,

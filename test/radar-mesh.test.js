@@ -33,7 +33,7 @@ const BLOCK = sliceBlock(AGENT_RAW, 'const MAP_MESH_BASE', '// ── end Zone m
 function boot(meshDir) {
   const paths = { mesh: meshDir };
   return new Function('fs', 'zlib', 'path', 'https', '_mapPaths',
-    BLOCK + '\nreturn { _meshDecode, _meshEdges, _meshGrid, _mapMeshNear, _mapMeshAnswer, _mapMeshEnsure, _mapMeshNet };')(fs, zlib, path, null, paths);
+    BLOCK + '\nreturn { _meshDecode, _meshEdges, _meshGrid, _mapMeshNear, _mapMeshAnswer, _mapMeshEnsure, _mapMeshNet, _meshTriGrid, _mapMeshTrisNear, MESH_MAX_TRIS };')(fs, zlib, path, null, paths);
 }
 
 // A v2 .map: uint32 version, uint32 data_size, uint32 buffer_size, zlib(payload).
@@ -125,6 +125,71 @@ describe('agent: /api/map-mesh', () => {
   });
 });
 
+// A v2 .map holding only zone triangles (9 floats each), no models, no tiles.
+function trisFile(list) {
+  const parts = [], u32 = (v) => { const b = Buffer.alloc(4); b.writeUInt32LE(v); parts.push(b); }, f32 = (v) => { const b = Buffer.alloc(4); b.writeFloatLE(v); parts.push(b); };
+  [list.length * 3, list.length * 3, 0, 0, 0, 0, 0, 0, 1].forEach(u32); f32(10);
+  list.forEach((t) => t.forEach(f32));
+  for (let i = 0; i < list.length * 3; i++) u32(i);
+  const payload = Buffer.concat(parts), z = zlib.deflateSync(payload), head = Buffer.alloc(12);
+  head.writeUInt32LE(0x02000000, 0); head.writeUInt32LE(z.length, 4); head.writeUInt32LE(payload.length, 8);
+  return Buffer.concat([head, z]);
+}
+
+// Radar surfaces: /api/map-mesh?tris=1 also returns the nearest triangles. Without it the answer is what it was.
+describe('agent: /api/map-mesh tris=1 (radar surfaces)', () => {
+  const q = (o) => new URLSearchParams(o);
+  const withZone = (file, fn) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-'));
+    try { fs.writeFileSync(path.join(dir, 'testzone.map'), file); return fn(boot(dir)); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  };
+  it('the edge-only answer is unchanged: same keys, no triangles, and tris=0 is the same as not asking', () => {
+    withZone(mapFile(), (api) => {
+      const a = api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '0', r: '100' }), 0);
+      expect(Object.keys(a)).toEqual(['ok', 'zone', 'status', 'source', 'x', 'y', 'z', 'r', 'segs', 'edges']);
+      expect(JSON.stringify(api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '0', r: '100', tris: '0' }), 0))).toBe(JSON.stringify(a));
+    });
+  });
+  it('tris=1 adds triangles and leaves the edges as they were', () => {
+    withZone(mapFile(), (api) => {
+      const base = api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '0', r: '100' }), 0);
+      const a = api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '0', r: '100', tris: '1' }), 0);
+      expect(a.segs).toEqual(base.segs);
+      expect(a.edges).toBe(base.edges);
+      expect(a.tris.length % 9).toBe(0);
+      expect(a.tris.length / 9).toBe(3);   // the zone triangle and the tile's two; the placed model is 200 away
+      expect(a.trisTotal).toBe(3);
+    });
+  });
+  it('only what is within the radius, and within the height band when z is known', () => {
+    withZone(mapFile(), (api) => {
+      expect(api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '0', r: '50', tris: '1' }), 0).tris.length / 9).toBe(1);   // r is clamped to at least 50: the tile (85 away) is out
+      expect(api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '1000', r: '100', tris: '1' }), 0).tris).toEqual([]);
+      expect(api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', r: '100', tris: '1' }), 0).tris.length / 9).toBe(3);   // no z: every floor
+    });
+  });
+  it('capped at MESH_MAX_TRIS, nearest first, with the uncapped count reported', () => {
+    const n = 6500, list = [];
+    for (let k = 0; k < n; k++) { const x = (k % 100) * 2, y = Math.floor(k / 100) * 2; list.push([x, y, 0, x + 1, y, 0, x, y + 1, 0]); }
+    withZone(trisFile(list), (api) => {
+      expect(api.MESH_MAX_TRIS).toBe(6000);
+      const a = api._mapMeshAnswer(q({ zone: 'testzone', x: '0', y: '0', z: '0', r: '300', tris: '1' }), 0);
+      expect(a.tris.length).toBe(6000 * 9);
+      expect(a.trisTotal).toBe(n);
+      const d = (i) => Math.hypot((a.tris[i] + a.tris[i + 3] + a.tris[i + 6]) / 3, (a.tris[i + 1] + a.tris[i + 4] + a.tris[i + 7]) / 3);
+      for (let i = 9; i < a.tris.length; i += 9) expect(d(i)).toBeGreaterThanOrEqual(d(i - 9) - 1e-9);
+      const all = list.map((t) => Math.hypot((t[0] + t[3] + t[6]) / 3, (t[1] + t[4] + t[7]) / 3)).sort((p, r) => p - r);
+      expect(d(5999 * 9)).toBeCloseTo(all[5999], 0);   // the last one kept is the 6,000th nearest: what was dropped is farther
+    });
+  });
+  it('coordinates are rounded to 0.1', () => {
+    withZone(trisFile([[1.23456, 2.34567, 3.45678, 4.56789, 5.6789, 6.78901, 7.89012, 8.90123, 9.01234]]), (api) => {
+      const t = api._mapMeshAnswer(q({ zone: 'testzone', x: '4', y: '5', r: '100', tris: '1' }), 0).tris;
+      expect(t).toEqual([1.2, 2.3, 3.5, 4.6, 5.7, 6.8, 7.9, 8.9, 9]);
+    });
+  });
+});
+
 describe('map.html: the radar draws the mesh', () => {
   const meshBits = sliceBlock(MAP, '  function meshWanted(me, zone, now) {', '\n  function meshFetch(me, zone) {').replace('\n  function meshFetch(me, zone) {', '');
   const boot2 = (S) => new Function('S', 'MESH_MOVE', 'MESH_RETRY_MS', meshBits + '\nreturn { meshWanted, meshToScreen };')(S, 120, 3000);
@@ -143,7 +208,7 @@ describe('map.html: the radar draws the mesh', () => {
   });
   it('renderRadar draws the mesh when it is here, else the grid and the raised map lines', () => {
     const r = sliceBlock(MAP, 'function renderRadar(rt) {', 'var body = function (sx, sy, z, radius, tall, style, label) {');
-    expect(r).toMatch(/meshFetch\(me, S\.zone\);\s*var meshSegs = S\.radarWalls === 'mesh' && S\.mesh && S\.mesh\.zone === S\.zone \? S\.mesh\.segs : null;\s*var rst = [^\n]*\n[^\n]*\n[^\n]*\n\s*if \(meshSegs\) drawMesh\(/);
+    expect(r).toMatch(/meshFetch\(me, S\.zone\);\s*var meshSegs = S\.radarWalls === 'mesh' && S\.mesh && S\.mesh\.zone === S\.zone \? S\.mesh\.segs : null;\s*var rst = [^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n\s*if \(meshSegs && !\(surfs && S\.radarLook === 'surfaces'\)\) drawMesh\(/);
     expect(r).toMatch(/for \(var k = -80; k <= 80 && !meshSegs; k \+= 10\)/);
     expect(r).toMatch(/if \(!meshSegs && localWalls\(\)\) \{/);
     expect(r).toMatch(/\} else if \(!meshSegs\) \{\s*g\.globalAlpha = 0\.8;[^\n]*\n\s*g\.fillText\('No map file for this zone/);
@@ -222,7 +287,7 @@ describe('map.html: radar styles', () => {
     expect(MAP).toMatch(/radarEl\.hidden = v === 'map';\s*try \{ if \(window\.mimic && window\.mimic\.mapBlindCover\) window\.mimic\.mapBlindCover\(v !== 'map'\); \} catch \(e\) \{\}\s*resize\(\);\s*kickRadar\(\);/);
     expect(MAP).toMatch(/if \(rst\.anim\) drawRadarVignette\(g, w, h, beat\.name === 'danger' \? '255,60,60' : rst\.rgb\);/);
     expect(MAP).toMatch(/var beat = radarBeat\(P\.pulse\);/);
-    expect(MAP).toMatch(/if \(meshSegs\) drawMesh\(g, c, meshSegs, ms, sz, w, h, rcol, S\.radarStyle, rt, beat\);/);
+    expect(MAP).toMatch(/if \(meshSegs && !\(surfs && S\.radarLook === 'surfaces'\)\) drawMesh\(g, c, meshSegs, ms, sz, w, h, rcol, S\.radarStyle, rt, beat\);/);
   });
   it('pings: raiders, your target and the mobs other raiders are on', () => {
     const r = sliceBlock(MAP, 'function renderRadar(rt) {', "g.fillText('Radar · '");
