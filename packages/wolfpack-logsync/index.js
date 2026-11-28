@@ -56014,7 +56014,8 @@ const MAP_MESH_KEEP      = 2;          // zones held decoded in memory
 const MESH_CREASE_DEG    = 25;
 const MESH_CELL          = 128;        // spatial grid for the radius query
 const MESH_MAX_SEGS      = 24000;      // per answer
-const _mapMesh = new Map();            // short -> { inflight, retryAt }
+const MESH_MAX_TRIS      = 6000;       // per answer, when the radar asks for surfaces (tris=1); nearest first
+const _mapMesh = new Map();           // short -> { inflight, retryAt }
 const _mapMeshMem = new Map();         // short -> { segs: Float32Array (6 per edge), grid: Map, tris, edges }
 const _mapMeshNet = {                  // one GET -> { status, buf }; status 0 = network failure. Swapped out by tests.
   get(url) {
@@ -56220,6 +56221,46 @@ function _mapMeshFor(short) {
   while (_mapMeshMem.size > MAP_MESH_KEEP) _mapMeshMem.delete(_mapMeshMem.keys().next().value);
   return m;
 }
+// The triangles' own grid, for the radar's filled surfaces: built the first time a zone is asked for them (a radar that only draws
+// lines never pays for it), kept on the zone's entry beside the edge grid. The triangles are decoded again from the file because
+// the edge pass does not keep them; that is one extra decode per zone, only for a radar set to Surfaces or Both.
+function _meshTriGrid(tris) {
+  const grid = new Map();
+  for (let i = 0; i + 8 < tris.length; i += 9) {
+    const k = Math.floor((tris[i] + tris[i + 3] + tris[i + 6]) / 3 / MESH_CELL) + ':' + Math.floor((tris[i + 1] + tris[i + 4] + tris[i + 7]) / 3 / MESH_CELL);
+    let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+  }
+  return grid;
+}
+function _mapMeshTrisFor(short, m) {
+  if (m.triGrid) return m;
+  const tris = _meshDecode(fs.readFileSync(path.join(_mapPaths.mesh, short + '.map')));
+  m.triData = tris; m.triGrid = _meshTriGrid(tris);
+  return m;
+}
+// The triangles whose middle is within r (flat) of (x, y) and within dz of z, nearest first, at most `cap`, coordinates to 0.1:
+// { tris: [x1,y1,z1,x2,y2,z2,x3,y3,z3, ...], total } (total = how many qualified before the cap).
+function _mapMeshTrisNear(m, x, y, z, r, dz, cap) {
+  const T = m.triData, c0x = Math.floor((x - r) / MESH_CELL), c1x = Math.floor((x + r) / MESH_CELL);
+  const c0y = Math.floor((y - r) / MESH_CELL), c1y = Math.floor((y + r) / MESH_CELL), hit = [];
+  for (let cx = c0x; cx <= c1x; cx++) for (let cy = c0y; cy <= c1y; cy++) {
+    const a = m.triGrid.get(cx + ':' + cy);
+    if (!a) continue;
+    for (const i of a) {
+      const mx = (T[i] + T[i + 3] + T[i + 6]) / 3, my = (T[i + 1] + T[i + 4] + T[i + 7]) / 3, mz = (T[i + 2] + T[i + 5] + T[i + 8]) / 3;
+      const d = Math.hypot(mx - x, my - y);
+      if (d > r || (z != null && Math.abs(mz - z) > dz)) continue;
+      hit.push([d, i]);
+    }
+  }
+  hit.sort((p, q) => p[0] - q[0]);
+  const out = [];
+  for (let n = 0; n < hit.length && n < cap; n++) {
+    const i = hit[n][1];
+    for (let k = 0; k < 9; k++) out.push(Math.round(T[i + k] * 10) / 10);
+  }
+  return { tris: out, total: hit.length };
+}
 // The edges within r (flat) of (x, y) whose middle is within dz of z, rounded to whole units: [x1,y1,z1,x2,y2,z2, ...].
 function _mapMeshNear(m, x, y, z, r, dz) {
   const out = [], c0x = Math.floor((x - r) / MESH_CELL), c1x = Math.floor((x + r) / MESH_CELL);
@@ -56248,7 +56289,15 @@ function _mapMeshAnswer(q, now) {
   let m;
   try { m = _mapMeshFor(zone); } catch (e) { return { ok: false, zone, status: 'error', error: String(e && e.message) }; }
   if (!m) return { ok: true, zone, status: 'loading' };
-  return { ok: true, zone, status: 'ready', source: 'EQEmu server map', x, y, z, r, segs: _mapMeshNear(m, x, y, isFinite(z) ? z : null, r, 200), edges: m.edges };
+  const ans = { ok: true, zone, status: 'ready', source: 'EQEmu server map', x, y, z, r, segs: _mapMeshNear(m, x, y, isFinite(z) ? z : null, r, 200), edges: m.edges };
+  // tris=1 (the radar's Surfaces / Both look): also the nearest MESH_MAX_TRIS triangles. Without it the answer is as it was.
+  if (q.get('tris') === '1') {
+    try {
+      const near = _mapMeshTrisNear(_mapMeshTrisFor(zone, m), x, y, isFinite(z) ? z : null, r, 200, MESH_MAX_TRIS);
+      ans.tris = near.tris; ans.trisTotal = near.total;
+    } catch (e) { ans.tris = []; ans.trisTotal = 0; }   // the lines still draw
+  }
+  return ans;
 }
 // ── end Zone meshes ──
 
