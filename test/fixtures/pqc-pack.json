@@ -4,14 +4,14 @@
   "triggers": [
     {
       "id": "a1f0c2d3e4b50001",
-      "name": "Brackwyn Falls",
+      "name": "Brackwyn Casts",
       "enabled": true,
-      "pattern": "^{C} has fallen to the ground\\.$",
+      "pattern": "^{C} begins to cast a spell\\.$",
       "actions": [
-        { "type": "overlay_text", "text": "FALLEN", "duration_secs": 5, "color": "#ff0000", "sound_path": "", "volume": 0, "voice": "" },
-        { "type": "text_to_speech", "text": "You fell", "duration_secs": 0, "color": "", "sound_path": "", "volume": 1, "voice": "" }
+        { "type": "overlay_text", "text": "CASTING", "duration_secs": 3, "color": "#ffd24a", "sound_path": "", "volume": 0, "voice": "" },
+        { "type": "text_to_speech", "text": "Casting now", "duration_secs": 0, "color": "", "sound_path": "", "volume": 1, "voice": "" }
       ],
-      "pack_name": "Misc Alerts",
+      "pack_name": "Utility",
       "source": "log",
       "timer_type": "none",
       "timer_duration_secs": 0,
