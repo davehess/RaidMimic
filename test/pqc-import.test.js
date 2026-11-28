@@ -47,17 +47,17 @@ afterAll(() => {
 
 describe('_parsePqCompanionPack — a plain alert', () => {
   it('carries the pattern raw, the shown text and the spoken text', () => {
-    const t = byName('Brackwyn Falls');
-    expect(t.pattern).toBe('^{C} has fallen to the ground\\.$');
-    expect(t).toMatchObject({ display_text: 'FALLEN', tts_text: 'You fell', use_regex: true, timer_duration_sec: 0, cooldown_seconds: 0 });
+    const t = byName('Brackwyn Casts');
+    expect(t.pattern).toBe('^{C} begins to cast a spell\\.$');
+    expect(t).toMatchObject({ display_text: 'CASTING', tts_text: 'Casting now', use_regex: true, timer_duration_sec: 0, cooldown_seconds: 0 });
     expect(t.not_carried).toBeUndefined();
   });
 
   it('the stored pattern fires on a real timestamped line (anchor, {C})', () => {
-    const t = byName('Brackwyn Falls');
+    const t = byName('Brackwyn Casts');
     const c = agent.compileTriggerPattern(t.pattern, { characters: ['Brackwyn'] });
-    expect(c.regex.test(TS + 'Brackwyn has fallen to the ground.')).toBe(true);
-    expect(c.regex.test(TS + 'Someone else has fallen to the ground.')).toBe(false);
+    expect(c.regex.test(TS + 'Brackwyn begins to cast a spell.')).toBe(true);
+    expect(c.regex.test(TS + 'Someone else begins to cast a spell.')).toBe(false);
   });
 
   it('never carries the exporter\'s character list', () => {
